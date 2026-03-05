@@ -124,7 +124,7 @@ export async function collectPacketsInRange(
   // Collect packets until we reach endSec
   while (packet) {
     if (packet.timestamp >= endSec) break;
-    if (!packet.isMetadataOnly) {
+    if (!packet.isMetadataOnly && packet.timestamp >= 0) {
       packets.push(packet);
     }
     const next = await sink.getNextPacket(packet);

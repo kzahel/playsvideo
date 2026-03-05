@@ -14,18 +14,22 @@ let plan: PlannedSegment[] = [];
 let doTranscode = false;
 let audioDecoderConfig: AudioDecoderConfig | null = null;
 let initSegment: Uint8Array | null = null;
+const segmentCache = new Map<number, Uint8Array>();
 
-self.onmessage = async (event: MessageEvent) => {
+// Serialize segment processing — concurrent ffmpeg.wasm calls corrupt shared MEMFS files
+let processingChain: Promise<void> = Promise.resolve();
+
+self.onmessage = (event: MessageEvent) => {
   const msg = event.data;
 
-  try {
-    if (msg.type === 'open') {
-      await handleOpen(msg.file, msg.targetSegmentDuration ?? 4);
-    } else if (msg.type === 'segment') {
-      await handleSegment(msg.index);
-    }
-  } catch (err) {
-    self.postMessage({ type: 'error', message: String(err) });
+  if (msg.type === 'open') {
+    processingChain = handleOpen(msg.file, msg.targetSegmentDuration ?? 4).catch((err) =>
+      self.postMessage({ type: 'error', message: String(err) }),
+    );
+  } else if (msg.type === 'segment') {
+    processingChain = processingChain.then(() => handleSegment(msg.index)).catch((err) =>
+      self.postMessage({ type: 'error', message: String(err) }),
+    );
   }
 };
 
@@ -55,8 +59,8 @@ async function handleOpen(file: File, targetSegmentDuration: number) {
     endList: true,
   });
 
-  // Process first segment to extract init segment (ftyp+moov) as a side effect
-  await processSegment(0);
+  // Process first segment to extract init segment (ftyp+moov) as a side effect, cache media data
+  segmentCache.set(0, await processSegment(0));
 
   self.postMessage(
     {
@@ -76,8 +80,15 @@ async function handleSegment(index: number) {
     return;
   }
 
-  // If we already processed segment 0 during open and still have initSegment,
-  // we could cache it, but for simplicity just re-process
+  // Return cached segment if available (segment 0 is pre-processed during open)
+  const cached = segmentCache.get(index);
+  if (cached) {
+    segmentCache.delete(index);
+    const buffer = cached.buffer.slice(cached.byteOffset, cached.byteOffset + cached.byteLength);
+    self.postMessage({ type: 'segment', index, data: buffer }, { transfer: [buffer] });
+    return;
+  }
+
   const mediaData = await processSegment(index);
   const buffer = mediaData.buffer.slice(
     mediaData.byteOffset,
@@ -106,7 +117,7 @@ async function processSegment(index: number): Promise<Uint8Array> {
     const transcoded = await transcodeAudioSegment({
       packets: audioPackets,
       sampleRate,
-      segmentStartSec: seg.startSec,
+      audioStartSec: audioPackets[0].timestamp,
       ffmpeg,
     });
     audioPackets = transcoded.packets;

@@ -14,7 +14,8 @@ export function needsTranscode(codec: string): boolean {
 export interface TranscodeOptions {
   packets: EncodedPacket[];
   sampleRate: number;
-  segmentStartSec: number;
+  /** Timestamp of the first original audio packet — used as base for transcoded timestamps */
+  audioStartSec: number;
   ffmpeg: FfmpegRunner;
 }
 
@@ -73,7 +74,7 @@ export async function transcodeAudioSegment(opts: TranscodeOptions): Promise<Tra
   const frames = parseAdtsFrames(aacData);
   const frameDuration = SAMPLES_PER_AAC_FRAME / opts.sampleRate;
 
-  let timestamp = opts.segmentStartSec;
+  let timestamp = opts.audioStartSec;
   const packets = frames.map((frame, i) => {
     const pkt = new EncodedPacket(
       frame.data,

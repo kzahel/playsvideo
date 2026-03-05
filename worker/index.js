@@ -18,6 +18,13 @@ export default {
     headers.set('Cross-Origin-Opener-Policy', 'same-origin');
     headers.set('Cross-Origin-Embedder-Policy', 'require-corp');
 
+    // HTML: always revalidate. Hashed JS/WASM assets: cache long-term.
+    if (key.endsWith('.html') || key === 'index.html') {
+      headers.set('Cache-Control', 'no-cache');
+    } else if (key.startsWith('assets/')) {
+      headers.set('Cache-Control', 'public, max-age=31536000, immutable');
+    }
+
     return new Response(object.body, { headers });
   },
 };

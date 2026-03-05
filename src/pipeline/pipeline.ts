@@ -70,7 +70,7 @@ export async function runPipeline(opts: PipelineOptions): Promise<PipelineResult
         const transcoded = await transcodeAudioSegment({
           packets: audioPackets,
           sampleRate,
-          segmentStartSec: seg.startSec,
+          audioStartSec: audioPackets[0].timestamp,
           ffmpeg: opts.ffmpeg,
         });
         audioPackets = transcoded.packets;

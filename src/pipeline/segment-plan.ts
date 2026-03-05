@@ -2,10 +2,6 @@ import type { PlannedSegment } from './types.js';
 
 const EPSILON_SEC = 1 / 1000;
 
-function roundMillis(value: number): number {
-  return Number(value.toFixed(3));
-}
-
 export function normalizeKeyframeTimestamps(
   timestampsSec: number[],
   durationSec: number,
@@ -79,8 +75,8 @@ export function buildSegmentPlan(options: BuildSegmentPlanOptions): PlannedSegme
     plan.push({
       sequence,
       uri: `seg-${sequence}.m4s`,
-      startSec: roundMillis(startSec),
-      durationSec: roundMillis(duration),
+      startSec,
+      durationSec: duration,
     });
 
     sequence += 1;

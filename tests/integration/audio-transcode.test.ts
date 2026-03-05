@@ -39,7 +39,7 @@ describe('audio-transcode', () => {
     const result = await transcodeAudioSegment({
       packets: ac3Packets,
       sampleRate: 48000,
-      segmentStartSec: 0,
+      audioStartSec: 0,
       ffmpeg,
     });
 
