@@ -1,0 +1,20 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>playsvideo</title>
+  <style>
+    body { font-family: system-ui, sans-serif; margin: 2rem; background: #111; color: #eee; }
+    video { width: 100%; max-width: 1280px; display: none; margin-top: 1rem; background: #000; }
+    #status { margin-top: 0.5rem; color: #999; }
+    input[type="file"] { font-size: 1rem; }
+  </style>
+</head>
+<body>
+  <input type="file" id="file-input" accept="video/*,.mkv,.avi,.ts,.webm">
+  <p id="status">Select a video file to play.</p>
+  <video id="video" controls></video>
+  <script type="module" src="/src/main.ts"></script>
+</body>
+</html>

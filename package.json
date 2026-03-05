@@ -16,6 +16,8 @@
     "check": "biome check --write ."
   },
   "dependencies": {
+    "@ffmpeg/ffmpeg": "^0.12.15",
+    "@ffmpeg/util": "^0.12.2",
     "hls.js": "^1.5.0",
     "mediabunny": "^1.35.1"
   },
