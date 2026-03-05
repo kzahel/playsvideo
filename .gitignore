@@ -1,5 +1,6 @@
 node_modules/
 dist/
+src/vendor/ffmpeg-core/
 tests/fixtures/bigvideo.mp4
 tests/fixtures/*.mp4
 tests/fixtures/*.mkv

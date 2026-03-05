@@ -1,6 +1,9 @@
 import { FFmpeg } from '@ffmpeg/ffmpeg';
-import { toBlobURL } from '@ffmpeg/util';
 import type { FfmpegRunner } from '../pipeline/types.js';
+
+// Vite resolves these to asset URLs at build time
+import coreJsUrl from '../vendor/ffmpeg-core/ffmpeg-core.js?url';
+import coreWasmUrl from '../vendor/ffmpeg-core/ffmpeg-core.wasm?url';
 
 let instance: FFmpeg | null = null;
 let loadPromise: Promise<FFmpeg> | null = null;
@@ -10,10 +13,9 @@ async function getFFmpeg(): Promise<FFmpeg> {
   if (loadPromise) return loadPromise;
   loadPromise = (async () => {
     const ff = new FFmpeg();
-    const baseURL = 'https://unpkg.com/@ffmpeg/core@0.12.6/dist/umd';
     await ff.load({
-      coreURL: await toBlobURL(`${baseURL}/ffmpeg-core.js`, 'text/javascript'),
-      wasmURL: await toBlobURL(`${baseURL}/ffmpeg-core.wasm`, 'application/wasm'),
+      coreURL: coreJsUrl,
+      wasmURL: coreWasmUrl,
     });
     instance = ff;
     return ff;

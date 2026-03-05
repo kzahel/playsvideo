@@ -13,11 +13,12 @@
     "typecheck": "tsc --noEmit",
     "format": "biome format --write .",
     "lint": "biome lint .",
-    "check": "biome check --write ."
+    "check": "biome check --write .",
+    "download:ffmpeg-core": "node scripts/download-ffmpeg-core.mjs",
+    "setup": "npm install && npm run download:ffmpeg-core"
   },
   "dependencies": {
     "@ffmpeg/ffmpeg": "^0.12.15",
-    "@ffmpeg/util": "^0.12.2",
     "hls.js": "^1.5.0",
     "mediabunny": "^1.35.1"
   },
