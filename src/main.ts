@@ -1,13 +1,12 @@
-import Hls from 'hls.js';
 import type {
   FragmentLoaderContext,
   Loader,
   LoaderCallbacks,
   LoaderConfiguration,
-  LoaderContext,
   LoaderStats,
   PlaylistLoaderContext,
 } from 'hls.js';
+import Hls from 'hls.js';
 
 const fileInput = document.getElementById('file-input') as HTMLInputElement;
 const video = document.getElementById('video') as HTMLVideoElement;
@@ -125,9 +124,8 @@ function startHls() {
     enableWorker: false, // we have our own worker
   });
 
-  hls.loadSource('/virtual/playlist.m3u8');
-  hls.attachMedia(video);
-
+  // Register event listeners BEFORE loadSource/attachMedia to avoid race
+  // with synchronous custom loaders that may trigger MANIFEST_PARSED immediately.
   hls.on(Hls.Events.MANIFEST_PARSED, () => {
     video.style.display = 'block';
     video.play().catch(() => {});
@@ -139,6 +137,9 @@ function startHls() {
       status.textContent = `Playback error: ${data.details}`;
     }
   });
+
+  hls.loadSource('/virtual/playlist.m3u8');
+  hls.attachMedia(video);
 }
 
 function makeStats(): LoaderStats {
@@ -169,26 +170,20 @@ class PipelinePlaylistLoader implements Loader<PlaylistLoaderContext> {
     this.context = context;
 
     if (playlist) {
-      this.stats.loaded = playlist.length;
-      this.stats.loading.end = performance.now();
-      callbacks.onSuccess(
-        { url: context.url, data: playlist },
-        this.stats,
-        context,
-        null,
-      );
+      // Defer to let hls.js's state machine settle between ticks
+      const data = playlist;
+      queueMicrotask(() => {
+        this.stats.loaded = data.length;
+        this.stats.loading.end = performance.now();
+        callbacks.onSuccess({ url: context.url, data }, this.stats, context, null);
+      });
     } else {
       // Wait for worker to send playlist
       pendingPlaylist = {
         resolve: (data) => {
           this.stats.loaded = data.length;
           this.stats.loading.end = performance.now();
-          callbacks.onSuccess(
-            { url: context.url, data },
-            this.stats,
-            context,
-            null,
-          );
+          callbacks.onSuccess({ url: context.url, data }, this.stats, context, null);
         },
         reject: (err) => {
           callbacks.onError({ code: 0, text: err.message }, context, null, this.stats);
@@ -231,25 +226,19 @@ class PipelineFragmentLoader implements Loader<FragmentLoaderContext> {
     callbacks: LoaderCallbacks<FragmentLoaderContext>,
   ) {
     if (initData) {
-      this.stats.loaded = initData.byteLength;
-      this.stats.loading.end = performance.now();
-      callbacks.onSuccess(
-        { url: context.url, data: initData },
-        this.stats,
-        context,
-        null,
-      );
+      // Defer to let hls.js's state machine settle between ticks
+      const data = initData;
+      queueMicrotask(() => {
+        this.stats.loaded = data.byteLength;
+        this.stats.loading.end = performance.now();
+        callbacks.onSuccess({ url: context.url, data }, this.stats, context, null);
+      });
     } else {
       pendingInit = {
         resolve: (data) => {
           this.stats.loaded = data.byteLength;
           this.stats.loading.end = performance.now();
-          callbacks.onSuccess(
-            { url: context.url, data },
-            this.stats,
-            context,
-            null,
-          );
+          callbacks.onSuccess({ url: context.url, data }, this.stats, context, null);
         },
         reject: (err) => {
           callbacks.onError({ code: 0, text: err.message }, context, null, this.stats);
@@ -267,20 +256,10 @@ class PipelineFragmentLoader implements Loader<FragmentLoaderContext> {
       .then((data) => {
         this.stats.loaded = data.byteLength;
         this.stats.loading.end = performance.now();
-        callbacks.onSuccess(
-          { url: context.url, data },
-          this.stats,
-          context,
-          null,
-        );
+        callbacks.onSuccess({ url: context.url, data }, this.stats, context, null);
       })
       .catch((err) => {
-        callbacks.onError(
-          { code: 0, text: err.message },
-          context,
-          null,
-          this.stats,
-        );
+        callbacks.onError({ code: 0, text: err.message }, context, null, this.stats);
       });
   }
 

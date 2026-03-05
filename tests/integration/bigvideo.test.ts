@@ -4,11 +4,11 @@ import { join } from 'node:path';
 import { describe, expect, it } from 'vitest';
 import { makeTempDir, NodeFfmpegRunner } from '../../src/adapters/node-ffmpeg.js';
 import { NodeFfprobeRunner } from '../../src/adapters/node-ffprobe.js';
+import { needsTranscode, transcodeAudioSegment } from '../../src/pipeline/audio-transcode.js';
 import { collectPacketsInRange, demuxFile, getKeyframeIndex } from '../../src/pipeline/demux.js';
 import { muxToFmp4 } from '../../src/pipeline/mux.js';
 import { parsePlaylist } from '../../src/pipeline/playlist.js';
 import { buildSegmentPlan } from '../../src/pipeline/segment-plan.js';
-import { needsTranscode, transcodeAudioSegment } from '../../src/pipeline/audio-transcode.js';
 
 const FIXTURES_DIR = join(import.meta.dirname, '..', 'fixtures');
 const GOLDEN_DIR = join(import.meta.dirname, '..', 'golden', 'output');
@@ -158,9 +158,7 @@ describeIfBigVideo('bigvideo full-file validation', () => {
       await writeFile(segPath, combined);
 
       const decodable = await ffprobe.verifyDecodable(segPath);
-      expect(decodable.ok, `Segment ${seg.sequence} not decodable: ${decodable.stderr}`).toBe(
-        true,
-      );
+      expect(decodable.ok, `Segment ${seg.sequence} not decodable: ${decodable.stderr}`).toBe(true);
 
       const probe = await ffprobe.probe(segPath);
       expect(probe.streams.find((s) => s.codecType === 'video')?.codecName).toBe('h264');
@@ -177,11 +175,7 @@ describeIfBigVideo('bigvideo full-file validation', () => {
     const initData = await readFile(join(GOLDEN_DIR, 'init.mp4'));
     const tempDir = await makeTempDir();
 
-    const indices = [
-      0,
-      Math.floor(golden.entries.length / 2),
-      golden.entries.length - 1,
-    ];
+    const indices = [0, Math.floor(golden.entries.length / 2), golden.entries.length - 1];
 
     for (const idx of indices) {
       const entry = golden.entries[idx];
@@ -190,13 +184,19 @@ describeIfBigVideo('bigvideo full-file validation', () => {
       // Combine init + segment for ffprobe verification
       const combined = new Uint8Array(initData.byteLength + segData.byteLength);
       combined.set(new Uint8Array(initData.buffer, initData.byteOffset, initData.byteLength), 0);
-      combined.set(new Uint8Array(segData.buffer, segData.byteOffset, segData.byteLength), initData.byteLength);
+      combined.set(
+        new Uint8Array(segData.buffer, segData.byteOffset, segData.byteLength),
+        initData.byteLength,
+      );
 
       const verifyPath = join(tempDir, `golden-verify-${idx}.mp4`);
       await writeFile(verifyPath, combined);
 
       const decodable = await ffprobe.verifyDecodable(verifyPath);
-      expect(decodable.ok, `Golden seg ${idx} (${entry.uri}) not decodable: ${decodable.stderr}`).toBe(true);
+      expect(
+        decodable.ok,
+        `Golden seg ${idx} (${entry.uri}) not decodable: ${decodable.stderr}`,
+      ).toBe(true);
 
       const probe = await ffprobe.probe(verifyPath);
       expect(probe.streams.find((s) => s.codecType === 'video')?.codecName).toBe('h264');

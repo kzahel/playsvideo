@@ -15,7 +15,10 @@
     "lint": "biome lint .",
     "check": "biome check --write .",
     "download:ffmpeg-core": "node scripts/download-ffmpeg-core.mjs",
-    "setup": "npm install && npm run download:ffmpeg-core"
+    "setup": "npm install && npm run download:ffmpeg-core",
+    "deploy:worker": "cd worker && npx wrangler deploy",
+    "deploy:site": "npm run build && bash scripts/deploy.sh",
+    "deploy": "npm run deploy:site && npm run deploy:worker"
   },
   "dependencies": {
     "@ffmpeg/ffmpeg": "^0.12.15",
@@ -24,6 +27,7 @@
   },
   "devDependencies": {
     "@biomejs/biome": "^2.4.6",
+    "@playwright/test": "^1.58.2",
     "@types/node": "^25.3.3",
     "typescript": "^5.7.0",
     "vite": "^6.0.0",

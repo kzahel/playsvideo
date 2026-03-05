@@ -6,3 +6,4 @@ tests/fixtures/*.mp4
 tests/fixtures/*.mkv
 tests/fixtures/*.aac
 tests/golden/output/
+test-results/

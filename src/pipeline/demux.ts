@@ -25,15 +25,11 @@ export interface DemuxResult {
 }
 
 export async function demuxFile(filePath: string): Promise<DemuxResult> {
-  return demuxInput(
-    new Input({ formats: ALL_FORMATS, source: new FilePathSource(filePath) }),
-  );
+  return demuxInput(new Input({ formats: ALL_FORMATS, source: new FilePathSource(filePath) }));
 }
 
 export async function demuxBlob(blob: Blob): Promise<DemuxResult> {
-  return demuxInput(
-    new Input({ formats: ALL_FORMATS, source: new BlobSource(blob) }),
-  );
+  return demuxInput(new Input({ formats: ALL_FORMATS, source: new BlobSource(blob) }));
 }
 
 async function demuxInput(input: Input): Promise<DemuxResult> {

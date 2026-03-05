@@ -1,0 +1,11 @@
+name = "playsvideo"
+main = "index.js"
+compatibility_date = "2024-01-01"
+
+[[r2_buckets]]
+binding = "BUCKET"
+bucket_name = "playsvideo"
+
+[[routes]]
+pattern = "playsvideo.com/*"
+zone_id = "57b60fce174574bce74be1100ffdd5a2"

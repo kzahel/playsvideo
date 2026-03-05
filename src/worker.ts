@@ -1,7 +1,7 @@
 import { WasmFfmpegRunner } from './adapters/wasm-ffmpeg.js';
 import { needsTranscode, transcodeAudioSegment } from './pipeline/audio-transcode.js';
-import { collectPacketsInRange, demuxBlob, getKeyframeIndex } from './pipeline/demux.js';
 import type { DemuxResult } from './pipeline/demux.js';
+import { collectPacketsInRange, demuxBlob, getKeyframeIndex } from './pipeline/demux.js';
 import { muxToFmp4 } from './pipeline/mux.js';
 import { generateVodPlaylist } from './pipeline/playlist.js';
 import { buildSegmentPlan } from './pipeline/segment-plan.js';
@@ -55,16 +55,19 @@ async function handleOpen(file: File, targetSegmentDuration: number) {
     endList: true,
   });
 
-  // Process first segment to get init segment
-  initSegment = await processSegment(0);
+  // Process first segment to extract init segment (ftyp+moov) as a side effect
+  await processSegment(0);
 
-  self.postMessage({
-    type: 'ready',
-    playlist,
-    initData: initSegment.buffer,
-    totalSegments: plan.length,
-    durationSec: demux.duration,
-  }, { transfer: [] }); // don't transfer initData — we need to keep it
+  self.postMessage(
+    {
+      type: 'ready',
+      playlist,
+      initData: initSegment!.buffer,
+      totalSegments: plan.length,
+      durationSec: demux.duration,
+    },
+    { transfer: [] },
+  ); // don't transfer initData — we need to keep it
 }
 
 async function handleSegment(index: number) {
@@ -81,10 +84,7 @@ async function handleSegment(index: number) {
     mediaData.byteOffset + mediaData.byteLength,
   );
 
-  self.postMessage(
-    { type: 'segment', index, data: buffer },
-    { transfer: [buffer] },
-  );
+  self.postMessage({ type: 'segment', index, data: buffer }, { transfer: [buffer] });
 }
 
 async function processSegment(index: number): Promise<Uint8Array> {
