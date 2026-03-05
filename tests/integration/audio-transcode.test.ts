@@ -7,7 +7,7 @@ import { needsTranscode, transcodeAudioSegment } from '../../src/pipeline/audio-
 import { collectPacketsInRange, demuxFile } from '../../src/pipeline/demux.js';
 
 const FIXTURES_DIR = join(import.meta.dirname, '..', 'fixtures');
-const ffmpeg = new NodeFfmpegRunner();
+let ffmpeg: NodeFfmpegRunner;
 const ffprobe = new NodeFfprobeRunner();
 
 describe('audio-transcode', () => {
@@ -35,12 +35,12 @@ describe('audio-transcode', () => {
     expect(ac3Packets.length).toBeGreaterThan(0);
 
     const tempDir = await makeTempDir();
+    ffmpeg = new NodeFfmpegRunner(tempDir);
     const result = await transcodeAudioSegment({
       packets: ac3Packets,
       sampleRate: 48000,
       segmentStartSec: 0,
       ffmpeg,
-      tempDir,
     });
 
     expect(result.packets.length).toBeGreaterThan(0);

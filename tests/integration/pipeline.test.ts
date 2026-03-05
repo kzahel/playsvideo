@@ -7,7 +7,6 @@ import { runPipeline } from '../../src/pipeline/pipeline.js';
 import { parsePlaylist } from '../../src/pipeline/playlist.js';
 
 const FIXTURES_DIR = join(import.meta.dirname, '..', 'fixtures');
-const ffmpeg = new NodeFfmpegRunner();
 const ffprobe = new NodeFfprobeRunner();
 
 describe('pipeline', () => {
@@ -15,9 +14,8 @@ describe('pipeline', () => {
     const tempDir = await makeTempDir();
     const result = await runPipeline({
       filePath: join(FIXTURES_DIR, 'test-h264-aac.mp4'),
-      ffmpeg,
+      ffmpeg: new NodeFfmpegRunner(tempDir),
       targetSegmentDuration: 4,
-      tempDir,
     });
 
     expect(result.init.byteLength).toBeGreaterThan(0);
@@ -54,9 +52,8 @@ describe('pipeline', () => {
     const tempDir = await makeTempDir();
     const result = await runPipeline({
       filePath: join(FIXTURES_DIR, 'test-h264-ac3.mkv'),
-      ffmpeg,
+      ffmpeg: new NodeFfmpegRunner(tempDir),
       targetSegmentDuration: 4,
-      tempDir,
     });
 
     expect(result.init.byteLength).toBeGreaterThan(0);
@@ -83,9 +80,8 @@ describe('pipeline', () => {
     const tempDir = await makeTempDir();
     const result = await runPipeline({
       filePath: join(FIXTURES_DIR, 'test-h264-ac3-10s.mkv'),
-      ffmpeg,
+      ffmpeg: new NodeFfmpegRunner(tempDir),
       targetSegmentDuration: 4,
-      tempDir,
     });
 
     // Should produce multiple segments

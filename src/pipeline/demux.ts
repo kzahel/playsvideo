@@ -1,5 +1,6 @@
 import {
   ALL_FORMATS,
+  BlobSource,
   type EncodedPacket,
   EncodedPacketSink,
   FilePathSource,
@@ -24,11 +25,18 @@ export interface DemuxResult {
 }
 
 export async function demuxFile(filePath: string): Promise<DemuxResult> {
-  const input = new Input({
-    formats: ALL_FORMATS,
-    source: new FilePathSource(filePath),
-  });
+  return demuxInput(
+    new Input({ formats: ALL_FORMATS, source: new FilePathSource(filePath) }),
+  );
+}
 
+export async function demuxBlob(blob: Blob): Promise<DemuxResult> {
+  return demuxInput(
+    new Input({ formats: ALL_FORMATS, source: new BlobSource(blob) }),
+  );
+}
+
+async function demuxInput(input: Input): Promise<DemuxResult> {
   const videoTrack = await input.getPrimaryVideoTrack();
   if (!videoTrack) {
     throw new Error('No video track found');

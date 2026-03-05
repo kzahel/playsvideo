@@ -9,7 +9,6 @@ export interface PipelineOptions {
   filePath: string;
   ffmpeg: FfmpegRunner;
   targetSegmentDuration?: number;
-  tempDir: string;
 }
 
 export interface PipelineSegment {
@@ -73,7 +72,6 @@ export async function runPipeline(opts: PipelineOptions): Promise<PipelineResult
           sampleRate,
           segmentStartSec: seg.startSec,
           ffmpeg: opts.ffmpeg,
-          tempDir: opts.tempDir,
         });
         audioPackets = transcoded.packets;
         if (!audioDecoderConfig || audioDecoderConfig.codec !== 'mp4a.40.2') {

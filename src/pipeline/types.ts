@@ -31,6 +31,9 @@ export interface PlaylistSpec {
 
 export interface FfmpegRunner {
   run(args: string[]): Promise<{ exitCode: number; stderr: string }>;
+  writeInput(name: string, data: Uint8Array): Promise<void>;
+  readOutput(name: string): Promise<Uint8Array>;
+  deleteFile?(name: string): Promise<void>;
 }
 
 export interface ProbeStream {

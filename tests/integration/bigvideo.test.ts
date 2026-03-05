@@ -13,7 +13,6 @@ import { needsTranscode, transcodeAudioSegment } from '../../src/pipeline/audio-
 const FIXTURES_DIR = join(import.meta.dirname, '..', 'fixtures');
 const GOLDEN_DIR = join(import.meta.dirname, '..', 'golden', 'output');
 const BIGVIDEO = join(FIXTURES_DIR, 'bigvideo.mp4');
-const ffmpeg = new NodeFfmpegRunner();
 const ffprobe = new NodeFfprobeRunner();
 
 const hasBigVideo = existsSync(BIGVIDEO);
@@ -115,12 +114,12 @@ describeIfBigVideo('bigvideo full-file validation', () => {
 
       // Transcode AC3 → AAC
       const sampleRate = demux.audioDecoderConfig?.sampleRate ?? 48000;
+      const ffmpeg = new NodeFfmpegRunner(tempDir);
       const transcoded = await transcodeAudioSegment({
         packets: audioPackets,
         sampleRate,
         segmentStartSec: seg.startSec,
         ffmpeg,
-        tempDir,
       });
       audioPackets = transcoded.packets;
 

@@ -1,11 +1,11 @@
-import { readFile, writeFile } from 'node:fs/promises';
-import { join } from 'node:path';
 import { EncodedPacket } from 'mediabunny';
 import { parseAdtsFrames } from './adts-parse.js';
 import type { FfmpegRunner } from './types.js';
 
 const HLS_SAFE_CODECS = new Set(['aac', 'mp3']);
 const SAMPLES_PER_AAC_FRAME = 1024;
+const INPUT_NAME = 'transcode-input.ac3';
+const OUTPUT_NAME = 'transcode-output.aac';
 
 export function needsTranscode(codec: string): boolean {
   return !HLS_SAFE_CODECS.has(codec);
@@ -16,7 +16,6 @@ export interface TranscodeOptions {
   sampleRate: number;
   segmentStartSec: number;
   ffmpeg: FfmpegRunner;
-  tempDir: string;
 }
 
 export interface TranscodeResult {
@@ -41,10 +40,7 @@ export async function transcodeAudioSegment(opts: TranscodeOptions): Promise<Tra
     offset += pkt.data.byteLength;
   }
 
-  const inputPath = join(opts.tempDir, 'transcode-input.ac3');
-  const outputPath = join(opts.tempDir, 'transcode-output.aac');
-
-  await writeFile(inputPath, rawAudio);
+  await opts.ffmpeg.writeInput(INPUT_NAME, rawAudio);
 
   const result = await opts.ffmpeg.run([
     '-hide_banner',
@@ -53,7 +49,7 @@ export async function transcodeAudioSegment(opts: TranscodeOptions): Promise<Tra
     '-f',
     'ac3',
     '-i',
-    inputPath,
+    INPUT_NAME,
     '-c:a',
     'aac',
     '-ac',
@@ -63,14 +59,17 @@ export async function transcodeAudioSegment(opts: TranscodeOptions): Promise<Tra
     '-f',
     'adts',
     '-y',
-    outputPath,
+    OUTPUT_NAME,
   ]);
 
   if (result.exitCode !== 0) {
     throw new Error(`Audio transcode failed: ${result.stderr}`);
   }
 
-  const aacData = new Uint8Array(await readFile(outputPath));
+  const aacData = await opts.ffmpeg.readOutput(OUTPUT_NAME);
+  await opts.ffmpeg.deleteFile?.(INPUT_NAME);
+  await opts.ffmpeg.deleteFile?.(OUTPUT_NAME);
+
   const frames = parseAdtsFrames(aacData);
   const frameDuration = SAMPLES_PER_AAC_FRAME / opts.sampleRate;
 
