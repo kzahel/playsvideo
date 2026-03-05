@@ -102,11 +102,16 @@ export async function collectPacketsInRange(
   sink: EncodedPacketSink,
   startSec: number,
   endSec: number,
+  opts?: { startFromKeyframe?: boolean },
 ): Promise<EncodedPacket[]> {
   const packets: EncodedPacket[] = [];
 
-  // Find the packet at or before startSec
-  let packet = await sink.getPacket(startSec);
+  let packet: EncodedPacket | null = null;
+  if (opts?.startFromKeyframe) {
+    packet = await sink.getKeyPacket(startSec);
+  } else {
+    packet = await sink.getPacket(startSec);
+  }
   if (!packet) {
     packet = await sink.getFirstPacket();
   }

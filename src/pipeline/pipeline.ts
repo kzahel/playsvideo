@@ -57,7 +57,9 @@ export async function runPipeline(opts: PipelineOptions): Promise<PipelineResult
       const endSec = seg.startSec + seg.durationSec;
 
       // Extract packets for this segment
-      const videoPackets = await collectPacketsInRange(demux.videoSink, seg.startSec, endSec);
+      const videoPackets = await collectPacketsInRange(demux.videoSink, seg.startSec, endSec, {
+        startFromKeyframe: true,
+      });
 
       let audioPackets = demux.audioSink
         ? await collectPacketsInRange(demux.audioSink, seg.startSec, endSec)
