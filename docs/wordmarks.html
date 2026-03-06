@@ -1,0 +1,501 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>PlaysVideo — Brand Explorations</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@200;300;400;500;600;700;800;900&family=DM+Sans:wght@300;400;500;700&family=Space+Grotesk:wght@300;400;500;600;700&family=JetBrains+Mono:wght@300;400;500;700&display=swap" rel="stylesheet">
+<style>
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  body { font-family: 'Inter', -apple-system, sans-serif; background: #fafafa; color: #111; padding: 48px; }
+  h1 { font-size: 14px; text-transform: uppercase; letter-spacing: 4px; color: #999; margin-bottom: 4px; font-weight: 400; }
+  .title { font-size: 32px; font-weight: 700; margin-bottom: 4px; }
+  .subtitle { color: #999; margin-bottom: 56px; font-size: 13px; }
+  .section { margin-bottom: 72px; }
+  .section-title { font-size: 11px; text-transform: uppercase; letter-spacing: 3px; color: #bbb; margin-bottom: 24px; font-weight: 500; }
+  .row { display: flex; gap: 24px; flex-wrap: wrap; margin-bottom: 24px; }
+  .card {
+    border-radius: 16px;
+    padding: 40px 48px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    min-width: 300px;
+    min-height: 120px;
+    position: relative;
+    flex: 1;
+  }
+  .card.white { background: #fff; border: 1px solid #e5e5e5; }
+  .card.offwhite { background: #f5f5f0; border: 1px solid #e5e5e0; }
+  .card.black { background: #111; border: 1px solid #222; }
+  .card.dark { background: #1a1a1a; border: 1px solid #2a2a2a; }
+  .label { position: absolute; bottom: 10px; right: 14px; font-size: 9px; color: #ccc; letter-spacing: 2px; text-transform: uppercase; font-weight: 500; }
+  .card.black .label, .card.dark .label { color: #444; }
+  .desc { font-size: 12px; color: #999; margin-bottom: 24px; line-height: 1.6; max-width: 600px; }
+
+  .icon-row { display: flex; gap: 20px; flex-wrap: wrap; align-items: end; margin-bottom: 16px; }
+  .icon-group { text-align: center; }
+  .icon { display: flex; align-items: center; justify-content: center; }
+  .icon-label { font-size: 9px; color: #bbb; margin-top: 6px; letter-spacing: 1px; }
+
+  .divider { border: none; border-top: 1px solid #eee; margin: 64px 0; }
+
+  /* Simulated app store */
+  .store-mock {
+    background: #fff;
+    border: 1px solid #e5e5e5;
+    border-radius: 16px;
+    padding: 24px 32px;
+    display: flex;
+    align-items: center;
+    gap: 16px;
+    max-width: 420px;
+  }
+  .store-icon {
+    width: 64px; height: 64px;
+    border-radius: 14px;
+    display: flex; align-items: center; justify-content: center;
+    flex-shrink: 0;
+  }
+  .store-info { flex: 1; }
+  .store-name { font-weight: 600; font-size: 15px; }
+  .store-dev { font-size: 12px; color: #999; }
+  .store-cat { font-size: 11px; color: #bbb; margin-top: 2px; }
+  .store-btn {
+    background: #007AFF;
+    color: white;
+    border: none;
+    border-radius: 16px;
+    padding: 6px 18px;
+    font-size: 13px;
+    font-weight: 600;
+    cursor: pointer;
+  }
+</style>
+</head>
+<body>
+
+<h1>Brand Explorations</h1>
+<div class="title">PlaysVideo</div>
+<p class="subtitle">playsvideo.com &mdash; March 2026</p>
+
+<!-- ============ PRIMARY WORDMARKS ============ -->
+<div class="section">
+  <div class="section-title">Wordmarks &mdash; Light</div>
+  <p class="desc">Clean, minimal, black on white. The brand is the restraint.</p>
+  <div class="row">
+    <!-- Bold/light weight contrast -->
+    <div class="card white">
+      <svg width="300" height="52" viewBox="0 0 300 52">
+        <text x="0" y="42" font-family="'Inter', sans-serif" font-weight="700" font-size="44" fill="#111" letter-spacing="-2.5">plays</text>
+        <text x="138" y="42" font-family="'Inter', sans-serif" font-weight="300" font-size="44" fill="#111" letter-spacing="-2.5">video</text>
+      </svg>
+      <div class="label">Weight Contrast</div>
+    </div>
+
+    <!-- All light -->
+    <div class="card white">
+      <svg width="300" height="52" viewBox="0 0 300 52">
+        <text x="0" y="42" font-family="'Inter', sans-serif" font-weight="300" font-size="44" fill="#111" letter-spacing="-2">playsvideo</text>
+      </svg>
+      <div class="label">Ultra Light</div>
+    </div>
+  </div>
+
+  <div class="row">
+    <!-- Play triangle replaces A -->
+    <div class="card white">
+      <svg width="320" height="52" viewBox="0 0 320 52">
+        <text x="0" y="42" font-family="'Inter', sans-serif" font-weight="700" font-size="44" fill="#111" letter-spacing="-2.5">pl</text>
+        <polygon points="60,8 60,44 84,26" fill="#111"/>
+        <text x="80" y="42" font-family="'Inter', sans-serif" font-weight="700" font-size="44" fill="#111" letter-spacing="-2.5">ys</text>
+        <text x="142" y="42" font-family="'Inter', sans-serif" font-weight="300" font-size="44" fill="#111" letter-spacing="-2.5">video</text>
+      </svg>
+      <div class="label">&#9654; = A</div>
+    </div>
+
+    <!-- Period at end -->
+    <div class="card white">
+      <svg width="310" height="52" viewBox="0 0 310 52">
+        <text x="0" y="42" font-family="'Inter', sans-serif" font-weight="700" font-size="44" fill="#111" letter-spacing="-2.5">plays</text>
+        <text x="138" y="42" font-family="'Inter', sans-serif" font-weight="300" font-size="44" fill="#111" letter-spacing="-2.5">video.</text>
+      </svg>
+      <div class="label">Statement</div>
+    </div>
+  </div>
+
+  <div class="row">
+    <!-- Two words, stacked -->
+    <div class="card white" style="min-height: 140px;">
+      <svg width="160" height="90" viewBox="0 0 160 90">
+        <text x="0" y="38" font-family="'Inter', sans-serif" font-weight="800" font-size="42" fill="#111" letter-spacing="-2">plays</text>
+        <text x="0" y="80" font-family="'Inter', sans-serif" font-weight="200" font-size="42" fill="#111" letter-spacing="-2">video</text>
+      </svg>
+      <div class="label">Stacked</div>
+    </div>
+
+    <!-- Space Grotesk -->
+    <div class="card white">
+      <svg width="310" height="52" viewBox="0 0 310 52">
+        <text x="0" y="42" font-family="'Space Grotesk', sans-serif" font-weight="700" font-size="42" fill="#111" letter-spacing="-1.5">plays</text>
+        <text x="138" y="42" font-family="'Space Grotesk', sans-serif" font-weight="300" font-size="42" fill="#111" letter-spacing="-1.5">video</text>
+      </svg>
+      <div class="label">Grotesk</div>
+    </div>
+
+    <!-- DM Sans -->
+    <div class="card white">
+      <svg width="300" height="52" viewBox="0 0 300 52">
+        <text x="0" y="42" font-family="'DM Sans', sans-serif" font-weight="700" font-size="42" fill="#111" letter-spacing="-1">plays</text>
+        <text x="132" y="42" font-family="'DM Sans', sans-serif" font-weight="300" font-size="42" fill="#111" letter-spacing="-1">video</text>
+      </svg>
+      <div class="label">DM Sans</div>
+    </div>
+  </div>
+</div>
+
+<!-- ============ DARK VARIANTS ============ -->
+<div class="section">
+  <div class="section-title">Wordmarks &mdash; Dark</div>
+  <p class="desc">Same marks, inverted. For dark UI, splash screens, marketing.</p>
+  <div class="row">
+    <div class="card black">
+      <svg width="300" height="52" viewBox="0 0 300 52">
+        <text x="0" y="42" font-family="'Inter', sans-serif" font-weight="700" font-size="44" fill="#fff" letter-spacing="-2.5">plays</text>
+        <text x="138" y="42" font-family="'Inter', sans-serif" font-weight="300" font-size="44" fill="#fff" letter-spacing="-2.5">video</text>
+      </svg>
+      <div class="label">White on Black</div>
+    </div>
+
+    <div class="card black">
+      <svg width="320" height="52" viewBox="0 0 320 52">
+        <text x="0" y="42" font-family="'Inter', sans-serif" font-weight="700" font-size="44" fill="#fff" letter-spacing="-2.5">pl</text>
+        <polygon points="60,8 60,44 84,26" fill="#fff"/>
+        <text x="80" y="42" font-family="'Inter', sans-serif" font-weight="700" font-size="44" fill="#fff" letter-spacing="-2.5">ys</text>
+        <text x="142" y="42" font-family="'Inter', sans-serif" font-weight="300" font-size="44" fill="#fff" letter-spacing="-2.5">video</text>
+      </svg>
+      <div class="label">&#9654; = A</div>
+    </div>
+  </div>
+
+  <div class="row">
+    <div class="card black">
+      <svg width="310" height="52" viewBox="0 0 310 52">
+        <text x="0" y="42" font-family="'Inter', sans-serif" font-weight="700" font-size="44" fill="#fff" letter-spacing="-2.5">plays</text>
+        <text x="138" y="42" font-family="'Inter', sans-serif" font-weight="300" font-size="44" fill="#888" letter-spacing="-2.5">video.</text>
+      </svg>
+      <div class="label">Dimmed</div>
+    </div>
+
+    <div class="card dark">
+      <svg width="300" height="52" viewBox="0 0 300 52">
+        <text x="0" y="42" font-family="'JetBrains Mono', monospace" font-weight="400" font-size="34" fill="#e5e5e5" letter-spacing="-0.5">playsvideo</text>
+      </svg>
+      <div class="label">Monospace</div>
+    </div>
+  </div>
+</div>
+
+<!-- ============ LOGO MARK ============ -->
+<div class="section">
+  <div class="section-title">Logo Mark</div>
+  <p class="desc">The play triangle. Nothing else. Works at every size.</p>
+
+  <div class="icon-row">
+    <!-- Large -->
+    <div class="icon-group">
+      <div class="icon" style="width:96px; height:96px; background:#fff; border:1px solid #e5e5e5; border-radius:20px;">
+        <svg width="44" height="52" viewBox="0 0 44 52">
+          <polygon points="2,0 2,52 44,26" fill="#111"/>
+        </svg>
+      </div>
+      <div class="icon-label">96px</div>
+    </div>
+
+    <!-- 64 -->
+    <div class="icon-group">
+      <div class="icon" style="width:64px; height:64px; background:#fff; border:1px solid #e5e5e5; border-radius:14px;">
+        <svg width="28" height="34" viewBox="0 0 28 34">
+          <polygon points="2,0 2,34 28,17" fill="#111"/>
+        </svg>
+      </div>
+      <div class="icon-label">64px</div>
+    </div>
+
+    <!-- 48 -->
+    <div class="icon-group">
+      <div class="icon" style="width:48px; height:48px; background:#fff; border:1px solid #e5e5e5; border-radius:11px;">
+        <svg width="20" height="24" viewBox="0 0 20 24">
+          <polygon points="1,0 1,24 20,12" fill="#111"/>
+        </svg>
+      </div>
+      <div class="icon-label">48px</div>
+    </div>
+
+    <!-- 32 -->
+    <div class="icon-group">
+      <div class="icon" style="width:32px; height:32px; background:#fff; border:1px solid #e5e5e5; border-radius:8px;">
+        <svg width="14" height="16" viewBox="0 0 14 16">
+          <polygon points="1,0 1,16 14,8" fill="#111"/>
+        </svg>
+      </div>
+      <div class="icon-label">32px</div>
+    </div>
+
+    <!-- 16 favicon -->
+    <div class="icon-group">
+      <div class="icon" style="width:16px; height:16px; background:#fff; border:1px solid #ddd; border-radius:3px;">
+        <svg width="8" height="10" viewBox="0 0 8 10">
+          <polygon points="1,0 1,10 8,5" fill="#111"/>
+        </svg>
+      </div>
+      <div class="icon-label">16px</div>
+    </div>
+  </div>
+
+  <!-- Dark versions -->
+  <div style="margin-top: 24px;"></div>
+  <div class="icon-row">
+    <div class="icon-group">
+      <div class="icon" style="width:96px; height:96px; background:#111; border:1px solid #333; border-radius:20px;">
+        <svg width="44" height="52" viewBox="0 0 44 52">
+          <polygon points="2,0 2,52 44,26" fill="#fff"/>
+        </svg>
+      </div>
+      <div class="icon-label">Dark</div>
+    </div>
+
+    <div class="icon-group">
+      <div class="icon" style="width:96px; height:96px; background:#111; border:1px solid #333; border-radius:20px;">
+        <svg width="44" height="52" viewBox="0 0 44 52">
+          <polygon points="2,0 2,52 44,26" fill="#e5e5e5"/>
+        </svg>
+      </div>
+      <div class="icon-label">Dark Soft</div>
+    </div>
+
+    <div class="icon-group">
+      <div class="icon" style="width:96px; height:96px; background:#000; border:1px solid #222; border-radius:20px;">
+        <svg width="44" height="52" viewBox="0 0 44 52">
+          <polygon points="2,0 2,52 44,26" fill="none" stroke="#fff" stroke-width="2.5"/>
+        </svg>
+      </div>
+      <div class="icon-label">Outline</div>
+    </div>
+
+    <div class="icon-group">
+      <div class="icon" style="width:96px; height:96px; background:#fff; border:1px solid #e5e5e5; border-radius:20px;">
+        <svg width="44" height="52" viewBox="0 0 44 52">
+          <polygon points="2,0 2,52 44,26" fill="none" stroke="#111" stroke-width="2.5"/>
+        </svg>
+      </div>
+      <div class="icon-label">Outline Light</div>
+    </div>
+
+    <div class="icon-group">
+      <div class="icon" style="width:96px; height:96px; background:#fff; border:1px solid #e5e5e5; border-radius:48px;">
+        <svg width="38" height="44" viewBox="0 0 38 44">
+          <polygon points="4,0 4,44 38,22" fill="#111"/>
+        </svg>
+      </div>
+      <div class="icon-label">Circle</div>
+    </div>
+  </div>
+</div>
+
+<hr class="divider">
+
+<!-- ============ LOCKUPS ============ -->
+<div class="section">
+  <div class="section-title">Lockups &mdash; Logo + Wordmark</div>
+  <p class="desc">How the mark and name sit together.</p>
+  <div class="row">
+    <!-- Horizontal lockup -->
+    <div class="card white">
+      <svg width="340" height="48" viewBox="0 0 340 48">
+        <polygon points="2,4 2,44 32,24" fill="#111"/>
+        <text x="44" y="38" font-family="'Inter', sans-serif" font-weight="700" font-size="38" fill="#111" letter-spacing="-2">plays</text>
+        <text x="164" y="38" font-family="'Inter', sans-serif" font-weight="300" font-size="38" fill="#111" letter-spacing="-2">video</text>
+      </svg>
+      <div class="label">Horizontal</div>
+    </div>
+
+    <!-- Tight lockup - triangle as P -->
+    <div class="card white">
+      <svg width="280" height="48" viewBox="0 0 280 48">
+        <polygon points="0,4 0,44 26,24" fill="#111"/>
+        <text x="24" y="38" font-family="'Inter', sans-serif" font-weight="700" font-size="38" fill="#111" letter-spacing="-2">lays</text>
+        <text x="126" y="38" font-family="'Inter', sans-serif" font-weight="300" font-size="38" fill="#111" letter-spacing="-2">video</text>
+      </svg>
+      <div class="label">&#9654; = P</div>
+    </div>
+  </div>
+
+  <div class="row">
+    <!-- Stacked lockup -->
+    <div class="card white" style="min-height: 160px;">
+      <div style="text-align: center;">
+        <svg width="44" height="52" viewBox="0 0 44 52">
+          <polygon points="2,0 2,52 44,26" fill="#111"/>
+        </svg>
+        <svg width="200" height="36" viewBox="0 0 200 36" style="display:block; margin: 12px auto 0;">
+          <text x="100" y="28" text-anchor="middle" font-family="'Inter', sans-serif" font-weight="700" font-size="28" fill="#111" letter-spacing="-1.5">plays</text>
+        </svg>
+        <svg width="200" height="30" viewBox="0 0 200 30" style="display:block; margin: -2px auto 0;">
+          <text x="100" y="22" text-anchor="middle" font-family="'Inter', sans-serif" font-weight="200" font-size="28" fill="#111" letter-spacing="-1.5">video</text>
+        </svg>
+      </div>
+      <div class="label">Stacked Center</div>
+    </div>
+
+    <!-- Dark horizontal -->
+    <div class="card black">
+      <svg width="340" height="48" viewBox="0 0 340 48">
+        <polygon points="2,4 2,44 32,24" fill="#fff"/>
+        <text x="44" y="38" font-family="'Inter', sans-serif" font-weight="700" font-size="38" fill="#fff" letter-spacing="-2">plays</text>
+        <text x="164" y="38" font-family="'Inter', sans-serif" font-weight="300" font-size="38" fill="#fff" letter-spacing="-2">video</text>
+      </svg>
+      <div class="label">Dark Horizontal</div>
+    </div>
+  </div>
+
+  <div class="row">
+    <!-- Minimal: just ▶ video -->
+    <div class="card white">
+      <svg width="200" height="48" viewBox="0 0 200 48">
+        <polygon points="0,4 0,44 30,24" fill="#111"/>
+        <text x="40" y="38" font-family="'Inter', sans-serif" font-weight="300" font-size="38" fill="#111" letter-spacing="-1.5">video</text>
+      </svg>
+      <div class="label">&#9654; Video</div>
+    </div>
+
+    <!-- Minimal: plays ▶ -->
+    <div class="card white">
+      <svg width="200" height="48" viewBox="0 0 200 48">
+        <text x="0" y="38" font-family="'Inter', sans-serif" font-weight="700" font-size="38" fill="#111" letter-spacing="-2">plays</text>
+        <polygon points="130,4 130,44 160,24" fill="#111"/>
+      </svg>
+      <div class="label">Plays &#9654;</div>
+    </div>
+
+    <!-- Period -->
+    <div class="card offwhite">
+      <svg width="310" height="48" viewBox="0 0 310 48">
+        <polygon points="0,4 0,44 26,24" fill="#111"/>
+        <text x="34" y="38" font-family="'Inter', sans-serif" font-weight="700" font-size="38" fill="#111" letter-spacing="-2">lays</text>
+        <text x="130" y="38" font-family="'Inter', sans-serif" font-weight="300" font-size="38" fill="#111" letter-spacing="-2">video.</text>
+      </svg>
+      <div class="label">Full Statement</div>
+    </div>
+  </div>
+</div>
+
+<hr class="divider">
+
+<!-- ============ IN CONTEXT ============ -->
+<div class="section">
+  <div class="section-title">In Context</div>
+  <p class="desc">How it looks in a real app store listing and browser tab.</p>
+
+  <div class="row" style="gap: 32px;">
+    <!-- App Store mock -->
+    <div class="store-mock">
+      <div class="store-icon" style="background: #fff; border: 1px solid #e5e5e5;">
+        <svg width="32" height="38" viewBox="0 0 32 38">
+          <polygon points="2,0 2,38 32,19" fill="#111"/>
+        </svg>
+      </div>
+      <div class="store-info">
+        <div class="store-name">PlaysVideo</div>
+        <div class="store-dev">Graehl Arts</div>
+        <div class="store-cat">Video Players & Editors</div>
+      </div>
+      <button class="store-btn">GET</button>
+    </div>
+
+    <!-- Chrome Web Store mock -->
+    <div class="store-mock">
+      <div class="store-icon" style="background: #111; border: 1px solid #333;">
+        <svg width="32" height="38" viewBox="0 0 32 38">
+          <polygon points="2,0 2,38 32,19" fill="#fff"/>
+        </svg>
+      </div>
+      <div class="store-info">
+        <div class="store-name">PlaysVideo</div>
+        <div class="store-dev">Graehl Arts</div>
+        <div class="store-cat">Chrome Web Store</div>
+      </div>
+      <button class="store-btn" style="background: #1a73e8;">Add</button>
+    </div>
+  </div>
+
+  <!-- Browser tab mock -->
+  <div style="margin-top: 32px;">
+    <div style="background: #e8e8e8; border-radius: 10px 10px 0 0; padding: 8px 12px; display: inline-flex; align-items: center; gap: 8px; font-size: 12px; color: #555;">
+      <svg width="10" height="12" viewBox="0 0 10 12">
+        <polygon points="1,0 1,12 10,6" fill="#555"/>
+      </svg>
+      PlaysVideo &mdash; player
+      <span style="color:#ccc; margin-left: 8px;">&#10005;</span>
+    </div>
+  </div>
+</div>
+
+<hr class="divider">
+
+<!-- ============ TYPOGRAPHY SPEC ============ -->
+<div class="section">
+  <div class="section-title">Typography</div>
+  <div class="row">
+    <div class="card white" style="flex-direction: column; align-items: flex-start; gap: 8px; padding: 32px;">
+      <div style="font-family: 'Inter'; font-weight: 700; font-size: 32px; color: #111; letter-spacing: -1.5px;">plays<span style="font-weight: 300;">video</span></div>
+      <div style="font-size: 11px; color: #bbb; letter-spacing: 1px;">INTER &bull; BOLD 700 + LIGHT 300</div>
+    </div>
+    <div class="card white" style="flex-direction: column; align-items: flex-start; gap: 8px; padding: 32px;">
+      <div style="font-family: 'DM Sans'; font-weight: 700; font-size: 32px; color: #111; letter-spacing: -1px;">plays<span style="font-weight: 300;">video</span></div>
+      <div style="font-size: 11px; color: #bbb; letter-spacing: 1px;">DM SANS &bull; BOLD 700 + LIGHT 300</div>
+    </div>
+    <div class="card white" style="flex-direction: column; align-items: flex-start; gap: 8px; padding: 32px;">
+      <div style="font-family: 'Space Grotesk'; font-weight: 700; font-size: 32px; color: #111; letter-spacing: -1px;">plays<span style="font-weight: 300;">video</span></div>
+      <div style="font-size: 11px; color: #bbb; letter-spacing: 1px;">SPACE GROTESK &bull; BOLD 700 + LIGHT 300</div>
+    </div>
+  </div>
+</div>
+
+<!-- ============ COLOR ============ -->
+<div class="section">
+  <div class="section-title">Color Palette</div>
+  <p class="desc">Black and white. The video is the color.</p>
+  <div class="icon-row" style="gap: 12px;">
+    <div style="text-align: center;">
+      <div style="width: 80px; height: 80px; background: #111; border-radius: 12px; border: 1px solid #333;"></div>
+      <div style="font-size: 10px; color: #999; margin-top: 6px;">#111111</div>
+      <div style="font-size: 9px; color: #ccc;">Primary</div>
+    </div>
+    <div style="text-align: center;">
+      <div style="width: 80px; height: 80px; background: #fff; border-radius: 12px; border: 1px solid #e5e5e5;"></div>
+      <div style="font-size: 10px; color: #999; margin-top: 6px;">#FFFFFF</div>
+      <div style="font-size: 9px; color: #ccc;">Background</div>
+    </div>
+    <div style="text-align: center;">
+      <div style="width: 80px; height: 80px; background: #888; border-radius: 12px; border: 1px solid #999;"></div>
+      <div style="font-size: 10px; color: #999; margin-top: 6px;">#888888</div>
+      <div style="font-size: 9px; color: #ccc;">Secondary</div>
+    </div>
+    <div style="text-align: center;">
+      <div style="width: 80px; height: 80px; background: #f5f5f0; border-radius: 12px; border: 1px solid #e5e5e0;"></div>
+      <div style="font-size: 10px; color: #999; margin-top: 6px;">#F5F5F0</div>
+      <div style="font-size: 9px; color: #ccc;">Surface</div>
+    </div>
+    <div style="text-align: center;">
+      <div style="width: 80px; height: 80px; background: #e5e5e5; border-radius: 12px;"></div>
+      <div style="font-size: 10px; color: #999; margin-top: 6px;">#E5E5E5</div>
+      <div style="font-size: 9px; color: #ccc;">Border</div>
+    </div>
+  </div>
+</div>
+
+</body>
+</html>
