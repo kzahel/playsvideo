@@ -11,8 +11,8 @@ import fullWasmUrl from '../vendor/ffmpeg-core/ffmpeg-core.wasm?url';
 
 export type FfmpegTier = 'audio' | 'full';
 
-/** Codecs the minimal audio bundle can handle. */
-const AUDIO_TIER_CODECS = new Set(['ac3', 'eac3', 'dts']);
+/** Codecs the minimal audio bundle can handle (all decoders built into ffmpeg-core-audio). */
+const AUDIO_TIER_CODECS = new Set(['ac3', 'eac3', 'dts', 'mp3', 'flac', 'opus']);
 
 const TIER_URLS: Record<FfmpegTier, { coreURL: string; wasmURL: string }> = {
   audio: { coreURL: audioJsUrl, wasmURL: audioWasmUrl },
@@ -70,7 +70,7 @@ export function tierForCodec(codec: string): FfmpegTier {
 }
 
 export class WasmFfmpegRunner implements FfmpegRunner {
-  private tier: FfmpegTier = 'full';
+  private tier: FfmpegTier = 'audio';
 
   /**
    * Pre-load the smallest sufficient bundle for the given audio codec.
