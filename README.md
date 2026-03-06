@@ -61,13 +61,16 @@ import { PlaysVideoEngine } from 'playsvideo';
 const video = document.querySelector('video')!;
 const engine = new PlaysVideoEngine(video);
 
-engine.addEventListener('ready', (e) => {
-  console.log(`${e.detail.totalSegments} segments, ${e.detail.durationSec}s`);
-});
+// Play a local file (drag-and-drop, <input type="file">, etc.)
+engine.loadFile(file);
 
-engine.loadFile(file); // from drag-and-drop or <input type="file">
-engine.destroy();      // clean up
+// Or play from a URL (requires CORS + range request support)
+engine.loadUrl('https://example.com/video.mkv');
+
+engine.destroy(); // clean up
 ```
+
+See [engine API docs](docs/engine-api.md) for events, properties, and full usage.
 
 ### Roadmap
 
