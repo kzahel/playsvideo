@@ -94,8 +94,7 @@ Changelog-driven releases. The changelog entry must exist before the release scr
 
 - Entry: `import { PlaysVideoEngine } from 'playsvideo'`
 - Lib build: `npm run build:lib` (tsc via `tsconfig.lib.json`, excludes Vite-specific files)
-- `NPM_TOKEN` secret required in GitHub repo settings
-- Publishes with `--provenance` (OIDC trusted publishing via GitHub Actions `id-token: write`)
+- Trusted publishing via OIDC (`id-token: write`) — no npm token needed, configure on npmjs.com package settings
 
 ## Deploy
 
