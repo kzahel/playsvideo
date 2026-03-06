@@ -4,9 +4,12 @@ All notable changes to playsvideo are documented here.
 
 ## [Unreleased]
 
+## [0.0.2] - 2026-03-06
+
 ### Added
 - npm package setup (`import { PlaysVideoEngine } from 'playsvideo'`)
-- GitHub Actions CI for npm publish on release
+- GitHub Actions CI with OIDC trusted publishing
+- Changelog-driven release process (`scripts/release.sh`)
 - MIT license
 
 ### Changed
