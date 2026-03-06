@@ -1,0 +1,143 @@
+# Minimal ffmpeg.wasm build — audio transcode only
+# AC3/EAC3/DTS decode → AAC encode (~2-5 MB vs 32 MB full build)
+#
+# This follows the upstream ffmpegwasm/ffmpeg.wasm build process but strips
+# out all 14 external library stages and uses --disable-everything to include
+# only the audio codecs we need. No external libs required — AC3, EAC3, DTS
+# decoders and AAC encoder are all native ffmpeg components.
+#
+# Build:
+#   docker buildx build -f ffmpegbuild/Dockerfile.ffmpeg-audio -o ffmpegbuild/out .
+#
+# Output:
+#   ffmpegbuild/out/ffmpeg-core.js   — JS glue (Emscripten runtime)
+#   ffmpegbuild/out/ffmpeg-core.wasm — WASM binary
+#
+# Then copy to src/vendor/ffmpeg-core-audio/ for the app to use.
+#
+# Upstream reference: https://github.com/ffmpegwasm/ffmpeg.wasm
+# Matches @ffmpeg/ffmpeg v0.12.x JS API (createFFmpegCore, FS, etc.)
+
+FROM emscripten/emsdk:3.1.40 AS emsdk-base
+
+ARG FFMPEG_VERSION=n5.1.4
+ARG FFMPEG_ST=yes
+
+ENV CFLAGS="-O3 -msimd128"
+ENV CXXFLAGS="-O3 -msimd128"
+ENV LDFLAGS="-O3"
+
+# ---------- Build FFmpeg libraries (no external deps) ----------
+FROM emsdk-base AS ffmpeg-builder
+
+RUN git clone --depth 1 --branch $FFMPEG_VERSION \
+      https://github.com/FFmpeg/FFmpeg.git /src/ffmpeg
+
+WORKDIR /src/ffmpeg
+
+# Configure with --disable-everything, then selectively enable only what we
+# need for audio transcode. This is the key to a small wasm binary.
+#
+# What we're enabling and why:
+#   Decoders: ac3, eac3, dca (DTS) — codecs MSE can't play natively
+#   Encoder:  aac — our universal output format
+#   Parsers:  ac3, dca, aac — needed for format detection
+#   Demuxers: ac3, eac3, dts, dtshd — raw bitstream input (-f ac3 etc.)
+#   Muxer:    adts — AAC output format (-f adts)
+#   Protocol: file — Emscripten MEMFS file I/O
+#   Filters:  anull, aresample — minimal audio filter chain
+#   swresample — sample format/rate conversion (required by aresample)
+RUN emconfigure ./configure \
+      --target-os=none \
+      --arch=x86_32 \
+      --enable-cross-compile \
+      --disable-asm \
+      --disable-stripping \
+      --disable-programs \
+      --disable-doc \
+      --disable-debug \
+      --disable-runtime-cpudetect \
+      --disable-autodetect \
+      --disable-pthreads \
+      --disable-w32threads \
+      --disable-os2threads \
+      --disable-everything \
+      --enable-decoder=ac3 \
+      --enable-decoder=eac3 \
+      --enable-decoder=dca \
+      --enable-encoder=aac \
+      --enable-parser=ac3 \
+      --enable-parser=dca \
+      --enable-parser=aac \
+      --enable-demuxer=ac3 \
+      --enable-demuxer=eac3 \
+      --enable-demuxer=dts \
+      --enable-demuxer=dtshd \
+      --enable-muxer=adts \
+      --enable-protocol=file \
+      --enable-filter=anull \
+      --enable-filter=aresample \
+      --enable-swresample \
+      --nm=emnm \
+      --ar=emar \
+      --ranlib=emranlib \
+      --cc=emcc \
+      --cxx=em++ \
+      --objcc=emcc \
+      --dep-cc=emcc \
+      --extra-cflags="$CFLAGS" \
+      --extra-cxxflags="$CXXFLAGS" \
+    && emmake make -j$(nproc)
+
+# ---------- Build C entry point + link into WASM ----------
+FROM emsdk-base AS ffmpeg-wasm-builder
+
+COPY --from=ffmpeg-builder /src/ffmpeg /src/ffmpeg
+
+# The upstream ffmpegwasm project has its own C binding layer
+# (src/bind/ffmpeg/) that wraps fftools into an exported _ffmpeg function.
+# Rather than reproduce that, we clone the upstream repo and use its
+# bind source with our stripped-down ffmpeg libraries.
+RUN git clone --depth 1 https://github.com/ffmpegwasm/ffmpeg.wasm.git /src/ffmpeg-wasm
+
+WORKDIR /src/ffmpeg-wasm
+
+# Build the final WASM binary using upstream's bind layer + our minimal libs.
+# Flags match upstream's `make prd` target for single-threaded ESM output.
+RUN mkdir -p /build/dist/esm && \
+    EXPORTED_FUNCTIONS=$(node -e "process.stdout.write(require('./src/bind/ffmpeg/export.js').join(','))") && \
+    EXPORTED_RUNTIME_METHODS=$(node -e "process.stdout.write(require('./src/bind/ffmpeg/export-runtime.js').join(','))") && \
+    emcc -O3 -msimd128 \
+      -I/src/ffmpeg \
+      -L/src/ffmpeg/libavfilter -L/src/ffmpeg/libavformat -L/src/ffmpeg/libavcodec \
+      -L/src/ffmpeg/libswresample -L/src/ffmpeg/libavutil \
+      src/bind/ffmpeg/*.c \
+      /src/ffmpeg/fftools/cmdutils.c \
+      /src/ffmpeg/fftools/opt_common.c \
+      /src/ffmpeg/fftools/ffmpeg.c \
+      /src/ffmpeg/fftools/ffmpeg_mux.c \
+      /src/ffmpeg/fftools/ffmpeg_mux_init.c \
+      /src/ffmpeg/fftools/ffmpeg_demux.c \
+      /src/ffmpeg/fftools/ffmpeg_enc.c \
+      /src/ffmpeg/fftools/ffmpeg_filter.c \
+      /src/ffmpeg/fftools/ffmpeg_dec.c \
+      /src/ffmpeg/fftools/ffmpeg_hw.c \
+      /src/ffmpeg/fftools/ffmpeg_opt.c \
+      -lavfilter -lavformat -lavcodec -lswresample -lavutil -lm \
+      -lworkerfs.js \
+      -sWASM_BIGINT \
+      -sSTACK_SIZE=5242880 \
+      -sMODULARIZE \
+      -sEXPORT_NAME="createFFmpegCore" \
+      -sEXPORT_ES6=1 \
+      -sENVIRONMENT=worker \
+      -sEXPORTED_FUNCTIONS="$EXPORTED_FUNCTIONS" \
+      -sEXPORTED_RUNTIME_METHODS="$EXPORTED_RUNTIME_METHODS" \
+      -sINITIAL_MEMORY=33554432 \
+      -sALLOW_MEMORY_GROWTH=1 \
+      -o /build/dist/esm/ffmpeg-core.js
+
+# ---------- Export just the two output files ----------
+FROM scratch AS exportor
+COPY --from=ffmpeg-wasm-builder /build/dist/esm/ffmpeg-core.js /ffmpeg-core.js
+COPY --from=ffmpeg-wasm-builder /build/dist/esm/ffmpeg-core.wasm /ffmpeg-core.wasm
