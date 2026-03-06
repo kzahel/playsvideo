@@ -23,7 +23,7 @@
   "dependencies": {
     "@ffmpeg/ffmpeg": "^0.12.15",
     "hls.js": "^1.5.0",
-    "mediabunny": "github:kzahel/mediabunny#fix/fragmented-cts-multitrack"
+    "mediabunny": "github:kzahel/mediabunny#integration"
   },
   "devDependencies": {
     "@biomejs/biome": "^2.4.6",

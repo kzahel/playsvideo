@@ -26,17 +26,17 @@ describe('normalizeKeyframeTimestamps', () => {
 });
 
 describe('buildSegmentPlan', () => {
-  it('creates segments at keyframe boundaries with target duration', () => {
+  it('creates one segment per keyframe boundary', () => {
     const plan = buildSegmentPlan({
       keyframeTimestampsSec: [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10],
       durationSec: 10,
       targetSegmentDurationSec: 4,
     });
 
-    expect(plan.length).toBe(3);
-    expect(plan[0]).toMatchObject({ sequence: 0, startSec: 0, durationSec: 4 });
-    expect(plan[1]).toMatchObject({ sequence: 1, startSec: 4, durationSec: 4 });
-    expect(plan[2]).toMatchObject({ sequence: 2, startSec: 8, durationSec: 2 });
+    // Cuts at every keyframe regardless of targetSegmentDurationSec
+    expect(plan.length).toBe(10);
+    expect(plan[0]).toMatchObject({ sequence: 0, startSec: 0, durationSec: 1 });
+    expect(plan[9]).toMatchObject({ sequence: 9, startSec: 9, durationSec: 1 });
   });
 
   it('handles single long gap between keyframes', () => {
@@ -50,14 +50,16 @@ describe('buildSegmentPlan', () => {
     expect(plan[0].durationSec).toBe(10);
   });
 
-  it('defaults target duration to 4s', () => {
+  it('cuts at every keyframe regardless of target duration', () => {
     const plan = buildSegmentPlan({
       keyframeTimestampsSec: [0, 2, 4, 6, 8],
       durationSec: 8,
     });
 
-    // With 2s keyframe interval and 4s target: [0-4], [4-8]
-    expect(plan.length).toBe(2);
+    // One segment per keyframe interval
+    expect(plan.length).toBe(4);
+    expect(plan[0]).toMatchObject({ startSec: 0, durationSec: 2 });
+    expect(plan[1]).toMatchObject({ startSec: 2, durationSec: 2 });
   });
 
   it('generates correct URIs', () => {
