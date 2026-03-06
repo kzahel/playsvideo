@@ -4,7 +4,7 @@
   <img alt="playsvideo" src="docs/wordmark-light.svg" width="340">
 </picture>
 
-**You may not need VLC.** Play any video file in the browser — no server, no install.
+**You may not need VLC.** Play any video file in the browser — no install, no upload.
 
 [Try it at playsvideo.com](https://playsvideo.com) &nbsp;|&nbsp; Drop a file. It plays.
 
@@ -37,7 +37,7 @@ Video file (MKV, MP4, AVI, …)
   → subtitles extracted to WebVTT
 ```
 
-Video transcode is almost never needed — browsers natively decode the vast majority of video codecs in the wild. Only unsupported codecs (audio today, video planned) go through ffmpeg.wasm — a few seconds at a time, entirely in-browser.
+Video transcode is almost never needed — browsers natively decode the vast majority of video codecs in the wild. When audio transcode is needed, a lightweight 1.5 MB ffmpeg.wasm build is lazy-loaded on demand — a few seconds at a time, entirely in-browser.
 
 ### Under the hood
 
