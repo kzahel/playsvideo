@@ -8,6 +8,10 @@ import type {
 } from 'hls.js';
 import Hls from 'hls.js';
 
+function mlog(msg: string) {
+  console.log(`[main] ${msg}`);
+}
+
 const fileInput = document.getElementById('file-input') as HTMLInputElement;
 const video = document.getElementById('video') as HTMLVideoElement;
 const status = document.getElementById('status') as HTMLElement;
@@ -31,6 +35,11 @@ let pendingPlaylist: {
   reject: (err: Error) => void;
 } | null = null;
 
+// Race detection tracking
+let lastSegmentRequested = -1;
+let lastSegmentCompleted = -1;
+const segmentRequestTimes = new Map<number, number>();
+
 fileInput.addEventListener('change', () => {
   const file = fileInput.files?.[0];
   if (!file) return;
@@ -49,6 +58,9 @@ function startProcessing(file: File) {
   playlist = null;
   initData = null;
   pendingSegments.clear();
+  lastSegmentRequested = -1;
+  lastSegmentCompleted = -1;
+  segmentRequestTimes.clear();
   video.style.display = 'none';
   status.textContent = `Opening ${file.name}...`;
 
@@ -58,6 +70,7 @@ function startProcessing(file: File) {
     status.textContent = `Worker error: ${e.message}`;
   };
   worker.postMessage({ type: 'open', file });
+  mlog(`open file=${file.name} size=${(file.size / 1024 / 1024).toFixed(1)}MB`);
 }
 
 function handleWorkerMessage(event: MessageEvent) {
@@ -67,6 +80,7 @@ function handleWorkerMessage(event: MessageEvent) {
     playlist = msg.playlist;
     initData = msg.initData;
     status.textContent = `Ready — ${msg.totalSegments} segments, ${formatTime(msg.durationSec)}`;
+    mlog(`ready segments=${msg.totalSegments} dur=${msg.durationSec.toFixed(1)}s`);
 
     // Resolve any pending requests
     if (pendingPlaylist) {
@@ -81,11 +95,25 @@ function handleWorkerMessage(event: MessageEvent) {
     startHls();
   } else if (msg.type === 'segment') {
     const pending = pendingSegments.get(msg.index);
+    const reqTime = segmentRequestTimes.get(msg.index);
+    const latency = reqTime ? (performance.now() - reqTime).toFixed(1) : '?';
+    const size = msg.data?.byteLength ?? 0;
+    segmentRequestTimes.delete(msg.index);
+
     if (pending) {
       pending.resolve(msg.data);
       pendingSegments.delete(msg.index);
     }
+
+    // Race detection: out-of-order completion
+    if (msg.index < lastSegmentCompleted) {
+      mlog(`WARN seg ${msg.index} completed out-of-order (last=${lastSegmentCompleted})`);
+    }
+    lastSegmentCompleted = Math.max(lastSegmentCompleted, msg.index);
+
+    mlog(`seg ${msg.index} arrived latency=${latency}ms size=${size} pending=${pendingSegments.size}`);
   } else if (msg.type === 'error') {
+    mlog(`error: ${msg.message} pending=${pendingSegments.size}`);
     status.textContent = `Error: ${msg.message}`;
     console.error('Worker error:', msg.message);
 
@@ -106,6 +134,24 @@ function handleWorkerMessage(event: MessageEvent) {
 }
 
 function requestSegment(index: number): Promise<ArrayBuffer> {
+  // Race detection: duplicate request for same segment
+  if (pendingSegments.has(index)) {
+    mlog(`WARN duplicate request for seg ${index} (already pending)`);
+  }
+  // Race detection: out-of-order request
+  if (index < lastSegmentRequested) {
+    mlog(`WARN seg ${index} requested out-of-order (last=${lastSegmentRequested})`);
+  }
+  lastSegmentRequested = Math.max(lastSegmentRequested, index);
+
+  const pendingCount = pendingSegments.size;
+  if (pendingCount > 1) {
+    mlog(`WARN ${pendingCount} segments already pending when requesting seg ${index}`);
+  }
+
+  mlog(`req seg ${index} pending=${pendingCount}`);
+  segmentRequestTimes.set(index, performance.now());
+
   return new Promise((resolve, reject) => {
     pendingSegments.set(index, { resolve, reject });
     worker!.postMessage({ type: 'segment', index });
@@ -126,12 +172,30 @@ function startHls() {
 
   // Register event listeners BEFORE loadSource/attachMedia to avoid race
   // with synchronous custom loaders that may trigger MANIFEST_PARSED immediately.
-  hls.on(Hls.Events.MANIFEST_PARSED, () => {
+  hls.on(Hls.Events.MANIFEST_PARSED, (_evt, data) => {
+    mlog(`hls MANIFEST_PARSED levels=${data.levels.length}`);
     video.style.display = 'block';
     video.play().catch(() => {});
   });
 
+  hls.on(Hls.Events.FRAG_LOADING, (_evt, data) => {
+    mlog(`hls FRAG_LOADING sn=${data.frag.sn} url=${data.frag.relurl}`);
+  });
+
+  hls.on(Hls.Events.FRAG_LOADED, (_evt, data) => {
+    mlog(`hls FRAG_LOADED sn=${data.frag.sn} size=${data.frag.stats.loaded}`);
+  });
+
+  hls.on(Hls.Events.FRAG_BUFFERED, (_evt, data) => {
+    mlog(`hls FRAG_BUFFERED sn=${data.frag.sn}`);
+  });
+
+  hls.on(Hls.Events.BUFFER_APPENDING, (_evt, data) => {
+    mlog(`hls BUFFER_APPENDING type=${data.type}`);
+  });
+
   hls.on(Hls.Events.ERROR, (_evt, data) => {
+    mlog(`hls ERROR fatal=${data.fatal} type=${data.type} details=${data.details}`);
     if (data.fatal) {
       console.error('hls.js fatal error:', data);
       status.textContent = `Playback error: ${data.details}`;

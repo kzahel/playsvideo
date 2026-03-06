@@ -8,21 +8,54 @@ const BIGVIDEO_LINK = resolve(__dirname, '../fixtures/bigvideo.mp4');
 const BIGVIDEO = existsSync(BIGVIDEO_LINK) ? realpathSync(BIGVIDEO_LINK) : BIGVIDEO_LINK;
 
 const hasBigvideo = existsSync(BIGVIDEO_LINK);
-const PLAYBACK_SECONDS = Number(process.env.SMOKE_DURATION) || 20;
+const PLAYBACK_SECONDS = Number(process.env.SMOKE_DURATION) || 45;
 const STALL_THRESHOLD_SEC = 3; // max seconds without time advancing before flagging stall
+
+interface LogEntry {
+  ts: number; // wall-clock ms since test start
+  source: string; // 'worker' | 'main' | 'video' | 'page' | 'error'
+  text: string;
+}
+
+interface VideoEvent {
+  ts: number;
+  event: string;
+  time: number;
+  readyState: number;
+  buffered: number;
+}
 
 test.describe('bigvideo smoke test', () => {
   test.skip(!hasBigvideo, 'tests/fixtures/bigvideo.mp4 not found (symlink missing)');
 
   test('plays bigvideo without errors', async ({ page, context }) => {
+    test.setTimeout(180_000); // 3 min: 60s startup + 45s playback + margin
+
+    const testStart = Date.now();
+    const logs: LogEntry[] = [];
     const consoleErrors: string[] = [];
+
     page.on('console', (msg) => {
+      const text = msg.text();
+      const ts = Date.now() - testStart;
+
       if (msg.type() === 'error') {
-        consoleErrors.push(msg.text());
+        consoleErrors.push(text);
+        logs.push({ ts, source: 'error', text });
+      } else if (text.startsWith('[worker]')) {
+        logs.push({ ts, source: 'worker', text: text.slice('[worker] '.length) });
+      } else if (text.startsWith('[main]')) {
+        logs.push({ ts, source: 'main', text: text.slice('[main] '.length) });
+      } else if (text.startsWith('[video]')) {
+        logs.push({ ts, source: 'video', text: text.slice('[video] '.length) });
+      } else {
+        logs.push({ ts, source: 'page', text });
       }
     });
+
     page.on('pageerror', (err) => {
       consoleErrors.push(err.message);
+      logs.push({ ts: Date.now() - testStart, source: 'error', text: err.message });
     });
 
     // CDP session for CPU metrics (Performance.getMetrics)
@@ -57,6 +90,44 @@ test.describe('bigvideo smoke test', () => {
     // Ensure playback starts
     await video.evaluate((el: HTMLVideoElement) => {
       el.play().catch(() => {});
+    });
+
+    // Inject video event listeners to track DOM media events
+    await video.evaluate((el: HTMLVideoElement) => {
+      const events = [
+        'waiting', 'playing', 'stalled', 'seeking', 'seeked',
+        'pause', 'ended', 'error', 'canplay', 'canplaythrough',
+      ];
+      (window as any).__videoEvents = [];
+      let lastTimeUpdate = 0;
+
+      for (const name of events) {
+        el.addEventListener(name, () => {
+          (window as any).__videoEvents.push({
+            ts: performance.now(),
+            event: name,
+            time: el.currentTime,
+            readyState: el.readyState,
+            buffered: el.buffered.length > 0 ? el.buffered.end(el.buffered.length - 1) : 0,
+          });
+          console.log(`[video] ${name} t=${el.currentTime.toFixed(2)} rs=${el.readyState} buf=${el.buffered.length > 0 ? el.buffered.end(el.buffered.length - 1).toFixed(1) : '0'}`);
+        });
+      }
+
+      // Throttled timeupdate — only log every 2 seconds of media time
+      el.addEventListener('timeupdate', () => {
+        if (el.currentTime - lastTimeUpdate >= 2) {
+          lastTimeUpdate = el.currentTime;
+          (window as any).__videoEvents.push({
+            ts: performance.now(),
+            event: 'timeupdate',
+            time: el.currentTime,
+            readyState: el.readyState,
+            buffered: el.buffered.length > 0 ? el.buffered.end(el.buffered.length - 1) : 0,
+          });
+          console.log(`[video] timeupdate t=${el.currentTime.toFixed(2)}`);
+        }
+      });
     });
 
     // Wait for playback to start (currentTime > 0)
@@ -134,6 +205,52 @@ test.describe('bigvideo smoke test', () => {
       }
     }
 
+    // Retrieve video events accumulated in the page
+    const pageVideoEvents = await video.evaluate(() => {
+      return (window as any).__videoEvents as VideoEvent[];
+    });
+
+    // --- Timeline Summary ---
+    console.log('\n  === TIMELINE SUMMARY ===');
+
+    const workerLogs = logs.filter((l) => l.source === 'worker');
+    console.log(`\n  Worker activity (${workerLogs.length} messages):`);
+    for (const l of workerLogs) {
+      console.log(`    +${(l.ts / 1000).toFixed(1)}s  ${l.text}`);
+    }
+
+    const mainLogs = logs.filter((l) => l.source === 'main');
+    console.log(`\n  Main thread (${mainLogs.length} messages):`);
+    for (const l of mainLogs) {
+      console.log(`    +${(l.ts / 1000).toFixed(1)}s  ${l.text}`);
+    }
+
+    console.log(`\n  Video events (${pageVideoEvents.length}):`);
+    for (const e of pageVideoEvents) {
+      if (e.event !== 'timeupdate') {
+        console.log(
+          `    ${e.event} at media t=${e.time.toFixed(2)} rs=${e.readyState} buf=${e.buffered.toFixed(1)}`,
+        );
+      }
+    }
+
+    const warnLogs = logs.filter((l) => l.text.startsWith('WARN'));
+    if (warnLogs.length > 0) {
+      console.log(`\n  WARNINGS (${warnLogs.length}):`);
+      for (const l of warnLogs) {
+        console.log(`    +${(l.ts / 1000).toFixed(1)}s  [${l.source}] ${l.text}`);
+      }
+    }
+
+    if (consoleErrors.length > 0) {
+      console.log(`\n  ERRORS (${consoleErrors.length}):`);
+      for (const e of consoleErrors) {
+        console.log(`    ${e}`);
+      }
+    }
+
+    console.log('  === END TIMELINE ===\n');
+
     // Assert: no stall longer than threshold
     const longStalls = stalls.filter((s) => s.durationSec >= STALL_THRESHOLD_SEC);
     expect(longStalls, `Found ${longStalls.length} stalls >= ${STALL_THRESHOLD_SEC}s`).toHaveLength(
@@ -167,9 +284,43 @@ test.describe('bigvideo smoke test', () => {
     // Assert no console.error calls were observed
     expect(consoleErrors).toEqual([]);
 
+    // Assert: no duplicate segment requests (race detection)
+    const duplicateWarns = logs.filter(
+      (l) => l.source === 'main' && l.text.startsWith('WARN duplicate'),
+    );
+    expect(
+      duplicateWarns,
+      `Race detected: ${duplicateWarns.length} duplicate segment requests`,
+    ).toHaveLength(0);
+
+    // Assert: no video 'error' events
+    const errorEvents = pageVideoEvents.filter((e) => e.event === 'error');
+    expect(errorEvents, 'Video error events detected').toHaveLength(0);
+
+    // Assert: no unrecoverable stalled events (stalled without 'playing' within 5s, after initial buffer)
+    const stalledEvents = pageVideoEvents.filter((e) => e.event === 'stalled');
+    const playingEvents = pageVideoEvents.filter((e) => e.event === 'playing');
+    const unresolvedStalls = stalledEvents.filter((stall) => {
+      const recovery = playingEvents.find(
+        (p) => p.ts > stall.ts && p.ts - stall.ts < 5000,
+      );
+      return !recovery;
+    });
+    if (unresolvedStalls.length > 0) {
+      console.log(`  WARN: ${unresolvedStalls.length} stalled events without recovery within 5s`);
+    }
+    const lateUnresolvedStalls = unresolvedStalls.filter((s) => s.time > 2);
+    expect(
+      lateUnresolvedStalls,
+      `${lateUnresolvedStalls.length} unrecoverable stall events after initial buffer`,
+    ).toHaveLength(0);
+
     // Final summary
     console.log(
-      `  Summary: ${PLAYBACK_SECONDS}s observed, final time=${finalTime.toFixed(2)}s, stalls=${stalls.length}, errors=${consoleErrors.length}`,
+      `  Summary: ${PLAYBACK_SECONDS}s observed, final time=${finalTime.toFixed(2)}s, ` +
+        `stalls=${stalls.length}, errors=${consoleErrors.length}, ` +
+        `worker-msgs=${workerLogs.length}, main-msgs=${mainLogs.length}, ` +
+        `video-events=${pageVideoEvents.length}, warnings=${warnLogs.length}`,
     );
   });
 });

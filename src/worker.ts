@@ -7,6 +7,14 @@ import { generateVodPlaylist } from './pipeline/playlist.js';
 import { buildSegmentPlan } from './pipeline/segment-plan.js';
 import type { PlannedSegment } from './pipeline/types.js';
 
+function wlog(msg: string) {
+  console.log(`[worker] ${msg}`);
+}
+
+function elapsed(start: number): string {
+  return `${(performance.now() - start).toFixed(1)}ms`;
+}
+
 const ffmpeg = new WasmFfmpegRunner();
 
 let demux: DemuxResult | null = null;
@@ -23,10 +31,12 @@ self.onmessage = (event: MessageEvent) => {
   const msg = event.data;
 
   if (msg.type === 'open') {
+    wlog('recv open');
     processingChain = handleOpen(msg.file, msg.targetSegmentDuration ?? 4).catch((err) =>
       self.postMessage({ type: 'error', message: String(err) }),
     );
   } else if (msg.type === 'segment') {
+    wlog(`recv segment idx=${msg.index}`);
     processingChain = processingChain.then(() => handleSegment(msg.index)).catch((err) =>
       self.postMessage({ type: 'error', message: String(err) }),
     );
@@ -34,18 +44,27 @@ self.onmessage = (event: MessageEvent) => {
 };
 
 async function handleOpen(file: File, targetSegmentDuration: number) {
+  const t0 = performance.now();
+
   if (demux) {
     demux.dispose();
   }
 
+  const tDemux = performance.now();
   demux = await demuxBlob(file);
-  const index = await getKeyframeIndex(demux.videoSink, demux.duration);
+  wlog(`demux done ${elapsed(tDemux)} codec=${demux.videoCodec}/${demux.audioCodec} dur=${demux.duration.toFixed(1)}s`);
 
+  const tIndex = performance.now();
+  const index = await getKeyframeIndex(demux.videoSink, demux.duration);
+  wlog(`keyframe-index done ${elapsed(tIndex)} keyframes=${index.keyframes.length}`);
+
+  const tPlan = performance.now();
   plan = buildSegmentPlan({
     keyframeTimestampsSec: index.keyframes.map((k) => k.timestamp),
     durationSec: index.duration,
     targetSegmentDurationSec: targetSegmentDuration,
   });
+  wlog(`segment-plan done ${elapsed(tPlan)} segments=${plan.length}`);
 
   doTranscode = demux.audioCodec !== null && needsTranscode(demux.audioCodec);
   audioDecoderConfig = demux.audioDecoderConfig;
@@ -59,8 +78,11 @@ async function handleOpen(file: File, targetSegmentDuration: number) {
     endList: true,
   });
 
-  // Process first segment to extract init segment (ftyp+moov) as a side effect, cache media data
+  const tSeg0 = performance.now();
   segmentCache.set(0, await processSegment(0));
+  wlog(`seg0 preprocess done ${elapsed(tSeg0)}`);
+
+  wlog(`open complete ${elapsed(t0)} total`);
 
   self.postMessage(
     {
@@ -84,17 +106,20 @@ async function handleSegment(index: number) {
   const cached = segmentCache.get(index);
   if (cached) {
     segmentCache.delete(index);
+    wlog(`seg ${index} cache-hit size=${cached.byteLength}`);
     const buffer = cached.buffer.slice(cached.byteOffset, cached.byteOffset + cached.byteLength);
     self.postMessage({ type: 'segment', index, data: buffer }, { transfer: [buffer] });
     return;
   }
 
+  const t0 = performance.now();
   const mediaData = await processSegment(index);
+  wlog(`seg ${index} done ${elapsed(t0)} size=${mediaData.byteLength}`);
+
   const buffer = mediaData.buffer.slice(
     mediaData.byteOffset,
     mediaData.byteOffset + mediaData.byteLength,
   );
-
   self.postMessage({ type: 'segment', index, data: buffer }, { transfer: [buffer] });
 }
 
@@ -103,29 +128,37 @@ async function processSegment(index: number): Promise<Uint8Array> {
 
   const seg = plan[index];
   const endSec = seg.startSec + seg.durationSec;
+  wlog(`seg ${index} start range=[${seg.startSec.toFixed(2)},${endSec.toFixed(2)})`);
 
+  const tVid = performance.now();
   const videoPackets = await collectPacketsInRange(demux.videoSink, seg.startSec, endSec, {
     startFromKeyframe: true,
   });
+  wlog(`seg ${index} video-collect ${elapsed(tVid)} pkts=${videoPackets.length}`);
 
+  const tAud = performance.now();
   let audioPackets = demux.audioSink
     ? await collectPacketsInRange(demux.audioSink, seg.startSec, endSec)
     : [];
+  wlog(`seg ${index} audio-collect ${elapsed(tAud)} pkts=${audioPackets.length}`);
 
   if (doTranscode && audioPackets.length > 0) {
     const sampleRate = demux.audioDecoderConfig?.sampleRate ?? 48000;
+    const tXcode = performance.now();
     const transcoded = await transcodeAudioSegment({
       packets: audioPackets,
       sampleRate,
       audioStartSec: audioPackets[0].timestamp,
       ffmpeg,
     });
+    wlog(`seg ${index} transcode ${elapsed(tXcode)} in=${audioPackets.length} out=${transcoded.packets.length}`);
     audioPackets = transcoded.packets;
     if (!audioDecoderConfig || audioDecoderConfig.codec !== 'mp4a.40.2') {
       audioDecoderConfig = transcoded.decoderConfig;
     }
   }
 
+  const tMux = performance.now();
   const muxResult = await muxToFmp4({
     videoPackets,
     audioPackets,
@@ -134,9 +167,11 @@ async function processSegment(index: number): Promise<Uint8Array> {
     videoDecoderConfig: demux.videoDecoderConfig,
     audioDecoderConfig,
   });
+  wlog(`seg ${index} mux ${elapsed(tMux)}`);
 
   if (!initSegment) {
     initSegment = muxResult.init;
+    wlog(`init-segment captured size=${initSegment.byteLength}`);
   }
 
   // Concatenate media fragments
