@@ -89,41 +89,44 @@ RUN emconfigure ./configure \
       --extra-cxxflags="$CXXFLAGS" \
     && emmake make -j$(nproc)
 
-# ---------- Build C entry point + link into WASM ----------
+# ---------- Link into WASM using upstream's fftools + JS bind layer ----------
 FROM emsdk-base AS ffmpeg-wasm-builder
 
 COPY --from=ffmpeg-builder /src/ffmpeg /src/ffmpeg
 
-# The upstream ffmpegwasm project has its own C binding layer
-# (src/bind/ffmpeg/) that wraps fftools into an exported _ffmpeg function.
-# Rather than reproduce that, we clone the upstream repo and use its
-# bind source with our stripped-down ffmpeg libraries.
+# Clone the upstream ffmpegwasm repo for its modified fftools source files
+# and JS binding layer. The upstream fftools are simplified wrappers around
+# ffmpeg's libraries that export _ffmpeg and _ffprobe entry points.
 RUN git clone --depth 1 https://github.com/ffmpegwasm/ffmpeg.wasm.git /src/ffmpeg-wasm
 
-WORKDIR /src/ffmpeg-wasm
+WORKDIR /src/ffmpeg
 
-# Build the final WASM binary using upstream's bind layer + our minimal libs.
-# Flags match upstream's `make prd` target for single-threaded ESM output.
+# Copy upstream's modified fftools and bind layer into the ffmpeg source tree
+RUN mkdir -p src && \
+    cp -r /src/ffmpeg-wasm/src/fftools src/fftools && \
+    cp -r /src/ffmpeg-wasm/src/bind src/bind
+
+# Build the final WASM binary.
+# - Uses upstream's modified fftools/*.c (not FFmpeg's original fftools)
+# - Uses --pre-js to inject the JS bind layer (no C bind files)
+# - Matches upstream's `make prd` flags for single-threaded ESM output
 RUN mkdir -p /build/dist/esm && \
-    EXPORTED_FUNCTIONS=$(node -e "process.stdout.write(require('./src/bind/ffmpeg/export.js').join(','))") && \
-    EXPORTED_RUNTIME_METHODS=$(node -e "process.stdout.write(require('./src/bind/ffmpeg/export-runtime.js').join(','))") && \
+    EXPORTED_FUNCTIONS=$(node src/bind/ffmpeg/export.js) && \
+    EXPORTED_RUNTIME_METHODS=$(node src/bind/ffmpeg/export-runtime.js) && \
     emcc -O3 -msimd128 \
-      -I/src/ffmpeg \
-      -L/src/ffmpeg/libavfilter -L/src/ffmpeg/libavformat -L/src/ffmpeg/libavcodec \
-      -L/src/ffmpeg/libswresample -L/src/ffmpeg/libavutil \
-      src/bind/ffmpeg/*.c \
-      /src/ffmpeg/fftools/cmdutils.c \
-      /src/ffmpeg/fftools/opt_common.c \
-      /src/ffmpeg/fftools/ffmpeg.c \
-      /src/ffmpeg/fftools/ffmpeg_mux.c \
-      /src/ffmpeg/fftools/ffmpeg_mux_init.c \
-      /src/ffmpeg/fftools/ffmpeg_demux.c \
-      /src/ffmpeg/fftools/ffmpeg_enc.c \
-      /src/ffmpeg/fftools/ffmpeg_filter.c \
-      /src/ffmpeg/fftools/ffmpeg_dec.c \
-      /src/ffmpeg/fftools/ffmpeg_hw.c \
-      /src/ffmpeg/fftools/ffmpeg_opt.c \
-      -lavfilter -lavformat -lavcodec -lswresample -lavutil -lm \
+      -I. \
+      -Isrc/fftools \
+      -Llibavdevice -Llibavfilter -Llibavformat -Llibavcodec \
+      -Llibswresample -Llibswscale -Llibavutil \
+      src/fftools/cmdutils.c \
+      src/fftools/ffmpeg.c \
+      src/fftools/ffmpeg_filter.c \
+      src/fftools/ffmpeg_hw.c \
+      src/fftools/ffmpeg_mux.c \
+      src/fftools/ffmpeg_opt.c \
+      src/fftools/opt_common.c \
+      src/fftools/ffprobe.c \
+      -lavdevice -lavfilter -lavformat -lavcodec -lswresample -lswscale -lavutil -lm \
       -lworkerfs.js \
       -sWASM_BIGINT \
       -sSTACK_SIZE=5242880 \
@@ -135,6 +138,7 @@ RUN mkdir -p /build/dist/esm && \
       -sEXPORTED_RUNTIME_METHODS="$EXPORTED_RUNTIME_METHODS" \
       -sINITIAL_MEMORY=33554432 \
       -sALLOW_MEMORY_GROWTH=1 \
+      --pre-js src/bind/ffmpeg/bind.js \
       -o /build/dist/esm/ffmpeg-core.js
 
 # ---------- Export just the two output files ----------
