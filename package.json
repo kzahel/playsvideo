@@ -1,6 +1,6 @@
 {
   "name": "playsvideo",
-  "version": "0.0.2",
+  "version": "0.0.3",
   "description": "Play any video file in the browser — client-side remuxing and audio transcode, no server required.",
   "license": "MIT",
   "type": "module",
