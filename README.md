@@ -4,7 +4,7 @@
   <img alt="playsvideo" src="docs/wordmark-light.svg" width="340">
 </picture>
 
-**You may not need VLC.** Play any video file in the browser — no server, no install, no transcoding.
+**You may not need VLC.** Play any video file in the browser — no server, no install.
 
 [Try it at playsvideo.com](https://playsvideo.com) &nbsp;|&nbsp; Drop a file. It plays.
 
@@ -17,9 +17,11 @@ Most video files won't play in a browser — not because the browser can't *deco
 | | Formats | Notes |
 |---|---|---|
 | **Containers** | MKV, MP4, AVI, TS, WebM | Demuxed and remuxed to fMP4 |
-| **Video** | H.264, H.265, VP9, AV1 | Passed through untouched — zero quality loss |
+| **Video** | H.264, H.265, VP9, AV1 | Passthrough — plays ~99% of files (~90% on Firefox; HEVC transcode planned) |
 | **Audio** | AAC, MP3, AC-3, E-AC-3, DTS, FLAC, Opus | Unsupported codecs transcoded to AAC on the fly |
 | **Subtitles** | SRT, ASS/SSA | Extracted and displayed as WebVTT |
+
+See [supported media](docs/supported-media.md) for the full codec matrix, browser compatibility, and transcode details.
 
 ### How it works
 
@@ -28,14 +30,14 @@ Video file (MKV, MP4, AVI, …)
   → mediabunny demux (streaming, any file size)
   → keyframe-aligned segment plan
   → per segment:
-      video packets copied as-is (H.264/HEVC/VP9/AV1)
+      video passed through or transcoded if needed
       audio transcoded only if needed (AC-3/DTS/FLAC → AAC)
       muxed to fMP4
   → hls.js plays segments on demand
   → subtitles extracted to WebVTT
 ```
 
-Video is **never** re-encoded. Only unsupported audio codecs go through ffmpeg.wasm — a few seconds at a time, entirely in-browser.
+Video transcode is almost never needed — browsers natively decode the vast majority of video codecs in the wild. Only unsupported codecs (audio today, video planned) go through ffmpeg.wasm — a few seconds at a time, entirely in-browser.
 
 ### Under the hood
 
