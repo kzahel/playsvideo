@@ -1,0 +1,31 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>playsvideo</title>
+  <link rel="icon" type="image/svg+xml" href="/favicon.svg">
+  <link rel="manifest" href="/manifest.json">
+  <meta name="theme-color" content="#111111">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+  <link rel="apple-touch-icon" href="/icons/icon-192.png">
+  <style>
+    body { font-family: system-ui, sans-serif; margin: 2rem; background: #111; color: #eee; }
+    video { width: 100%; max-width: 1280px; display: none; margin-top: 1rem; background: #000; }
+    #status { margin-top: 0.5rem; color: #999; }
+    input[type="file"] { font-size: 1rem; }
+  </style>
+</head>
+<body>
+  <svg width="300" height="48" viewBox="0 0 340 48" style="margin-bottom: 1rem;">
+    <polygon points="2,4 2,44 32,24" fill="#fff"/>
+    <text x="44" y="38" font-family="'Inter', sans-serif" font-weight="700" font-size="38" fill="#fff" letter-spacing="-2">plays</text>
+    <text x="164" y="38" font-family="'Inter', sans-serif" font-weight="300" font-size="38" fill="#fff" letter-spacing="-2">video</text>
+  </svg>
+  <input type="file" id="file-input">
+  <p id="status">Select a video file to play.</p>
+  <video id="video" controls></video>
+  <script type="module" src="/src/main.ts"></script>
+</body>
+</html>

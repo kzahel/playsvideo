@@ -1,7 +1,7 @@
 const CACHE_NAME = 'playsvideo-shell-v1';
 const SHELL_URLS = [
-  '/',
-  '/index.html',
+  '/player',
+  '/player.html',
   '/manifest.json',
   '/favicon.svg',
   '/icons/icon-192.png',
@@ -30,7 +30,7 @@ self.addEventListener('fetch', (event) => {
   const url = new URL(event.request.url);
 
   // Handle share target POST (Android share sheet)
-  if (url.pathname === '/share-target' && event.request.method === 'POST') {
+  if (url.pathname === '/player/share-target' && event.request.method === 'POST') {
     event.respondWith(handleShareTarget(event.request));
     return;
   }
@@ -55,5 +55,5 @@ async function handleShareTarget(request) {
     await cache.put('/shared-video-file', new Response(videoFile));
   }
 
-  return Response.redirect('/?source=share', 303);
+  return Response.redirect('/player?source=share', 303);
 }

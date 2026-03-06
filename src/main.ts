@@ -8,7 +8,7 @@ const engine = new PlaysVideoEngine(video);
 
 // Register service worker
 if ('serviceWorker' in navigator) {
-  navigator.serviceWorker.register('/sw.js');
+  navigator.serviceWorker.register('/sw.js', { scope: '/player' });
 }
 
 fileInput.addEventListener('change', () => {
@@ -40,7 +40,7 @@ async function handleShareTarget() {
     await cache.delete('/shared-video-file');
   }
   // Clean the URL
-  history.replaceState(null, '', '/');
+  history.replaceState(null, '', '/player');
 }
 handleShareTarget();
 

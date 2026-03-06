@@ -5,6 +5,10 @@ export default {
 
     if (key === '' || key === '/') {
       key = 'index.html';
+    } else if (key === 'player' || key === 'player/') {
+      key = 'player.html';
+    } else if (key === 'debug' || key === 'debug/') {
+      key = 'debug.html';
     }
 
     const object = await env.BUCKET.get(key);
@@ -19,7 +23,7 @@ export default {
     headers.set('Cross-Origin-Embedder-Policy', 'require-corp');
 
     // HTML, SW, manifest: always revalidate. Hashed assets: cache long-term.
-    if (key.endsWith('.html') || key === 'index.html' || key === 'sw.js' || key === 'manifest.json') {
+    if (key.endsWith('.html') || key === 'sw.js' || key === 'manifest.json') {
       headers.set('Cache-Control', 'no-cache');
     } else if (key.startsWith('assets/')) {
       headers.set('Cache-Control', 'public, max-age=31536000, immutable');
