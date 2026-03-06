@@ -1,17 +1,6 @@
-const CACHE_NAME = 'playsvideo-shell-v1';
-const SHELL_URLS = [
-  '/player',
-  '/player.html',
-  '/manifest.json',
-  '/favicon.svg',
-  '/icons/icon-192.png',
-  '/icons/icon-512.png',
-];
+const WASM_CACHE = 'playsvideo-wasm-v1';
 
-self.addEventListener('install', (event) => {
-  event.waitUntil(
-    caches.open(CACHE_NAME).then((cache) => cache.addAll(SHELL_URLS))
-  );
+self.addEventListener('install', () => {
   self.skipWaiting();
 });
 
@@ -19,7 +8,7 @@ self.addEventListener('activate', (event) => {
   event.waitUntil(
     caches.keys().then((keys) =>
       Promise.all(
-        keys.filter((k) => k !== CACHE_NAME).map((k) => caches.delete(k))
+        keys.filter((k) => k !== WASM_CACHE && k !== 'playsvideo-shared').map((k) => caches.delete(k))
       )
     )
   );
@@ -39,10 +28,19 @@ self.addEventListener('fetch', (event) => {
   if (event.request.method !== 'GET') return;
   if (url.origin !== self.location.origin) return;
 
-  // Cache-first for shell resources
-  event.respondWith(
-    caches.match(event.request).then((cached) => cached || fetch(event.request))
-  );
+  // Cache-first only for .wasm files; everything else goes to network
+  if (url.pathname.endsWith('.wasm')) {
+    event.respondWith(
+      caches.open(WASM_CACHE).then((cache) =>
+        cache.match(event.request).then((cached) =>
+          cached || fetch(event.request).then((resp) => {
+            cache.put(event.request, resp.clone());
+            return resp;
+          })
+        )
+      )
+    );
+  }
 });
 
 async function handleShareTarget(request) {

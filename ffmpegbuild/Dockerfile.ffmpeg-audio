@@ -45,7 +45,7 @@ WORKDIR /src/ffmpeg
 #   Demuxers: ac3, eac3, dts, dtshd — raw bitstream input (-f ac3 etc.)
 #   Muxer:    adts — AAC output format (-f adts)
 #   Protocol: file — Emscripten MEMFS file I/O
-#   Filters:  anull, aresample — minimal audio filter chain
+#   Filters:  abuffer, abuffersink, aformat, anull, aresample — full audio filter chain
 #   swresample — sample format/rate conversion (required by aresample)
 RUN emconfigure ./configure \
       --target-os=none \
@@ -75,6 +75,9 @@ RUN emconfigure ./configure \
       --enable-demuxer=dtshd \
       --enable-muxer=adts \
       --enable-protocol=file \
+      --enable-filter=abuffer \
+      --enable-filter=abuffersink \
+      --enable-filter=aformat \
       --enable-filter=anull \
       --enable-filter=aresample \
       --enable-swresample \
