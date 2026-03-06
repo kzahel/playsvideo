@@ -1,0 +1,17 @@
+{
+  "extends": "./tsconfig.json",
+  "compilerOptions": {
+    "outDir": "dist",
+    "declaration": true,
+    "declarationMap": true,
+    "sourceMap": true
+  },
+  "include": ["src/**/*.ts"],
+  "exclude": [
+    "src/vite-env.d.ts",
+    "src/pwa-player.ts",
+    "src/debug.ts",
+    "src/worker.ts",
+    "src/adapters/wasm-ffmpeg.ts"
+  ]
+}

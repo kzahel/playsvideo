@@ -1,11 +1,24 @@
 {
   "name": "playsvideo",
   "version": "0.0.1",
-  "private": true,
+  "description": "Play any video file in the browser — client-side remuxing and audio transcode, no server required.",
+  "license": "MIT",
   "type": "module",
+  "main": "dist/index.js",
+  "types": "dist/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js"
+    }
+  },
+  "files": [
+    "dist"
+  ],
   "scripts": {
     "dev": "vite",
     "build": "vite build",
+    "build:lib": "rm -rf dist && tsc -p tsconfig.lib.json",
     "test": "vitest run",
     "test:unit": "vitest run tests/unit",
     "test:integration": "vitest run tests/integration",
@@ -13,13 +26,15 @@
     "test:e2e": "npx playwright test",
     "typecheck": "tsc --noEmit",
     "format": "biome format --write .",
+    "format:check": "biome format .",
     "lint": "biome lint .",
     "check": "biome check --write .",
     "download:ffmpeg-core": "node scripts/download-ffmpeg-core.mjs",
     "setup": "npm install && npm run download:ffmpeg-core",
     "deploy:worker": "cd worker && npx wrangler deploy",
     "deploy:site": "npm run build && bash scripts/deploy.sh",
-    "deploy": "npm run deploy:site && npm run deploy:worker"
+    "deploy": "npm run deploy:site && npm run deploy:worker",
+    "prepublishOnly": "npm run build:lib"
   },
   "dependencies": {
     "@ffmpeg/ffmpeg": "^0.12.15",
