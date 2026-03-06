@@ -3,7 +3,9 @@ dist/
 src/vendor/ffmpeg-core/
 tests/fixtures/bigvideo.mp4
 tests/fixtures/*.mp4
+!tests/fixtures/codec-h264-baseline.mp4
 tests/fixtures/*.mkv
+tests/fixtures/*.webm
 tests/fixtures/*.aac
 tests/golden/output/
 test-results/
