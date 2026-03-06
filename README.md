@@ -1,22 +1,55 @@
-# playsvideo
+<picture>
+  <source media="(prefers-color-scheme: dark)" srcset="docs/wordmark-dark.svg">
+  <source media="(prefers-color-scheme: light)" srcset="docs/wordmark-light.svg">
+  <img alt="playsvideo" src="docs/wordmark-light.svg" width="340">
+</picture>
 
-Play video files in the browser. No server, no pre-transcoding, no install. Try it at [playsvideo.com](https://playsvideo.com).
+**You may not need VLC.** Play any video file in the browser — no server, no install, no transcoding.
 
-Drop a file and it plays — remuxing containers and transcoding audio codecs that browsers can't handle natively. All processing happens client-side in a web worker.
+[Try it at playsvideo.com](https://playsvideo.com) &nbsp;|&nbsp; Drop a file. It plays.
 
-### Supported formats
+---
 
-| | Supported | Notes |
+Most video files won't play in a browser — not because the browser can't *decode* the video, but because it can't open the container or handle the audio codec. playsvideo fixes that entirely client-side: it remuxes containers and transcodes audio on the fly, so your MKV with AC-3 audio just works.
+
+### What it handles
+
+| | Formats | Notes |
 |---|---|---|
-| **Containers** | MKV, MP4, AVI, TS, WebM | Demuxed by mediabunny |
-| **Video** | H.264, H.265 (HEVC), VP9, AV1 | Passed through untouched. H.264 works everywhere. HEVC needs Chrome/Edge/Safari (not Chromium/Firefox). VP9/AV1 work in Chrome/Edge/Firefox (not Safari). |
-| **Audio (native)** | AAC, MP3 | Passed through |
-| **Audio (transcoded)** | AC-3, E-AC-3, DTS, FLAC, Opus | Transcoded to AAC 160k stereo via ffmpeg.wasm |
-| **Subtitles** | SRT, ASS/SSA (text-based) | Extracted to WebVTT |
+| **Containers** | MKV, MP4, AVI, TS, WebM | Demuxed and remuxed to fMP4 |
+| **Video** | H.264, H.265, VP9, AV1 | Passed through untouched — zero quality loss |
+| **Audio** | AAC, MP3, AC-3, E-AC-3, DTS, FLAC, Opus | Unsupported codecs transcoded to AAC on the fly |
+| **Subtitles** | SRT, ASS/SSA | Extracted and displayed as WebVTT |
 
-## Usage
+### How it works
 
-> **Not yet published to npm.** The API below is the current interface — it will stabilize before the first release.
+```
+Video file (MKV, MP4, AVI, …)
+  → mediabunny demux (streaming, any file size)
+  → keyframe-aligned segment plan
+  → per segment:
+      video packets copied as-is (H.264/HEVC/VP9/AV1)
+      audio transcoded only if needed (AC-3/DTS/FLAC → AAC)
+      muxed to fMP4
+  → hls.js plays segments on demand
+  → subtitles extracted to WebVTT
+```
+
+Video is **never** re-encoded. Only unsupported audio codecs go through ffmpeg.wasm — a few seconds at a time, entirely in-browser.
+
+### Why this exists
+
+There's no library that does this. The obvious approach — ffmpeg compiled to WebAssembly — can't handle large files (WORKERFS is catastrophically slow, MEMFS can't hold them). The trick is to split the problem:
+
+- **[mediabunny](https://github.com/Vanilagy/mediabunny)** — streaming demux/remux in pure TypeScript, works on any size file
+- **[ffmpeg.wasm](https://github.com/nicolo-ribaudo/ffmpeg.wasm)** — only transcodes short audio segments via MEMFS
+- **[hls.js](https://github.com/video-dev/hls.js)** — battle-tested HLS playback via Media Source Extensions
+
+Each piece existed separately. Nobody combined them.
+
+### Use as a library
+
+> Not yet published to npm. The API below is the current interface.
 
 ```ts
 import { PlaysVideoEngine } from 'playsvideo';
@@ -26,82 +59,20 @@ const engine = new PlaysVideoEngine(video);
 
 engine.addEventListener('ready', (e) => {
   console.log(`${e.detail.totalSegments} segments, ${e.detail.durationSec}s`);
-  console.log('subtitles:', e.detail.subtitleTracks);
 });
 
-engine.addEventListener('error', (e) => {
-  console.error(e.detail.message);
-});
-
-// Load from a File (e.g. drag-and-drop or <input type="file">)
-engine.loadFile(file);
-
-// Clean up
-engine.destroy();
+engine.loadFile(file); // from drag-and-drop or <input type="file">
+engine.destroy();      // clean up
 ```
 
-The engine handles everything: spawns a web worker for demux, transcodes unsupported audio, wires up hls.js with custom loaders, and attaches subtitle tracks to the `<video>` element.
+### Roadmap
 
-## Why this exists
+- **npm publish** — `npm install playsvideo`
+- **WebCodecs** — replace ffmpeg.wasm audio transcode with `AudioDecoder`/`AudioEncoder` (smaller bundle, lower latency)
+- **Video transcode** — hardware-accelerated decode via `VideoDecoder` for edge-case codecs
 
-There's no library or app that does this. The browser can decode H.264, H.265 (HEVC), VP9, and AV1 natively, but it can't *open* most video files because it doesn't understand container formats like MKV or audio codecs like AC-3. The obvious solution — ffmpeg compiled to WebAssembly — doesn't work for large files because WORKERFS is catastrophically slow and MEMFS can't hold them.
-
-The trick is to split the problem:
-
-- **mediabunny** (pure TypeScript) handles demux and remux — streaming, no full-file copies, works on any size file
-- **ffmpeg.wasm** only transcodes short audio segments (AC-3, E-AC-3, DTS, FLAC, Opus → AAC) via MEMFS — the one thing it's fast at
-- **hls.js** handles playback via Media Source Extensions — battle-tested, avoids the manual MSE bug factory
-
-Each piece existed separately. Nobody combined them.
-
-## How it works
-
-```
-Video file (MKV, MP4, AVI, TS, WebM)
-  → mediabunny demux (extract video + audio packets)
-  → keyframe index → segment plan
-  → per segment:
-      video packets (H.264/HEVC/VP9/AV1) copied as-is
-      audio transcoded only if needed (AC-3/E-AC-3/FLAC/Opus → AAC)
-      muxed to fMP4 via mediabunny
-  → hls.js plays fMP4 segments on demand
-  → subtitles extracted to WebVTT
-```
-
-The web worker keeps the demux handle open and processes segments on-demand as hls.js requests them. Video is never transcoded — packets are passed through untouched. Only unsupported audio codecs (AC-3, E-AC-3, DTS, FLAC, Opus) go through ffmpeg.wasm, and only a few seconds at a time.
-
-## Project structure
-
-```
-src/pipeline/       Core modules (demux, mux, segment plan, audio transcode,
-                    codec probe, playlist, subtitle extraction)
-src/adapters/       Platform adapters (ffmpeg.wasm for browser, node-ffmpeg for tests)
-src/worker.ts       Web worker — demux + on-demand segment processing
-src/pwa-player.ts   Browser entry — file picker, hls.js integration, subtitle tracks
-tests/unit/         Fast tests, no external dependencies
-tests/integration/  Tests requiring ffmpeg/ffprobe and fixture files
-tests/e2e/          Playwright browser tests
-```
-
-## Status
-
-Third iteration (after stupidplayer and easyplay). The pipeline works end-to-end: demux, keyframe indexing, segment planning, audio transcode, fMP4 muxing, HLS playback, and subtitle extraction. Using a [fork](https://github.com/kzahel/mediabunny/tree/integration) with subtitle support.
-
-## Roadmap
-
-- **npm publish** — package as an installable library (`npm install playsvideo`)
-- **WebCodecs** — replace ffmpeg.wasm audio transcode with `AudioDecoder`/`AudioEncoder` for lower latency and smaller bundle (no 1.5 MB wasm download)
-- **Video transcode** — hardware-accelerated decode via `VideoDecoder` for codecs the browser can decode but MSE can't mux (edge cases)
-
-## Dependencies
-
-Three runtime dependencies:
-
-- **[mediabunny](https://github.com/Vanilagy/mediabunny)** — pure TypeScript media toolkit for demux/mux (MP4, MKV, WebM, AVI, TS). Using a [fork](https://github.com/kzahel/mediabunny/tree/integration) with subtitle support.
-- **[hls.js](https://github.com/video-dev/hls.js)** — HLS playback via MSE
-- **[@ffmpeg/ffmpeg](https://github.com/nicolo-ribaudo/ffmpeg.wasm)** — ffmpeg compiled to WebAssembly, used only for small audio transcode operations
-
-## Development
+<details>
+<summary><strong>Development</strong></summary>
 
 ```bash
 npm run setup              # install deps + download ffmpeg-core.wasm
@@ -112,3 +83,15 @@ npm run lint               # biome lint
 npm run format             # biome format
 npm run test:integration   # requires test fixtures in tests/fixtures/
 ```
+
+```
+src/pipeline/       Core modules (demux, mux, segment plan, audio transcode,
+                    codec probe, playlist, subtitle extraction)
+src/adapters/       Platform adapters (ffmpeg.wasm for browser, node-ffmpeg for tests)
+src/worker.ts       Web worker — demux + on-demand segment processing
+src/engine.ts       PlaysVideoEngine class (worker, hls.js, subtitles)
+src/pwa-player.ts   Browser entry — file picker, drag-and-drop
+tests/              Unit, integration, and e2e (Playwright) tests
+```
+
+</details>
