@@ -7,6 +7,7 @@ import {
   Input,
   type InputAudioTrack,
   type InputVideoTrack,
+  UrlSource,
 } from 'mediabunny';
 import { getSubtitleTrackInfos } from './subtitle.js';
 import type { KeyframeEntry, KeyframeIndex, SubtitleTrackInfo } from './types.js';
@@ -32,6 +33,10 @@ export async function demuxFile(filePath: string): Promise<DemuxResult> {
 
 export async function demuxBlob(blob: Blob): Promise<DemuxResult> {
   return demuxInput(new Input({ formats: ALL_FORMATS, source: new BlobSource(blob) }));
+}
+
+export async function demuxUrl(url: string): Promise<DemuxResult> {
+  return demuxInput(new Input({ formats: ALL_FORMATS, source: new UrlSource(url) }));
 }
 
 async function demuxInput(input: Input): Promise<DemuxResult> {

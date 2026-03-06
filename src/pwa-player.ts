@@ -45,7 +45,7 @@ async function handleShareTarget() {
 handleShareTarget();
 
 engine.addEventListener('loading', (e) => {
-  status.textContent = `Opening ${e.detail.file.name}...`;
+  status.textContent = `Opening ${e.detail.file?.name ?? e.detail.url ?? ''}...`;
   video.style.display = 'none';
 });
 

@@ -13,13 +13,17 @@ fileInput.addEventListener('change', () => {
 });
 
 engine.addEventListener('loading', (e) => {
-  const { file } = e.detail;
-  status.textContent = `Opening ${file.name}...`;
+  const { file, url } = e.detail;
+  status.textContent = `Opening ${file?.name ?? url ?? ''}...`;
   video.style.display = 'none';
-  log(
-    'loading',
-    `loadFile name=${file.name} size=${(file.size / 1024 / 1024).toFixed(1)}MB type=${file.type}`,
-  );
+  if (file) {
+    log(
+      'loading',
+      `loadFile name=${file.name} size=${(file.size / 1024 / 1024).toFixed(1)}MB type=${file.type}`,
+    );
+  } else {
+    log('loading', `loadUrl url=${url}`);
+  }
 });
 
 engine.addEventListener('ready', (e) => {

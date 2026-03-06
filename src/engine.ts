@@ -22,7 +22,8 @@ export interface ErrorDetail {
 }
 
 export interface LoadingDetail {
-  file: File;
+  file?: File;
+  url?: string;
 }
 
 interface EngineEventMap {
@@ -87,7 +88,18 @@ export class PlaysVideoEngine extends EventTarget {
   }
 
   loadFile(file: File): void {
-    // Clean up previous state
+    this.resetAndCreateWorker({ file });
+    this.worker!.postMessage({ type: 'open', file });
+    mlog(`open file=${file.name} size=${(file.size / 1024 / 1024).toFixed(1)}MB`);
+  }
+
+  loadUrl(url: string): void {
+    this.resetAndCreateWorker({ url });
+    this.worker!.postMessage({ type: 'open-url', url });
+    mlog(`open url=${url}`);
+  }
+
+  private resetAndCreateWorker(detail: LoadingDetail): void {
     if (this.hls) {
       this.hls.destroy();
       this.hls = null;
@@ -108,7 +120,7 @@ export class PlaysVideoEngine extends EventTarget {
     this._durationSec = 0;
     this._subtitleTracks = [];
 
-    this.dispatchEvent(new CustomEvent('loading', { detail: { file } }));
+    this.dispatchEvent(new CustomEvent('loading', { detail }));
 
     this.worker = new Worker(new URL('./worker.ts', import.meta.url), { type: 'module' });
     this.worker.onmessage = (e) => this.handleWorkerMessage(e);
@@ -116,8 +128,6 @@ export class PlaysVideoEngine extends EventTarget {
       this._phase = 'error';
       this.dispatchEvent(new CustomEvent('error', { detail: { message: e.message } }));
     };
-    this.worker.postMessage({ type: 'open', file });
-    mlog(`open file=${file.name} size=${(file.size / 1024 / 1024).toFixed(1)}MB`);
   }
 
   destroy(): void {

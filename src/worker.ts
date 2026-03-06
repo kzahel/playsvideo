@@ -2,7 +2,7 @@ import { WasmFfmpegRunner } from './adapters/wasm-ffmpeg.js';
 import { transcodeAudioSegment } from './pipeline/audio-transcode.js';
 import { audioNeedsTranscode, createBrowserProber } from './pipeline/codec-probe.js';
 import type { DemuxResult } from './pipeline/demux.js';
-import { collectPacketsInRange, demuxBlob, getKeyframeIndex } from './pipeline/demux.js';
+import { collectPacketsInRange, demuxBlob, demuxUrl, getKeyframeIndex } from './pipeline/demux.js';
 import { muxToFmp4 } from './pipeline/mux.js';
 import { generateVodPlaylist } from './pipeline/playlist.js';
 import { buildSegmentPlan } from './pipeline/segment-plan.js';
@@ -35,8 +35,13 @@ self.onmessage = (event: MessageEvent) => {
 
   if (msg.type === 'open') {
     wlog('recv open');
-    processingChain = handleOpen(msg.file, msg.targetSegmentDuration ?? 4).catch((err) =>
-      self.postMessage({ type: 'error', message: String(err) }),
+    processingChain = handleOpen(() => demuxBlob(msg.file), msg.targetSegmentDuration ?? 4).catch(
+      (err) => self.postMessage({ type: 'error', message: String(err) }),
+    );
+  } else if (msg.type === 'open-url') {
+    wlog('recv open-url');
+    processingChain = handleOpen(() => demuxUrl(msg.url), msg.targetSegmentDuration ?? 4).catch(
+      (err) => self.postMessage({ type: 'error', message: String(err) }),
     );
   } else if (msg.type === 'segment') {
     wlog(`recv segment idx=${msg.index}`);
@@ -51,7 +56,7 @@ self.onmessage = (event: MessageEvent) => {
   }
 };
 
-async function handleOpen(file: File, targetSegmentDuration: number) {
+async function handleOpen(demuxFn: () => Promise<DemuxResult>, targetSegmentDuration: number) {
   const t0 = performance.now();
 
   if (demux) {
@@ -59,7 +64,7 @@ async function handleOpen(file: File, targetSegmentDuration: number) {
   }
 
   const tDemux = performance.now();
-  demux = await demuxBlob(file);
+  demux = await demuxFn();
   wlog(
     `demux done ${elapsed(tDemux)} codec=${demux.videoCodec}/${demux.audioCodec} dur=${demux.duration.toFixed(1)}s`,
   );
