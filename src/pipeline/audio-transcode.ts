@@ -2,14 +2,9 @@ import { EncodedPacket } from 'mediabunny';
 import { parseAdtsFrames } from './adts-parse.js';
 import type { FfmpegRunner } from './types.js';
 
-const HLS_SAFE_CODECS = new Set(['aac', 'mp3']);
 const SAMPLES_PER_AAC_FRAME = 1024;
 const INPUT_NAME = 'transcode-input.ac3';
 const OUTPUT_NAME = 'transcode-output.aac';
-
-export function needsTranscode(codec: string): boolean {
-  return !HLS_SAFE_CODECS.has(codec);
-}
 
 export interface TranscodeOptions {
   packets: EncodedPacket[];

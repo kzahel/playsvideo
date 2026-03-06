@@ -8,7 +8,8 @@ import {
   type InputAudioTrack,
   type InputVideoTrack,
 } from 'mediabunny';
-import type { KeyframeEntry, KeyframeIndex } from './types.js';
+import { getSubtitleTrackInfos } from './subtitle.js';
+import type { KeyframeEntry, KeyframeIndex, SubtitleTrackInfo } from './types.js';
 
 export interface DemuxResult {
   input: Input;
@@ -21,6 +22,7 @@ export interface DemuxResult {
   audioDecoderConfig: AudioDecoderConfig | null;
   videoSink: EncodedPacketSink;
   audioSink: EncodedPacketSink | null;
+  subtitleTracks: SubtitleTrackInfo[];
   dispose: () => void;
 }
 
@@ -65,6 +67,8 @@ async function demuxInput(input: Input): Promise<DemuxResult> {
     audioDecoderConfig = await audioTrack.getDecoderConfig();
   }
 
+  const subtitleTracks = await getSubtitleTrackInfos(input);
+
   return {
     input,
     duration,
@@ -76,6 +80,7 @@ async function demuxInput(input: Input): Promise<DemuxResult> {
     audioDecoderConfig,
     videoSink,
     audioSink,
+    subtitleTracks,
     dispose: () => input.dispose(),
   };
 }

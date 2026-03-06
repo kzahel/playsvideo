@@ -60,3 +60,46 @@ export interface AdtsFrame {
   sampleRate: number;
   channels: number;
 }
+
+/** Metadata for a discovered subtitle track (sent to main thread before extraction). */
+export interface SubtitleTrackInfo {
+  /** Index within the subtitle tracks array (0-based). */
+  index: number;
+  /** Original codec in the container. */
+  codec: string;
+  /** ISO 639-2/T language code (e.g. 'eng', 'spa', 'und'). */
+  language: string;
+  /** User-visible track name, if any. */
+  name: string | null;
+  /** Container disposition flags — use to decide <track kind>. */
+  disposition: {
+    default: boolean;
+    forced: boolean;
+    hearingImpaired: boolean;
+  };
+}
+
+/**
+ * Source of a subtitle track — either embedded in the file or imported by the user.
+ * This is the internal representation; the renderer decides what to do with it.
+ */
+export interface SubtitleData {
+  /** The cue list (format-agnostic). */
+  cues: SubtitleCueEntry[];
+  /** Original codec so the renderer can choose strategy. */
+  codec: string;
+  /** Format-specific header (ASS [V4+ Styles] section, WebVTT preamble, etc). */
+  header?: string;
+}
+
+/** Single subtitle cue — mirrors mediabunny's SubtitleCue but cleaned up for our use. */
+export interface SubtitleCueEntry {
+  /** Start time in seconds. */
+  startSec: number;
+  /** End time in seconds. */
+  endSec: number;
+  /** Cue text content (may contain format-specific markup like ASS override tags). */
+  text: string;
+  /** Optional VTT positioning/settings string. */
+  settings?: string;
+}

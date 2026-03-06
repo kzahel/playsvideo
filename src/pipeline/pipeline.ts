@@ -1,4 +1,5 @@
-import { needsTranscode, transcodeAudioSegment } from './audio-transcode.js';
+import { transcodeAudioSegment } from './audio-transcode.js';
+import { audioNeedsTranscode, type CodecProber, createNodeProber } from './codec-probe.js';
 import { collectPacketsInRange, demuxFile, getKeyframeIndex } from './demux.js';
 import { muxToFmp4 } from './mux.js';
 import { generateVodPlaylist } from './playlist.js';
@@ -9,6 +10,7 @@ export interface PipelineOptions {
   filePath: string;
   ffmpeg: FfmpegRunner;
   targetSegmentDuration?: number;
+  codecProber?: CodecProber;
 }
 
 export interface PipelineSegment {
@@ -27,6 +29,7 @@ export interface PipelineResult {
 
 export async function runPipeline(opts: PipelineOptions): Promise<PipelineResult> {
   const targetDuration = opts.targetSegmentDuration ?? 4;
+  const prober = opts.codecProber ?? createNodeProber();
 
   // 1. Demux
   const demux = await demuxFile(opts.filePath);
@@ -41,7 +44,9 @@ export async function runPipeline(opts: PipelineOptions): Promise<PipelineResult
       targetSegmentDurationSec: targetDuration,
     });
 
-    const doTranscode = demux.audioCodec !== null && needsTranscode(demux.audioCodec);
+    const doTranscode =
+      demux.audioCodec !== null &&
+      audioNeedsTranscode(prober, demux.audioCodec, demux.audioDecoderConfig?.codec);
     const outputAudioCodec = doTranscode ? 'aac' : (demux.audioCodec ?? 'aac');
 
     // For transcoded audio, we'll build a new AudioDecoderConfig from the AAC output.

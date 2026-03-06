@@ -3,7 +3,8 @@ import { join } from 'node:path';
 import { afterEach, describe, expect, it } from 'vitest';
 import { makeTempDir, NodeFfmpegRunner } from '../../src/adapters/node-ffmpeg.js';
 import { NodeFfprobeRunner } from '../../src/adapters/node-ffprobe.js';
-import { needsTranscode, transcodeAudioSegment } from '../../src/pipeline/audio-transcode.js';
+import { transcodeAudioSegment } from '../../src/pipeline/audio-transcode.js';
+import { audioNeedsTranscode, createNodeProber } from '../../src/pipeline/codec-probe.js';
 import { collectPacketsInRange, demuxFile } from '../../src/pipeline/demux.js';
 
 const FIXTURES_DIR = join(import.meta.dirname, '..', 'fixtures');
@@ -19,11 +20,12 @@ describe('audio-transcode', () => {
   });
 
   it('identifies codecs that need transcode', () => {
-    expect(needsTranscode('ac3')).toBe(true);
-    expect(needsTranscode('eac3')).toBe(true);
-    expect(needsTranscode('flac')).toBe(true);
-    expect(needsTranscode('aac')).toBe(false);
-    expect(needsTranscode('mp3')).toBe(false);
+    const prober = createNodeProber();
+    expect(audioNeedsTranscode(prober, 'ac3')).toBe(true);
+    expect(audioNeedsTranscode(prober, 'eac3')).toBe(true);
+    expect(audioNeedsTranscode(prober, 'flac')).toBe(true);
+    expect(audioNeedsTranscode(prober, 'aac')).toBe(false);
+    expect(audioNeedsTranscode(prober, 'mp3')).toBe(false);
   });
 
   it('transcodes AC3 packets to AAC', async () => {

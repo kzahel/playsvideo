@@ -1,10 +1,12 @@
 import { WasmFfmpegRunner } from './adapters/wasm-ffmpeg.js';
-import { needsTranscode, transcodeAudioSegment } from './pipeline/audio-transcode.js';
+import { transcodeAudioSegment } from './pipeline/audio-transcode.js';
+import { audioNeedsTranscode, createBrowserProber } from './pipeline/codec-probe.js';
 import type { DemuxResult } from './pipeline/demux.js';
 import { collectPacketsInRange, demuxBlob, getKeyframeIndex } from './pipeline/demux.js';
 import { muxToFmp4 } from './pipeline/mux.js';
 import { generateVodPlaylist } from './pipeline/playlist.js';
 import { buildSegmentPlan } from './pipeline/segment-plan.js';
+import { extractSubtitleData, subtitleDataToWebVTT } from './pipeline/subtitle.js';
 import type { PlannedSegment } from './pipeline/types.js';
 
 function wlog(msg: string) {
@@ -16,6 +18,7 @@ function elapsed(start: number): string {
 }
 
 const ffmpeg = new WasmFfmpegRunner();
+const codecProber = createBrowserProber();
 
 let demux: DemuxResult | null = null;
 let plan: PlannedSegment[] = [];
@@ -37,7 +40,12 @@ self.onmessage = (event: MessageEvent) => {
     );
   } else if (msg.type === 'segment') {
     wlog(`recv segment idx=${msg.index}`);
-    processingChain = processingChain.then(() => handleSegment(msg.index)).catch((err) =>
+    processingChain = processingChain
+      .then(() => handleSegment(msg.index))
+      .catch((err) => self.postMessage({ type: 'error', message: String(err) }));
+  } else if (msg.type === 'subtitle') {
+    wlog(`recv subtitle trackIndex=${msg.trackIndex}`);
+    handleSubtitle(msg.trackIndex).catch((err) =>
       self.postMessage({ type: 'error', message: String(err) }),
     );
   }
@@ -52,7 +60,9 @@ async function handleOpen(file: File, targetSegmentDuration: number) {
 
   const tDemux = performance.now();
   demux = await demuxBlob(file);
-  wlog(`demux done ${elapsed(tDemux)} codec=${demux.videoCodec}/${demux.audioCodec} dur=${demux.duration.toFixed(1)}s`);
+  wlog(
+    `demux done ${elapsed(tDemux)} codec=${demux.videoCodec}/${demux.audioCodec} dur=${demux.duration.toFixed(1)}s`,
+  );
 
   const tIndex = performance.now();
   const index = await getKeyframeIndex(demux.videoSink, demux.duration);
@@ -66,7 +76,9 @@ async function handleOpen(file: File, targetSegmentDuration: number) {
   });
   wlog(`segment-plan done ${elapsed(tPlan)} segments=${plan.length}`);
 
-  doTranscode = demux.audioCodec !== null && needsTranscode(demux.audioCodec);
+  doTranscode =
+    demux.audioCodec !== null &&
+    audioNeedsTranscode(codecProber, demux.audioCodec, demux.audioDecoderConfig?.codec);
   audioDecoderConfig = demux.audioDecoderConfig;
   initSegment = null;
 
@@ -91,6 +103,7 @@ async function handleOpen(file: File, targetSegmentDuration: number) {
       initData: initSegment!.buffer,
       totalSegments: plan.length,
       durationSec: demux.duration,
+      subtitleTracks: demux.subtitleTracks,
     },
     { transfer: [] },
   ); // don't transfer initData — we need to keep it
@@ -151,7 +164,9 @@ async function processSegment(index: number): Promise<Uint8Array> {
       audioStartSec: audioPackets[0].timestamp,
       ffmpeg,
     });
-    wlog(`seg ${index} transcode ${elapsed(tXcode)} in=${audioPackets.length} out=${transcoded.packets.length}`);
+    wlog(
+      `seg ${index} transcode ${elapsed(tXcode)} in=${audioPackets.length} out=${transcoded.packets.length}`,
+    );
     audioPackets = transcoded.packets;
     if (!audioDecoderConfig || audioDecoderConfig.codec !== 'mp4a.40.2') {
       audioDecoderConfig = transcoded.decoderConfig;
@@ -184,4 +199,18 @@ async function processSegment(index: number): Promise<Uint8Array> {
   }
 
   return mediaData;
+}
+
+async function handleSubtitle(trackIndex: number) {
+  if (!demux) {
+    self.postMessage({ type: 'error', message: 'No file open' });
+    return;
+  }
+
+  const t0 = performance.now();
+  const data = await extractSubtitleData(demux.input, trackIndex);
+  const webvtt = subtitleDataToWebVTT(data);
+  wlog(`subtitle track=${trackIndex} cues=${data.cues.length} codec=${data.codec} ${elapsed(t0)}`);
+
+  self.postMessage({ type: 'subtitle', trackIndex, webvtt, codec: data.codec });
 }

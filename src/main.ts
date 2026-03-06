@@ -7,6 +7,7 @@ import type {
   PlaylistLoaderContext,
 } from 'hls.js';
 import Hls from 'hls.js';
+import type { SubtitleTrackInfo } from './pipeline/types.js';
 
 function mlog(msg: string) {
   console.log(`[main] ${msg}`);
@@ -40,6 +41,10 @@ let lastSegmentRequested = -1;
 let lastSegmentCompleted = -1;
 const segmentRequestTimes = new Map<number, number>();
 
+// Subtitle state
+let subtitleBlobUrls: string[] = [];
+let subtitleTrackInfos: SubtitleTrackInfo[] = [];
+
 fileInput.addEventListener('change', () => {
   const file = fileInput.files?.[0];
   if (!file) return;
@@ -61,6 +66,9 @@ function startProcessing(file: File) {
   lastSegmentRequested = -1;
   lastSegmentCompleted = -1;
   segmentRequestTimes.clear();
+  for (const url of subtitleBlobUrls) URL.revokeObjectURL(url);
+  subtitleBlobUrls = [];
+  removeSubtitleTracks();
   video.style.display = 'none';
   status.textContent = `Opening ${file.name}...`;
 
@@ -92,7 +100,17 @@ function handleWorkerMessage(event: MessageEvent) {
       pendingInit = null;
     }
 
+    // Request subtitle extraction for all embedded tracks
+    subtitleTrackInfos = msg.subtitleTracks ?? [];
+    for (const track of subtitleTrackInfos) {
+      mlog(`requesting subtitle track=${track.index} lang=${track.language} codec=${track.codec}`);
+      worker!.postMessage({ type: 'subtitle', trackIndex: track.index });
+    }
+
     startHls();
+  } else if (msg.type === 'subtitle') {
+    mlog(`subtitle arrived track=${msg.trackIndex} codec=${msg.codec} len=${msg.webvtt?.length}`);
+    addSubtitleTrack(msg.webvtt, msg.trackIndex);
   } else if (msg.type === 'segment') {
     const pending = pendingSegments.get(msg.index);
     const reqTime = segmentRequestTimes.get(msg.index);
@@ -111,7 +129,9 @@ function handleWorkerMessage(event: MessageEvent) {
     }
     lastSegmentCompleted = Math.max(lastSegmentCompleted, msg.index);
 
-    mlog(`seg ${msg.index} arrived latency=${latency}ms size=${size} pending=${pendingSegments.size}`);
+    mlog(
+      `seg ${msg.index} arrived latency=${latency}ms size=${size} pending=${pendingSegments.size}`,
+    );
   } else if (msg.type === 'error') {
     mlog(`error: ${msg.message} pending=${pendingSegments.size}`);
     status.textContent = `Error: ${msg.message}`;
@@ -329,6 +349,81 @@ class PipelineFragmentLoader implements Loader<FragmentLoaderContext> {
 
   abort() {}
   destroy() {}
+}
+
+function addSubtitleTrack(webvtt: string, trackIndex: number) {
+  const blob = new Blob([webvtt], { type: 'text/vtt' });
+  const url = URL.createObjectURL(blob);
+  subtitleBlobUrls.push(url);
+
+  const info = subtitleTrackInfos[trackIndex];
+  const track = document.createElement('track');
+  track.kind = info?.disposition.hearingImpaired ? 'captions' : 'subtitles';
+  track.src = url;
+  track.srclang = iso639_2to1(info?.language ?? 'und');
+  track.label = info?.name ?? languageLabel(info?.language ?? 'und', trackIndex);
+  // Show first track by default
+  if (trackIndex === 0) {
+    track.default = true;
+  }
+  video.appendChild(track);
+  mlog(`subtitle track ${trackIndex} attached as <track kind=${track.kind} lang=${track.srclang}>`);
+}
+
+/** Map common ISO 639-2/T (3-letter) codes to ISO 639-1 (2-letter) for <track srclang>. */
+function iso639_2to1(code: string): string {
+  const map: Record<string, string> = {
+    eng: 'en',
+    spa: 'es',
+    fra: 'fr',
+    deu: 'de',
+    ita: 'it',
+    por: 'pt',
+    rus: 'ru',
+    jpn: 'ja',
+    kor: 'ko',
+    zho: 'zh',
+    ara: 'ar',
+    hin: 'hi',
+    nld: 'nl',
+    swe: 'sv',
+    pol: 'pl',
+    tur: 'tr',
+    vie: 'vi',
+    tha: 'th',
+    und: '',
+  };
+  return map[code] ?? code;
+}
+
+function languageLabel(langCode: string, trackIndex: number): string {
+  const names: Record<string, string> = {
+    eng: 'English',
+    spa: 'Spanish',
+    fra: 'French',
+    deu: 'German',
+    ita: 'Italian',
+    por: 'Portuguese',
+    rus: 'Russian',
+    jpn: 'Japanese',
+    kor: 'Korean',
+    zho: 'Chinese',
+    ara: 'Arabic',
+    hin: 'Hindi',
+    nld: 'Dutch',
+    swe: 'Swedish',
+    pol: 'Polish',
+    tur: 'Turkish',
+    vie: 'Vietnamese',
+    tha: 'Thai',
+  };
+  return names[langCode] ?? `Track ${trackIndex + 1}`;
+}
+
+function removeSubtitleTracks() {
+  for (const track of Array.from(video.querySelectorAll('track'))) {
+    track.remove();
+  }
 }
 
 function formatTime(sec: number): string {

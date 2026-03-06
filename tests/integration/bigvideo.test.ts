@@ -4,7 +4,8 @@ import { join } from 'node:path';
 import { describe, expect, it } from 'vitest';
 import { makeTempDir, NodeFfmpegRunner } from '../../src/adapters/node-ffmpeg.js';
 import { NodeFfprobeRunner } from '../../src/adapters/node-ffprobe.js';
-import { needsTranscode, transcodeAudioSegment } from '../../src/pipeline/audio-transcode.js';
+import { transcodeAudioSegment } from '../../src/pipeline/audio-transcode.js';
+import { audioNeedsTranscode, createNodeProber } from '../../src/pipeline/codec-probe.js';
 import { collectPacketsInRange, demuxFile, getKeyframeIndex } from '../../src/pipeline/demux.js';
 import { muxToFmp4 } from '../../src/pipeline/mux.js';
 import { parsePlaylist } from '../../src/pipeline/playlist.js';
@@ -32,7 +33,7 @@ describeIfBigVideo('bigvideo full-file validation', () => {
     expect(demux.duration).toBeLessThan(5600);
     expect(demux.videoDecoderConfig).toBeTruthy();
     expect(demux.audioDecoderConfig).toBeTruthy();
-    expect(needsTranscode(demux.audioCodec!)).toBe(true);
+    expect(audioNeedsTranscode(createNodeProber(), demux.audioCodec!)).toBe(true);
   });
 
   it('builds keyframe index across full file', async () => {
@@ -171,7 +172,12 @@ describeIfBigVideo('bigvideo full-file validation', () => {
 
     const index = await getKeyframeIndex(demux.videoSink, demux.duration);
     const kfTimestamps = index.keyframes.map((k) => k.timestamp);
-    console.log(`Keyframe count: ${kfTimestamps.length}, first 15: ${kfTimestamps.slice(0, 15).map((t) => t.toFixed(6)).join(', ')}`);
+    console.log(
+      `Keyframe count: ${kfTimestamps.length}, first 15: ${kfTimestamps
+        .slice(0, 15)
+        .map((t) => t.toFixed(6))
+        .join(', ')}`,
+    );
 
     const plan = buildSegmentPlan({
       keyframeTimestampsSec: kfTimestamps,
@@ -242,12 +248,16 @@ describeIfBigVideo('bigvideo full-file validation', () => {
     const maxDelta = Math.max(...deltas);
     const meanDelta = deltas.reduce((s, d) => s + d, 0) / deltas.length;
     const overThreshold = deltas.filter((d) => d > 0.001).length;
-    console.log(`Duration delta stats: max=${maxDelta.toFixed(6)}, mean=${meanDelta.toFixed(6)}, segments with delta>0.001s: ${overThreshold}/${deltas.length}`);
+    console.log(
+      `Duration delta stats: max=${maxDelta.toFixed(6)}, mean=${meanDelta.toFixed(6)}, segments with delta>0.001s: ${overThreshold}/${deltas.length}`,
+    );
 
     // Total duration comparison
     const ourTotal = plan.reduce((s, p) => s + p.durationSec, 0);
     const goldenTotal = golden.entries.reduce((s, e) => s + e.durationSec, 0);
-    console.log(`Total duration: ours=${ourTotal.toFixed(6)}, golden=${goldenTotal.toFixed(6)}, diff=${Math.abs(ourTotal - goldenTotal).toFixed(6)}`);
+    console.log(
+      `Total duration: ours=${ourTotal.toFixed(6)}, golden=${goldenTotal.toFixed(6)}, diff=${Math.abs(ourTotal - goldenTotal).toFixed(6)}`,
+    );
 
     if (failures.length) {
       console.log(`${failures.length} segments have non-zero diff:\n${failures.join('\n')}`);

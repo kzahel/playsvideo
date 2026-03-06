@@ -7,17 +7,18 @@ import { existsSync } from 'node:fs';
 import { mkdir, readFile, writeFile } from 'node:fs/promises';
 import { join } from 'node:path';
 import { promisify } from 'node:util';
-import { describe, expect, it } from 'vitest';
 import {
+  EncodedAudioPacketSource,
   EncodedPacket,
   EncodedVideoPacketSource,
-  EncodedAudioPacketSource,
   Mp4OutputFormat,
   NullTarget,
   Output,
 } from 'mediabunny';
+import { describe, expect, it } from 'vitest';
 import { makeTempDir, NodeFfmpegRunner } from '../../src/adapters/node-ffmpeg.js';
-import { needsTranscode, transcodeAudioSegment } from '../../src/pipeline/audio-transcode.js';
+import { transcodeAudioSegment } from '../../src/pipeline/audio-transcode.js';
+import { audioNeedsTranscode, createNodeProber } from '../../src/pipeline/codec-probe.js';
 import { collectPacketsInRange, demuxFile, getKeyframeIndex } from '../../src/pipeline/demux.js';
 import { muxToFmp4 } from '../../src/pipeline/mux.js';
 import { buildSegmentPlan } from '../../src/pipeline/segment-plan.js';
@@ -41,11 +42,15 @@ interface FrameInfo {
 
 async function getVideoFrames(mp4Path: string): Promise<FrameInfo[]> {
   const { stdout } = await execFileAsync('ffprobe', [
-    '-v', 'error',
-    '-select_streams', 'v:0',
+    '-v',
+    'error',
+    '-select_streams',
+    'v:0',
     '-show_packets',
-    '-show_entries', 'packet=pts_time,duration_time,flags',
-    '-of', 'json',
+    '-show_entries',
+    'packet=pts_time,duration_time,flags',
+    '-of',
+    'json',
     mp4Path,
   ]);
   const data = JSON.parse(stdout);
@@ -113,7 +118,9 @@ describeIf('segment verification vs golden', () => {
       startFromKeyframe: true,
     });
 
-    console.log(`\nSegment 0: [${seg.startSec.toFixed(3)}, ${endSec.toFixed(3)}), ${videoPackets.length} video packets`);
+    console.log(
+      `\nSegment 0: [${seg.startSec.toFixed(3)}, ${endSec.toFixed(3)}), ${videoPackets.length} video packets`,
+    );
     console.log('First 20 packet timestamps from collectPacketsInRange:');
 
     let isMonotonic = true;
@@ -122,25 +129,33 @@ describeIf('segment verification vs golden', () => {
       const pkt = videoPackets[i];
       const mono = pkt.timestamp >= prevTs ? '' : ' (NON-MONOTONIC)';
       if (pkt.timestamp < prevTs) isMonotonic = false;
-      console.log(`  [${i}] seq=${pkt.sequenceNumber} ts=${pkt.timestamp.toFixed(6)} dur=${pkt.duration.toFixed(6)} type=${pkt.type}${mono}`);
+      console.log(
+        `  [${i}] seq=${pkt.sequenceNumber} ts=${pkt.timestamp.toFixed(6)} dur=${pkt.duration.toFixed(6)} type=${pkt.type}${mono}`,
+      );
       prevTs = pkt.timestamp;
     }
 
     // Check ALL packets for monotonicity
     prevTs = -Infinity;
     for (const pkt of videoPackets) {
-      if (pkt.timestamp < prevTs) { isMonotonic = false; break; }
+      if (pkt.timestamp < prevTs) {
+        isMonotonic = false;
+        break;
+      }
       prevTs = pkt.timestamp;
     }
 
-    console.log(`\nPackets are ${isMonotonic ? 'MONOTONIC (BUG: B-frame PTS should be non-monotonic!)' : 'NON-MONOTONIC (correct for B-frames)'}`);
+    console.log(
+      `\nPackets are ${isMonotonic ? 'MONOTONIC (BUG: B-frame PTS should be non-monotonic!)' : 'NON-MONOTONIC (correct for B-frames)'}`,
+    );
 
     // For B-frame content, PTS MUST be non-monotonic in decode order
     expect(isMonotonic, 'B-frame PTS should be non-monotonic in decode order').toBe(false);
   }, 30_000);
 
   it('extract and compare segments', async () => {
-    const doTranscode = demux.audioCodec !== null && needsTranscode(demux.audioCodec);
+    const doTranscode =
+      demux.audioCodec !== null && audioNeedsTranscode(createNodeProber(), demux.audioCodec);
     let audioDecoderConfig = demux.audioDecoderConfig;
 
     for (const idx of SEGMENTS_TO_CHECK) {
@@ -158,14 +173,20 @@ describeIf('segment verification vs golden', () => {
         ? await collectPacketsInRange(demux.audioSink, seg.startSec, endSec)
         : [];
 
-      console.log(`  Collected: ${videoPackets.length} video, ${audioPackets.length} audio packets`);
+      console.log(
+        `  Collected: ${videoPackets.length} video, ${audioPackets.length} audio packets`,
+      );
 
       // Log first/last video packet details
       if (videoPackets.length > 0) {
         const first = videoPackets[0];
         const last = videoPackets[videoPackets.length - 1];
-        console.log(`  Video first: ts=${first.timestamp.toFixed(6)} dur=${first.duration.toFixed(6)} key=${first.isKeyFrame} seq=${first.sequenceNumber} size=${first.data.byteLength}`);
-        console.log(`  Video last:  ts=${last.timestamp.toFixed(6)} dur=${last.duration.toFixed(6)} key=${last.isKeyFrame} seq=${last.sequenceNumber} size=${last.data.byteLength}`);
+        console.log(
+          `  Video first: ts=${first.timestamp.toFixed(6)} dur=${first.duration.toFixed(6)} key=${first.isKeyFrame} seq=${first.sequenceNumber} size=${first.data.byteLength}`,
+        );
+        console.log(
+          `  Video last:  ts=${last.timestamp.toFixed(6)} dur=${last.duration.toFixed(6)} key=${last.isKeyFrame} seq=${last.sequenceNumber} size=${last.data.byteLength}`,
+        );
       }
 
       // Transcode audio if needed
@@ -235,7 +256,9 @@ describeIf('segment verification vs golden', () => {
       console.log(`  Golden frames: ${goldenFrames.length}`);
 
       if (ourFrames.length !== goldenFrames.length) {
-        console.log(`  ** FRAME COUNT MISMATCH: ours=${ourFrames.length} golden=${goldenFrames.length} diff=${ourFrames.length - goldenFrames.length}`);
+        console.log(
+          `  ** FRAME COUNT MISMATCH: ours=${ourFrames.length} golden=${goldenFrames.length} diff=${ourFrames.length - goldenFrames.length}`,
+        );
       }
 
       // Compare first few frames' timestamps
@@ -247,7 +270,9 @@ describeIf('segment verification vs golden', () => {
         const ptsDiff = Math.abs(o.pts_time - g.pts_time);
         const durDiff = Math.abs(o.duration_time - g.duration_time);
         const match = ptsDiff < 0.001 && durDiff < 0.001 ? 'OK' : '** MISMATCH **';
-        console.log(`    [${i}] ours: pts=${o.pts_time.toFixed(6)} dur=${o.duration_time.toFixed(6)} ${o.flags}  |  golden: pts=${g.pts_time.toFixed(6)} dur=${g.duration_time.toFixed(6)} ${g.flags}  ${match}`);
+        console.log(
+          `    [${i}] ours: pts=${o.pts_time.toFixed(6)} dur=${o.duration_time.toFixed(6)} ${o.flags}  |  golden: pts=${g.pts_time.toFixed(6)} dur=${g.duration_time.toFixed(6)} ${g.flags}  ${match}`,
+        );
       }
 
       // Check last frame too
@@ -256,7 +281,9 @@ describeIf('segment verification vs golden', () => {
         const gi = goldenFrames.length - 1;
         const o = ourFrames[oi];
         const g = goldenFrames[gi];
-        console.log(`    [last] ours[${oi}]: pts=${o.pts_time.toFixed(6)} dur=${o.duration_time.toFixed(6)} ${o.flags}  |  golden[${gi}]: pts=${g.pts_time.toFixed(6)} dur=${g.duration_time.toFixed(6)} ${g.flags}`);
+        console.log(
+          `    [last] ours[${oi}]: pts=${o.pts_time.toFixed(6)} dur=${o.duration_time.toFixed(6)} ${o.flags}  |  golden[${gi}]: pts=${g.pts_time.toFixed(6)} dur=${g.duration_time.toFixed(6)} ${g.flags}`,
+        );
       }
 
       // Check our frame durations for consistency
@@ -285,7 +312,7 @@ describe('CTS offset diagnosis', () => {
     const d = await demuxFile(BIGVIDEO);
     const index = await getKeyframeIndex(d.videoSink, d.duration);
     const p = buildSegmentPlan({
-      keyframeTimestampsSec: index.keyframes.map(k => k.timestamp),
+      keyframeTimestampsSec: index.keyframes.map((k) => k.timestamp),
       durationSec: index.duration,
       targetSegmentDurationSec: 2,
     });
@@ -296,14 +323,17 @@ describe('CTS offset diagnosis', () => {
       startFromKeyframe: true,
     });
 
-    console.log(`Segment 0: ${videoPackets.length} video packets, [${seg.startSec.toFixed(3)}, ${endSec.toFixed(3)})`);
+    console.log(
+      `Segment 0: ${videoPackets.length} video packets, [${seg.startSec.toFixed(3)}, ${endSec.toFixed(3)})`,
+    );
 
     // 1. Mux with audio (as normal pipeline does)
     const audioPackets = d.audioSink
       ? await collectPacketsInRange(d.audioSink, seg.startSec, endSec)
       : [];
 
-    const doTranscode = d.audioCodec !== null && needsTranscode(d.audioCodec);
+    const doTranscode =
+      d.audioCodec !== null && audioNeedsTranscode(createNodeProber(), d.audioCodec);
     let transcodedAudio = audioPackets;
     let audioDecoderConfig = d.audioDecoderConfig;
 
@@ -366,7 +396,7 @@ describe('CTS offset diagnosis', () => {
     // Write both and ffprobe
     for (const [label, init, media] of [
       ['with-audio', withAudio.init, withAudio.media],
-      ['video-only', concatAll(initPartsVO), moofMdatVO.map(p => concatAll(p))],
+      ['video-only', concatAll(initPartsVO), moofMdatVO.map((p) => concatAll(p))],
     ] as [string, Uint8Array, Uint8Array[]][]) {
       const allMedia = concatAll(media);
       const combined = concatAll([init, allMedia]);
@@ -374,9 +404,16 @@ describe('CTS offset diagnosis', () => {
       await writeFile(outFile, combined);
 
       const { stdout } = await execFileAsync('ffprobe', [
-        '-v', 'error', '-select_streams', 'v:0',
-        '-show_packets', '-show_entries', 'packet=pts_time,dts_time,duration_time,flags',
-        '-of', 'json', outFile,
+        '-v',
+        'error',
+        '-select_streams',
+        'v:0',
+        '-show_packets',
+        '-show_entries',
+        'packet=pts_time,dts_time,duration_time,flags',
+        '-of',
+        'json',
+        outFile,
       ]);
       const pkts = (JSON.parse(stdout).packets || []).slice(0, 10);
 
@@ -386,7 +423,9 @@ describe('CTS offset diagnosis', () => {
         const pts = parseFloat(p.pts_time);
         const dts = parseFloat(p.dts_time);
         const cts = pts - dts;
-        console.log(`  PTS=${pts.toFixed(6)} DTS=${dts.toFixed(6)} CTS=${cts.toFixed(6)} ${p.flags}`);
+        console.log(
+          `  PTS=${pts.toFixed(6)} DTS=${dts.toFixed(6)} CTS=${cts.toFixed(6)} ${p.flags}`,
+        );
         if (Math.abs(cts) > 0.0001) allCtsZero = false;
       }
       console.log(`  All CTS zero: ${allCtsZero}`);

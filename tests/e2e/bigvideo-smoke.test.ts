@@ -95,8 +95,16 @@ test.describe('bigvideo smoke test', () => {
     // Inject video event listeners to track DOM media events
     await video.evaluate((el: HTMLVideoElement) => {
       const events = [
-        'waiting', 'playing', 'stalled', 'seeking', 'seeked',
-        'pause', 'ended', 'error', 'canplay', 'canplaythrough',
+        'waiting',
+        'playing',
+        'stalled',
+        'seeking',
+        'seeked',
+        'pause',
+        'ended',
+        'error',
+        'canplay',
+        'canplaythrough',
       ];
       (window as any).__videoEvents = [];
       let lastTimeUpdate = 0;
@@ -110,7 +118,9 @@ test.describe('bigvideo smoke test', () => {
             readyState: el.readyState,
             buffered: el.buffered.length > 0 ? el.buffered.end(el.buffered.length - 1) : 0,
           });
-          console.log(`[video] ${name} t=${el.currentTime.toFixed(2)} rs=${el.readyState} buf=${el.buffered.length > 0 ? el.buffered.end(el.buffered.length - 1).toFixed(1) : '0'}`);
+          console.log(
+            `[video] ${name} t=${el.currentTime.toFixed(2)} rs=${el.readyState} buf=${el.buffered.length > 0 ? el.buffered.end(el.buffered.length - 1).toFixed(1) : '0'}`,
+          );
         });
       }
 
@@ -157,8 +167,7 @@ test.describe('bigvideo smoke test', () => {
         getCpuTime(),
       ]);
       const cpuSec = Math.round((cpu.taskDuration - cpuBaseline.taskDuration) * 100) / 100;
-      const cpuDelta =
-        i > 0 ? Math.round((cpuSec - samples[i - 1].cpuSec) * 100) / 100 : cpuSec;
+      const cpuDelta = i > 0 ? Math.round((cpuSec - samples[i - 1].cpuSec) * 100) / 100 : cpuSec;
       samples.push({ ...snap, cpuSec, heapMB: cpu.jsHeapUsedMB });
 
       const prevTime = i > 0 ? samples[i - 1].time : snap.time;
@@ -301,9 +310,7 @@ test.describe('bigvideo smoke test', () => {
     const stalledEvents = pageVideoEvents.filter((e) => e.event === 'stalled');
     const playingEvents = pageVideoEvents.filter((e) => e.event === 'playing');
     const unresolvedStalls = stalledEvents.filter((stall) => {
-      const recovery = playingEvents.find(
-        (p) => p.ts > stall.ts && p.ts - stall.ts < 5000,
-      );
+      const recovery = playingEvents.find((p) => p.ts > stall.ts && p.ts - stall.ts < 5000);
       return !recovery;
     });
     if (unresolvedStalls.length > 0) {
