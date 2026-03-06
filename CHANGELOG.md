@@ -4,6 +4,11 @@ All notable changes to playsvideo are documented here.
 
 ## [Unreleased]
 
+## [0.0.3] - 2026-03-06
+
+### Fixed
+- README wordmark images now use absolute URLs (fixes broken images on npmjs.com)
+
 ## [0.0.2] - 2026-03-06
 
 ### Added

@@ -1,7 +1,7 @@
 <picture>
-  <source media="(prefers-color-scheme: dark)" srcset="docs/wordmark-dark.svg">
-  <source media="(prefers-color-scheme: light)" srcset="docs/wordmark-light.svg">
-  <img alt="playsvideo" src="docs/wordmark-light.svg" width="340">
+  <source media="(prefers-color-scheme: dark)" srcset="https://raw.githubusercontent.com/kzahel/playsvideo/main/docs/wordmark-dark.svg">
+  <source media="(prefers-color-scheme: light)" srcset="https://raw.githubusercontent.com/kzahel/playsvideo/main/docs/wordmark-light.svg">
+  <img alt="playsvideo" src="https://raw.githubusercontent.com/kzahel/playsvideo/main/docs/wordmark-light.svg" width="340">
 </picture>
 
 **You may not need VLC.** Play any video file in the browser — no install, no upload.
