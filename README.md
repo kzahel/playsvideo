@@ -1,6 +1,6 @@
-# [playsvideo](https://playsvideo.com)
+# playsvideo
 
-Play video files in the browser. No server, no pre-transcoding, no install.
+Play video files in the browser. No server, no pre-transcoding, no install. Try it at [playsvideo.com](https://playsvideo.com).
 
 Drop a file and it plays — remuxing containers and transcoding audio codecs that browsers can't handle natively. All processing happens client-side in a web worker.
 
