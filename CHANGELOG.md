@@ -4,6 +4,15 @@ All notable changes to playsvideo are documented here.
 
 ## [Unreleased]
 
+## [0.0.5] - 2026-03-06
+
+### Added
+- `loadUrl(url)` method — play video from an HTTP URL using range requests (no full download)
+- Engine API documentation (`docs/engine-api.md`)
+
+### Changed
+- README library example simplified to show both `loadFile` and `loadUrl`
+
 ## [0.0.4] - 2026-03-06
 
 ### Fixed
