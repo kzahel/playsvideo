@@ -17,6 +17,7 @@
 | MP3         | `mp3`      | `mp4a.69`        | Native                |
 | AC-3        | `ac3`      | `ac-3`           | Transcode to AAC      |
 | E-AC-3      | `eac3`     | `ec-3`           | Transcode to AAC      |
+| DTS         | `dts`      | `dtsc`           | Transcode to AAC      |
 | FLAC        | `flac`     | `flac`           | Transcode to AAC      |
 | Opus        | `opus`     | `opus`           | Transcode to AAC      |
 
@@ -24,7 +25,7 @@
 
 Audio codecs that can't be played natively in MSE/fMP4 are transcoded on-the-fly using ffmpeg.wasm (audio-only build, ~1.5 MB):
 
-- **Input formats**: ac3, eac3, mp3, flac, opus (via ogg)
+- **Input formats**: ac3, eac3, dts, mp3, flac, opus (via ogg)
 - **Output**: AAC stereo, 160 kbps, ADTS framing
 - **Command**: `ffmpeg -f {sourceCodec} -i input -c:a aac -ac 2 -b:a 160k -f adts output.aac`
 

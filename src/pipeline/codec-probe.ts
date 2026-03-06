@@ -12,6 +12,7 @@ const AUDIO_CODEC_MAP: Record<string, string> = {
   mp3: 'mp4a.69',
   ac3: 'ac-3',
   eac3: 'ec-3',
+  dts: 'dtsc',
   flac: 'flac',
   opus: 'opus',
 };

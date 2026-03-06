@@ -47,7 +47,7 @@ Integration tests (`npm run test:integration`) require test fixtures in `tests/f
 ### Audio Transcode
 - Source packets → concatenate raw bitstream → ffmpeg → parse ADTS output → EncodedPackets
 - `ffmpeg -f {sourceCodec} -i input -c:a aac -ac 2 -b:a 160k -f adts output.aac`
-- `sourceCodec` from `TranscodeOptions.sourceCodec`: ac3, eac3, mp3, flac, opus
+- `sourceCodec` from `TranscodeOptions.sourceCodec`: ac3, eac3, dts, mp3, flac, opus
 - Codec probe (`audioNeedsTranscode`) decides passthrough vs transcode per platform
 
 ### Browser Worker

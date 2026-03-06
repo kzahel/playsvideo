@@ -9,6 +9,7 @@ const OUTPUT_NAME = 'transcode-output.aac';
 const INPUT_FORMAT: Record<string, string> = {
   ac3: 'ac3',
   eac3: 'eac3',
+  dts: 'dts',
   mp3: 'mp3',
   flac: 'flac',
   opus: 'ogg',

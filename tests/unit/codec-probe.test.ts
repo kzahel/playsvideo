@@ -15,9 +15,10 @@ describe('codec-probe', () => {
       expect(prober.canPlayAudio('mp3')).toBe(true);
     });
 
-    it('rejects ac3, eac3, flac, opus', () => {
+    it('rejects ac3, eac3, dts, flac, opus', () => {
       expect(prober.canPlayAudio('ac3')).toBe(false);
       expect(prober.canPlayAudio('eac3')).toBe(false);
+      expect(prober.canPlayAudio('dts')).toBe(false);
       expect(prober.canPlayAudio('flac')).toBe(false);
       expect(prober.canPlayAudio('opus')).toBe(false);
     });
@@ -55,8 +56,12 @@ describe('codec-probe', () => {
       expect(audioNeedsTranscode(prober, 'aac')).toBe(false);
     });
 
-    it('unknown codecs need transcode (safe default)', () => {
+    it('dts needs transcode', () => {
       expect(audioNeedsTranscode(prober, 'dts')).toBe(true);
+    });
+
+    it('unknown codecs need transcode (safe default)', () => {
+      expect(audioNeedsTranscode(prober, 'vorbis')).toBe(true);
     });
 
     it('custom prober can override decisions', () => {
