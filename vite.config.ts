@@ -2,6 +2,8 @@ import { resolve } from 'node:path';
 import { defineConfig } from 'vite';
 
 export default defineConfig({
+  clearScreen: false,
+  logLevel: 'error',
   build: {
     rollupOptions: {
       input: {
@@ -12,11 +14,34 @@ export default defineConfig({
     },
   },
   server: {
+    port: 4200,
+    host: '0.0.0.0',
+    allowedHosts: ['playsvideo.graehlarts.com'],
     headers: {
       'Cross-Origin-Opener-Policy': 'same-origin',
       'Cross-Origin-Embedder-Policy': 'require-corp',
     },
   },
+  appType: 'mpa',
+  plugins: [
+    {
+      name: 'clean-urls',
+      configureServer(server) {
+        const { port, host } = server.config.server;
+        server.httpServer?.once('listening', () => {
+          console.log(`http://${host === '0.0.0.0' ? 'localhost' : host}:${port}/`);
+        });
+        server.middlewares.use((req, _res, next) => {
+          if (req.url === '/player' || req.url === '/player/') {
+            req.url = '/player.html';
+          } else if (req.url === '/debug' || req.url === '/debug/') {
+            req.url = '/debug.html';
+          }
+          next();
+        });
+      },
+    },
+  ],
   optimizeDeps: {
     exclude: ['@ffmpeg/ffmpeg', '@ffmpeg/util'],
   },
