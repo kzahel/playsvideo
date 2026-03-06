@@ -79,6 +79,9 @@ async function handleOpen(file: File, targetSegmentDuration: number) {
   doTranscode =
     demux.audioCodec !== null &&
     audioNeedsTranscode(codecProber, demux.audioCodec, demux.audioDecoderConfig?.codec);
+  if (doTranscode && demux.audioCodec) {
+    await ffmpeg.loadForCodec(demux.audioCodec);
+  }
   audioDecoderConfig = demux.audioDecoderConfig;
   initSegment = null;
 
