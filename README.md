@@ -51,7 +51,9 @@ Each piece existed separately. Nobody combined them.
 
 ### Use as a library
 
-> Not yet published to npm. The API below is the current interface.
+```bash
+npm install playsvideo
+```
 
 ```ts
 import { PlaysVideoEngine } from 'playsvideo';
@@ -69,7 +71,6 @@ engine.destroy();      // clean up
 
 ### Roadmap
 
-- **npm publish** — `npm install playsvideo`
 - **WebCodecs** — replace ffmpeg.wasm audio transcode with `AudioDecoder`/`AudioEncoder` (smaller bundle, lower latency)
 - **Video transcode** — hardware-accelerated decode via `VideoDecoder` for edge-case codecs
 

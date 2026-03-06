@@ -66,6 +66,37 @@ Integration tests (`npm run test:integration`) require test fixtures in `tests/f
 - Root cause: ffmpeg's fMP4 init extraction resets `packets_written`, absorbing 2 keyframe cuts (hlsenc.c:2498-2508)
 - Fix: replicate ffmpeg's `end_pts = hls_time * vs->number` gating in `buildSegmentPlan`
 
+## Release Process
+
+Changelog-driven releases. The changelog entry must exist before the release script will run.
+
+### Steps
+
+1. Add entry to `CHANGELOG.md` under `## [x.y.z]` (move items from `[Unreleased]`)
+2. Commit the changelog update
+3. Run: `bash scripts/release.sh x.y.z`
+   - Validates version format and clean working tree
+   - Requires matching `## [x.y.z]` in CHANGELOG.md
+   - Runs green gates + lib build
+   - Updates package.json version, commits, creates `vx.y.z` tag
+4. Push: `git push && git push origin vx.y.z`
+5. CI picks up the tag → runs gates → publishes to npm → creates GitHub Release with changelog notes
+
+### Files
+
+| File | Purpose |
+|------|---------|
+| `CHANGELOG.md` | Keep a Changelog format, required before release |
+| `scripts/release.sh` | Version bump, validation, commit, tag |
+| `.github/workflows/publish.yml` | CI: tag push → npm publish + GitHub Release |
+
+### npm package
+
+- Entry: `import { PlaysVideoEngine } from 'playsvideo'`
+- Lib build: `npm run build:lib` (tsc via `tsconfig.lib.json`, excludes Vite-specific files)
+- `NPM_TOKEN` secret required in GitHub repo settings
+- Publishes with `--provenance` (OIDC trusted publishing via GitHub Actions `id-token: write`)
+
 ## Deploy
 
 Site is hosted on Cloudflare R2 + Workers at playsvideo.com.
