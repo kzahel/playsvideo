@@ -73,7 +73,7 @@ test.describe('bigvideo smoke test', () => {
 
     const cpuBaseline = await getCpuTime();
 
-    await page.goto('/');
+    await page.goto('/player');
 
     // Pick the bigvideo file
     await page.locator('#file-input').setInputFiles(BIGVIDEO);

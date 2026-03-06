@@ -6,51 +6,58 @@ import { expect, test } from '@playwright/test';
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const FIXTURES = resolve(__dirname, '../fixtures');
 
+interface CodecEntry {
+  id: string;
+  file: string;
+  /** MSE type string to check — null means we expect this to be unsupported */
+  mseType: string | null;
+}
+
 /**
- * Codec test matrix. Each entry maps a fixture file to the MSE codec string
- * used to check MediaSource.isTypeSupported() in the browser.
+ * Codec test matrix. Organized by category for readability.
+ * mseType is checked via MediaSource.isTypeSupported() — null entries
+ * are expected-unsupported and tested for graceful error handling.
  */
-const CODEC_MATRIX = [
+const CODEC_MATRIX: CodecEntry[] = [
+  // --- Video codecs ---
   {
     id: 'h264-baseline',
     file: 'codec-h264-baseline.mp4',
     mseType: 'video/mp4; codecs="avc1.42E01E"',
   },
-  {
-    id: 'h264-main',
-    file: 'codec-h264-main.mp4',
-    mseType: 'video/mp4; codecs="avc1.4D401E"',
-  },
-  {
-    id: 'h264-high',
-    file: 'codec-h264-high.mp4',
-    mseType: 'video/mp4; codecs="avc1.640028"',
-  },
-  {
-    id: 'hevc',
-    file: 'codec-hevc.mp4',
-    mseType: 'video/mp4; codecs="hev1.1.6.L93.B0"',
-  },
-  {
-    id: 'vp9',
-    file: 'codec-vp9.webm',
-    mseType: 'video/mp4; codecs="vp09.00.10.08"',
-  },
-  {
-    id: 'av1',
-    file: 'codec-av1.mp4',
-    mseType: 'video/mp4; codecs="av01.0.01M.08"',
-  },
-  {
-    id: 'h264-ac3',
-    file: 'codec-h264-ac3.mkv',
-    mseType: 'video/mp4; codecs="avc1.640028"',
-  },
+  { id: 'h264-main', file: 'codec-h264-main.mp4', mseType: 'video/mp4; codecs="avc1.4D401E"' },
+  { id: 'h264-high', file: 'codec-h264-high.mp4', mseType: 'video/mp4; codecs="avc1.640028"' },
+  { id: 'hevc', file: 'codec-hevc.mp4', mseType: 'video/mp4; codecs="hev1.1.6.L93.B0"' },
+  { id: 'vp9', file: 'codec-vp9.webm', mseType: 'video/mp4; codecs="vp09.00.10.08"' },
+  { id: 'vp8', file: 'codec-vp8.webm', mseType: 'video/mp4; codecs="vp08.00.10.08"' },
+  { id: 'av1', file: 'codec-av1.mp4', mseType: 'video/mp4; codecs="av01.0.01M.08"' },
+  { id: 'mpeg4', file: 'codec-mpeg4.mp4', mseType: null },
+  { id: 'mpeg2', file: 'codec-mpeg2.ts', mseType: null },
+  { id: 'mpeg1', file: 'codec-mpeg1.mpg', mseType: null },
+
+  // --- Containers (H.264+AAC in different wrappers) ---
+  { id: 'h264-mkv', file: 'codec-h264-mkv.mkv', mseType: 'video/mp4; codecs="avc1.640028"' },
+  { id: 'h264-ts', file: 'codec-h264-ts.ts', mseType: 'video/mp4; codecs="avc1.640028"' },
+  { id: 'h264-avi', file: 'codec-h264-avi.avi', mseType: 'video/mp4; codecs="avc1.640028"' },
+  { id: 'h264-flv', file: 'codec-h264-flv.flv', mseType: 'video/mp4; codecs="avc1.640028"' },
+
+  // --- Audio codec variations (with H.264 video) ---
+  { id: 'h264-ac3', file: 'codec-h264-ac3.mkv', mseType: 'video/mp4; codecs="avc1.640028"' },
+  { id: 'h264-mp3', file: 'codec-h264-mp3.mkv', mseType: 'video/mp4; codecs="avc1.640028"' },
+  { id: 'h264-eac3', file: 'codec-h264-eac3.mkv', mseType: 'video/mp4; codecs="avc1.640028"' },
+  { id: 'h264-flac', file: 'codec-h264-flac.mkv', mseType: 'video/mp4; codecs="avc1.640028"' },
+  { id: 'h264-opus', file: 'codec-h264-opus.mkv', mseType: 'video/mp4; codecs="avc1.640028"' },
+
+  // --- Special cases ---
   {
     id: 'h264-noaudio',
     file: 'codec-h264-noaudio.mp4',
     mseType: 'video/mp4; codecs="avc1.640028"',
   },
+  { id: 'audio-aac', file: 'codec-audio-aac.m4a', mseType: 'audio/mp4; codecs="mp4a.40.2"' },
+  { id: 'audio-mp3', file: 'codec-audio-mp3.mp3', mseType: 'audio/mp4; codecs="mp4a.69"' },
+  { id: 'audio-opus', file: 'codec-audio-opus.ogg', mseType: 'audio/mp4; codecs="opus"' },
+  { id: 'audio-flac', file: 'codec-audio-flac.flac', mseType: 'audio/mp4; codecs="flac"' },
 ];
 
 const PLAYBACK_WAIT_SEC = 5;
@@ -58,6 +65,32 @@ const PLAYBACK_WAIT_SEC = 5;
 test.describe('codec smoke tests', () => {
   for (const { id, file, mseType } of CODEC_MATRIX) {
     const fixturePath = resolve(FIXTURES, file);
+
+    if (mseType === null) {
+      // Expected-unsupported: verify app doesn't crash
+      test(`handles unsupported ${id}`, async ({ page }) => {
+        test.setTimeout(30_000);
+
+        if (!existsSync(fixturePath)) {
+          test.skip(true, `Fixture not found: ${file} (run generate-codec-matrix.sh)`);
+          return;
+        }
+
+        const pageErrors: string[] = [];
+        page.on('pageerror', (err) => pageErrors.push(err.message));
+
+        await page.goto('/player');
+        await page.waitForLoadState('networkidle');
+        await page.locator('#file-input').setInputFiles(fixturePath);
+
+        // Give it time to process and show an error
+        await page.waitForTimeout(5_000);
+
+        // Should not have unhandled page errors (thrown exceptions)
+        expect(pageErrors).toEqual([]);
+      });
+      continue;
+    }
 
     test(`plays ${id}`, async ({ page }) => {
       test.setTimeout(60_000);
@@ -84,7 +117,7 @@ test.describe('codec smoke tests', () => {
       });
       page.on('pageerror', (err) => consoleErrors.push(err.message));
 
-      await page.goto('/');
+      await page.goto('/player');
       // Wait for app JS to initialize before setting files
       await page.waitForLoadState('networkidle');
       await page.locator('#file-input').setInputFiles(fixturePath);
