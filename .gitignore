@@ -7,3 +7,4 @@ tests/fixtures/*.mkv
 tests/fixtures/*.aac
 tests/golden/output/
 test-results/
+tests/tmp/
