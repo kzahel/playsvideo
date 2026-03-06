@@ -76,5 +76,23 @@ describe('audio-transcode', () => {
 
     const decodable = await ffprobe.verifyDecodable(aacPath);
     expect(decodable.ok, `AAC not decodable: ${decodable.stderr}`).toBe(true);
+
+    // Verify transcode metrics are populated
+    const m = result.metrics;
+    expect(m.inputPackets).toBeGreaterThan(0);
+    expect(m.inputBytes).toBeGreaterThan(0);
+    expect(m.audioDurationSec).toBeGreaterThan(0);
+    expect(m.totalMs).toBeGreaterThan(0);
+    expect(m.ffmpegMs).toBeGreaterThan(0);
+    expect(m.outputPackets).toBeGreaterThan(0);
+    expect(m.outputBytes).toBeGreaterThan(0);
+    expect(m.outputDurationSec).toBeGreaterThan(0);
+    expect(m.realtimeRatio).toBeGreaterThan(0);
+    // Phase timings should be non-negative
+    expect(m.concatMs).toBeGreaterThanOrEqual(0);
+    expect(m.writeMs).toBeGreaterThanOrEqual(0);
+    expect(m.readMs).toBeGreaterThanOrEqual(0);
+    expect(m.parseMs).toBeGreaterThanOrEqual(0);
+    expect(m.cleanupMs).toBeGreaterThanOrEqual(0);
   });
 });

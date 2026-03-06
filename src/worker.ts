@@ -160,7 +160,6 @@ async function processSegment(index: number): Promise<Uint8Array> {
 
   if (doTranscode && audioPackets.length > 0) {
     const sampleRate = demux.audioDecoderConfig?.sampleRate ?? 48000;
-    const tXcode = performance.now();
     const transcoded = await transcodeAudioSegment({
       packets: audioPackets,
       sampleRate,
@@ -168,8 +167,10 @@ async function processSegment(index: number): Promise<Uint8Array> {
       ffmpeg,
       sourceCodec: demux.audioCodec ?? undefined,
     });
+    const m = transcoded.metrics;
+    const speed = m.ffmpegSpeed !== null ? ` speed=${m.ffmpegSpeed}x` : '';
     wlog(
-      `seg ${index} transcode ${elapsed(tXcode)} in=${audioPackets.length} out=${transcoded.packets.length}`,
+      `seg ${index} transcode ${m.totalMs.toFixed(1)}ms audio=${m.audioDurationSec.toFixed(2)}s ratio=${m.realtimeRatio.toFixed(4)}x ffmpeg=${m.ffmpegMs.toFixed(1)}ms${speed} | concat=${m.concatMs.toFixed(1)} write=${m.writeMs.toFixed(1)} read=${m.readMs.toFixed(1)} parse=${m.parseMs.toFixed(1)} cleanup=${m.cleanupMs.toFixed(1)} in=${m.inputPackets}/${m.inputBytes}B out=${m.outputPackets}/${m.outputBytes}B`,
     );
     audioPackets = transcoded.packets;
     if (!audioDecoderConfig || audioDecoderConfig.codec !== 'mp4a.40.2') {
