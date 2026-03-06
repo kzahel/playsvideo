@@ -17,10 +17,6 @@ export default defineConfig({
     port: 4200,
     host: '0.0.0.0',
     allowedHosts: ['playsvideo.graehlarts.com'],
-    headers: {
-      'Cross-Origin-Opener-Policy': 'same-origin',
-      'Cross-Origin-Embedder-Policy': 'require-corp',
-    },
   },
   appType: 'mpa',
   plugins: [

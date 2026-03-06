@@ -19,9 +19,6 @@ export default {
     const headers = new Headers();
     object.writeHttpMetadata(headers);
     headers.set('etag', object.httpEtag);
-    headers.set('Cross-Origin-Opener-Policy', 'same-origin');
-    headers.set('Cross-Origin-Embedder-Policy', 'require-corp');
-
     // HTML, SW, manifest: always revalidate. Hashed assets: cache long-term.
     if (key.endsWith('.html') || key === 'sw.js' || key === 'manifest.json') {
       headers.set('Cache-Control', 'no-cache');

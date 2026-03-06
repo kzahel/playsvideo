@@ -77,7 +77,26 @@ npm run deploy         # both
 ```
 
 - `scripts/deploy.sh` — uploads built files to R2 bucket with correct content types
-- `worker/index.js` — Cloudflare Worker that serves files from R2, sets COOP/COEP headers (required for SharedArrayBuffer/ffmpeg.wasm), and handles caching (no-cache for HTML/SW/manifest, immutable for hashed assets)
+- `worker/index.js` — Cloudflare Worker that serves files from R2 and handles caching (no-cache for HTML/SW/manifest, immutable for hashed assets). No COOP/COEP headers needed (see `docs/no-shared-array-buffer.md`)
+
+## Rebuilding ffmpeg.wasm (audio-only)
+
+The audio-only bundle is built via Docker on the desktop machine. To rebuild after changing `ffmpegbuild/Dockerfile.ffmpeg-audio`:
+
+```bash
+# 1. Commit and push changes (Dockerfile changes must be on remote)
+git push
+
+# 2. Build on desktop (has Docker) — pulls, builds, copies to vendor dir
+ssh desktop "cd ~/code/playsvideo && git pull && bash ffmpegbuild/build.sh"
+
+# 3. Copy built files back
+scp desktop:~/code/playsvideo/ffmpegbuild/out/ffmpeg-core.js \
+    desktop:~/code/playsvideo/ffmpegbuild/out/ffmpeg-core.wasm \
+    src/vendor/ffmpeg-core-audio/
+```
+
+Build config: `ffmpegbuild/Dockerfile.ffmpeg-audio` (decoders, encoders, filters, etc.)
 
 ## Reference Code
 
