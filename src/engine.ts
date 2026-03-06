@@ -54,9 +54,6 @@ export class PlaysVideoEngine extends EventTarget {
     reject: (err: Error) => void;
   } | null = null;
 
-  // Race detection tracking
-  private lastSegmentRequested = -1;
-  private lastSegmentCompleted = -1;
   private segmentRequestTimes = new Map<number, number>();
 
   // Subtitle state
@@ -101,8 +98,6 @@ export class PlaysVideoEngine extends EventTarget {
     this.playlist = null;
     this.initData = null;
     this.pendingSegments.clear();
-    this.lastSegmentRequested = -1;
-    this.lastSegmentCompleted = -1;
     this.segmentRequestTimes.clear();
     for (const url of this.subtitleBlobUrls) URL.revokeObjectURL(url);
     this.subtitleBlobUrls = [];
@@ -218,12 +213,6 @@ export class PlaysVideoEngine extends EventTarget {
         this.pendingSegments.delete(msg.index);
       }
 
-      // Race detection: out-of-order completion
-      if (msg.index < this.lastSegmentCompleted) {
-        mlog(`WARN seg ${msg.index} completed out-of-order (last=${this.lastSegmentCompleted})`);
-      }
-      this.lastSegmentCompleted = Math.max(this.lastSegmentCompleted, msg.index);
-
       mlog(
         `seg ${msg.index} arrived latency=${latency}ms size=${size} pending=${this.pendingSegments.size}`,
       );
@@ -253,11 +242,6 @@ export class PlaysVideoEngine extends EventTarget {
     if (this.pendingSegments.has(index)) {
       mlog(`WARN duplicate request for seg ${index} (already pending)`);
     }
-    // Race detection: out-of-order request
-    if (index < this.lastSegmentRequested) {
-      mlog(`WARN seg ${index} requested out-of-order (last=${this.lastSegmentRequested})`);
-    }
-    this.lastSegmentRequested = Math.max(this.lastSegmentRequested, index);
 
     const pendingCount = this.pendingSegments.size;
     if (pendingCount > 1) {
