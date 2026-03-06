@@ -18,6 +18,9 @@
     .tagline { color: var(--muted); font-size: 1.1rem; margin: 1.5rem 0 2rem; }
     .cta { display: inline-block; padding: 0.75rem 2rem; background: var(--cta-bg); color: var(--cta-fg); text-decoration: none; border-radius: 6px; font-weight: 600; font-size: 1rem; }
     .cta:hover { background: var(--cta-hover); }
+    .powered { color: var(--muted); font-size: 0.8rem; margin-top: 2rem; }
+    .powered a { color: var(--muted); text-decoration: none; }
+    .powered a:hover { text-decoration: underline; }
     .theme-toggle { position: fixed; top: 1rem; right: 1rem; background: none; border: 1px solid var(--muted); color: var(--fg); border-radius: 50%; width: 36px; height: 36px; cursor: pointer; font-size: 16px; display: flex; align-items: center; justify-content: center; opacity: 0.6; }
     .theme-toggle:hover { opacity: 1; }
   </style>
@@ -36,8 +39,9 @@
       <text x="44" y="38" font-family="'Inter', sans-serif" font-weight="700" font-size="38" fill="currentColor" letter-spacing="-2">plays</text>
       <text x="164" y="38" font-family="'Inter', sans-serif" font-weight="300" font-size="38" fill="currentColor" letter-spacing="-2">video</text>
     </svg>
-    <p class="tagline">Play any video file in the browser — no server needed.</p>
+    <p class="tagline">Finally, videos just work.</p>
     <a class="cta" href="/player">Launch Player</a>
+    <p class="powered">powered by <a href="https://github.com/nickreserved/mediabunny">mediabunny</a></p>
   </div>
   <script>
     (function() {
