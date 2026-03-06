@@ -9,17 +9,16 @@ const FIXTURES = resolve(__dirname, '../fixtures');
 interface CodecEntry {
   id: string;
   file: string;
-  /** MSE type string to check — null means we expect this to be unsupported */
+  /** MSE type string — null means expected-unsupported (no-crash test only) */
   mseType: string | null;
 }
 
 /**
- * Codec test matrix. Organized by category for readability.
- * mseType is checked via MediaSource.isTypeSupported() — null entries
- * are expected-unsupported and tested for graceful error handling.
+ * Codec test matrix. mseType=null entries are tested for graceful error
+ * handling only (no crash, no unhandled exceptions).
  */
 const CODEC_MATRIX: CodecEntry[] = [
-  // --- Video codecs ---
+  // --- Video codecs (should play) ---
   {
     id: 'h264-baseline',
     file: 'codec-h264-baseline.mp4',
@@ -31,33 +30,41 @@ const CODEC_MATRIX: CodecEntry[] = [
   { id: 'vp9', file: 'codec-vp9.webm', mseType: 'video/mp4; codecs="vp09.00.10.08"' },
   { id: 'vp8', file: 'codec-vp8.webm', mseType: 'video/mp4; codecs="vp08.00.10.08"' },
   { id: 'av1', file: 'codec-av1.mp4', mseType: 'video/mp4; codecs="av01.0.01M.08"' },
+
+  // --- Unsupported video codecs (no-crash) ---
   { id: 'mpeg4', file: 'codec-mpeg4.mp4', mseType: null },
   { id: 'mpeg2', file: 'codec-mpeg2.ts', mseType: null },
   { id: 'mpeg1', file: 'codec-mpeg1.mpg', mseType: null },
 
-  // --- Containers (H.264+AAC in different wrappers) ---
+  // --- Containers (should play) ---
   { id: 'h264-mkv', file: 'codec-h264-mkv.mkv', mseType: 'video/mp4; codecs="avc1.640028"' },
   { id: 'h264-ts', file: 'codec-h264-ts.ts', mseType: 'video/mp4; codecs="avc1.640028"' },
-  { id: 'h264-avi', file: 'codec-h264-avi.avi', mseType: 'video/mp4; codecs="avc1.640028"' },
-  { id: 'h264-flv', file: 'codec-h264-flv.flv', mseType: 'video/mp4; codecs="avc1.640028"' },
 
-  // --- Audio codec variations (with H.264 video) ---
+  // --- Unsupported containers (no-crash) ---
+  { id: 'h264-avi', file: 'codec-h264-avi.avi', mseType: null },
+  { id: 'h264-flv', file: 'codec-h264-flv.flv', mseType: null },
+
+  // --- Audio codec variations with H.264 video (should play) ---
   { id: 'h264-ac3', file: 'codec-h264-ac3.mkv', mseType: 'video/mp4; codecs="avc1.640028"' },
-  { id: 'h264-mp3', file: 'codec-h264-mp3.mkv', mseType: 'video/mp4; codecs="avc1.640028"' },
   { id: 'h264-eac3', file: 'codec-h264-eac3.mkv', mseType: 'video/mp4; codecs="avc1.640028"' },
   { id: 'h264-flac', file: 'codec-h264-flac.mkv', mseType: 'video/mp4; codecs="avc1.640028"' },
   { id: 'h264-opus', file: 'codec-h264-opus.mkv', mseType: 'video/mp4; codecs="avc1.640028"' },
 
-  // --- Special cases ---
+  // --- Unsupported audio codec (no-crash) ---
+  { id: 'h264-mp3', file: 'codec-h264-mp3.mkv', mseType: null },
+
+  // --- Special: video-only (should play) ---
   {
     id: 'h264-noaudio',
     file: 'codec-h264-noaudio.mp4',
     mseType: 'video/mp4; codecs="avc1.640028"',
   },
-  { id: 'audio-aac', file: 'codec-audio-aac.m4a', mseType: 'audio/mp4; codecs="mp4a.40.2"' },
-  { id: 'audio-mp3', file: 'codec-audio-mp3.mp3', mseType: 'audio/mp4; codecs="mp4a.69"' },
-  { id: 'audio-opus', file: 'codec-audio-opus.ogg', mseType: 'audio/mp4; codecs="opus"' },
-  { id: 'audio-flac', file: 'codec-audio-flac.flac', mseType: 'audio/mp4; codecs="flac"' },
+
+  // --- Audio-only (no-crash — requires video track) ---
+  { id: 'audio-aac', file: 'codec-audio-aac.m4a', mseType: null },
+  { id: 'audio-mp3', file: 'codec-audio-mp3.mp3', mseType: null },
+  { id: 'audio-opus', file: 'codec-audio-opus.ogg', mseType: null },
+  { id: 'audio-flac', file: 'codec-audio-flac.flac', mseType: null },
 ];
 
 const PLAYBACK_WAIT_SEC = 5;

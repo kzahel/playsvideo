@@ -1,0 +1,50 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>playsvideo — debug</title>
+  <link rel="icon" type="image/svg+xml" href="/favicon.svg">
+  <style>
+    body { font-family: system-ui, sans-serif; margin: 2rem; background: #111; color: #eee; }
+    video { width: 100%; max-width: 1280px; display: none; margin-top: 1rem; background: #000; }
+    #status { margin-top: 0.5rem; color: #999; }
+    input[type="file"] { font-size: 1rem; }
+    #log {
+      margin-top: 1rem;
+      padding: 1rem;
+      background: #0a0a0a;
+      border: 1px solid #333;
+      border-radius: 4px;
+      font-family: 'JetBrains Mono', 'SF Mono', monospace;
+      font-size: 12px;
+      line-height: 1.5;
+      max-height: 60vh;
+      overflow-y: auto;
+      white-space: pre-wrap;
+      word-break: break-all;
+    }
+    .log-ready { color: #4ade80; }
+    .log-error { color: #f87171; }
+    .log-loading { color: #60a5fa; }
+    .log-segment { color: #a3a3a3; }
+    .log-subtitle { color: #c084fc; }
+    .log-hls { color: #fbbf24; }
+    .log-warn { color: #fb923c; }
+  </style>
+</head>
+<body>
+  <svg width="300" height="48" viewBox="0 0 340 48" style="margin-bottom: 1rem;">
+    <polygon points="2,4 2,44 32,24" fill="#fff"/>
+    <text x="44" y="38" font-family="'Inter', sans-serif" font-weight="700" font-size="38" fill="#fff" letter-spacing="-2">plays</text>
+    <text x="164" y="38" font-family="'Inter', sans-serif" font-weight="300" font-size="38" fill="#fff" letter-spacing="-2">video</text>
+  </svg>
+  <span style="color: #666; font-size: 12px; vertical-align: top;">debug</span>
+  <br>
+  <input type="file" id="file-input">
+  <p id="status">Select a video file to play.</p>
+  <video id="video" controls></video>
+  <div id="log"></div>
+  <script type="module" src="/src/debug.ts"></script>
+</body>
+</html>
