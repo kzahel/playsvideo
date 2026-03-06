@@ -51,26 +51,17 @@ export interface BuildSegmentPlanOptions {
 export function buildSegmentPlan(options: BuildSegmentPlanOptions): PlannedSegment[] {
   const durationSec = Number(options.durationSec);
   const sequenceStart = Math.max(0, Math.floor(Number(options.sequenceStart) || 0));
-  const tsd = options.targetSegmentDurationSec;
-  const targetDuration = tsd != null && Number.isFinite(tsd) && tsd > 0 ? tsd : 4;
 
   const boundaries = normalizeKeyframeTimestamps(options.keyframeTimestampsSec, durationSec);
   const plan: PlannedSegment[] = [];
-  let cursor = 0;
   let sequence = sequenceStart;
 
-  while (cursor < boundaries.length - 1) {
-    const startSec = boundaries[cursor];
-    let endIndex = cursor + 1;
-
-    while (
-      endIndex < boundaries.length - 1 &&
-      boundaries[endIndex] - startSec + EPSILON_SEC < targetDuration
-    ) {
-      endIndex += 1;
-    }
-
-    const endSec = boundaries[endIndex];
+  // Cut at every keyframe boundary — matches ffmpeg HLS behavior.
+  // ffmpeg cuts at each keyframe regardless of hls_time; the target duration
+  // only affects the M3U8 EXT-X-TARGETDURATION header, not segment boundaries.
+  for (let i = 0; i < boundaries.length - 1; i++) {
+    const startSec = boundaries[i];
+    const endSec = boundaries[i + 1];
     const duration = Math.max(EPSILON_SEC, endSec - startSec);
     plan.push({
       sequence,
@@ -78,9 +69,7 @@ export function buildSegmentPlan(options: BuildSegmentPlanOptions): PlannedSegme
       startSec,
       durationSec: duration,
     });
-
     sequence += 1;
-    cursor = endIndex;
   }
 
   return plan;

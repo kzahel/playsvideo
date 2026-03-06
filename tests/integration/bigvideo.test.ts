@@ -166,6 +166,95 @@ describeIfBigVideo('bigvideo full-file validation', () => {
     }
   });
 
+  it('segment plan matches golden m3u8 exactly (hls_time=2)', async () => {
+    if (!hasGolden) return;
+
+    const index = await getKeyframeIndex(demux.videoSink, demux.duration);
+    const kfTimestamps = index.keyframes.map((k) => k.timestamp);
+    console.log(`Keyframe count: ${kfTimestamps.length}, first 15: ${kfTimestamps.slice(0, 15).map((t) => t.toFixed(6)).join(', ')}`);
+
+    const plan = buildSegmentPlan({
+      keyframeTimestampsSec: kfTimestamps,
+      durationSec: index.duration,
+      targetSegmentDurationSec: 2,
+    });
+
+    const goldenM3u8 = await readFile(join(GOLDEN_DIR, 'playlist.m3u8'), 'utf-8');
+    const golden = parsePlaylist(goldenM3u8);
+
+    // If counts differ, log divergence context
+    if (plan.length !== golden.entries.length) {
+      const minLen = Math.min(plan.length, golden.entries.length);
+      let divergeAt = 0;
+      for (let i = 0; i < minLen; i++) {
+        if (plan[i].durationSec !== golden.entries[i].durationSec) {
+          divergeAt = i;
+          break;
+        }
+        if (i === minLen - 1) divergeAt = minLen;
+      }
+
+      const start = Math.max(0, divergeAt - 2);
+      const end = Math.min(Math.max(plan.length, golden.entries.length), divergeAt + 3);
+      console.log(
+        `Segment count mismatch: ours=${plan.length}, golden=${golden.entries.length}. First divergence near index ${divergeAt}:`,
+      );
+      console.log('  idx | ourStart   | ourDur     | goldenDur  | delta');
+      console.log('  ----|------------|------------|------------|------');
+      for (let i = start; i < end; i++) {
+        const ours = i < plan.length ? plan[i] : null;
+        const gold = i < golden.entries.length ? golden.entries[i] : null;
+        const ourStart = ours ? ours.startSec.toFixed(6) : '---';
+        const ourDur = ours ? ours.durationSec.toFixed(6) : '---';
+        const goldDur = gold ? gold.durationSec.toFixed(6) : '---';
+        const delta = ours && gold ? (ours.durationSec - gold.durationSec).toFixed(6) : '---';
+        console.log(
+          `  ${String(i).padStart(3)} | ${ourStart.padStart(10)} | ${ourDur.padStart(10)} | ${goldDur.padStart(10)} | ${delta}`,
+        );
+      }
+    }
+
+    expect(plan.length, 'segment count must match golden').toBe(golden.entries.length);
+
+    // Per-segment EXTINF comparison
+    const deltas: number[] = [];
+    const failures: string[] = [];
+    for (let i = 0; i < plan.length; i++) {
+      const delta = Math.abs(plan[i].durationSec - golden.entries[i].durationSec);
+      deltas.push(delta);
+      if (delta > 0) {
+        failures.push(
+          `seg ${i}: ours=${plan[i].durationSec.toFixed(6)}, golden=${golden.entries[i].durationSec.toFixed(6)}, diff=${delta.toFixed(6)}`,
+        );
+      }
+    }
+
+    // Log per-segment diffs
+    for (let i = 0; i < deltas.length; i++) {
+      if (deltas[i] > 0) {
+        console.log(
+          `seg ${i}: dur diff=${deltas[i].toFixed(6)} (ours=${plan[i].durationSec.toFixed(6)}, golden=${golden.entries[i].durationSec.toFixed(6)})`,
+        );
+      }
+    }
+
+    // Summary stats
+    const maxDelta = Math.max(...deltas);
+    const meanDelta = deltas.reduce((s, d) => s + d, 0) / deltas.length;
+    const overThreshold = deltas.filter((d) => d > 0.001).length;
+    console.log(`Duration delta stats: max=${maxDelta.toFixed(6)}, mean=${meanDelta.toFixed(6)}, segments with delta>0.001s: ${overThreshold}/${deltas.length}`);
+
+    // Total duration comparison
+    const ourTotal = plan.reduce((s, p) => s + p.durationSec, 0);
+    const goldenTotal = golden.entries.reduce((s, e) => s + e.durationSec, 0);
+    console.log(`Total duration: ours=${ourTotal.toFixed(6)}, golden=${goldenTotal.toFixed(6)}, diff=${Math.abs(ourTotal - goldenTotal).toFixed(6)}`);
+
+    if (failures.length) {
+      console.log(`${failures.length} segments have non-zero diff:\n${failures.join('\n')}`);
+    }
+    expect(failures, 'all segment durations must exactly match golden').toHaveLength(0);
+  });
+
   it('golden reference segments are decodable (spot check)', async () => {
     if (!hasGolden) return;
 
