@@ -52,7 +52,7 @@ service worker segment cache ◄── fetch ── hls.js
 ### 2. Browser glue
 - `sw.js` — service worker: intercepts segment fetches, serves from cache
 - `player.ts` — hls.js setup, event logging, error recovery
-- `main.ts` — file picker → pipeline → playback
+- `pwa-player.ts` — file picker → pipeline → playback
 
 ### 3. Tests (Node, fast)
 - Segment validity: ffprobe each output segment

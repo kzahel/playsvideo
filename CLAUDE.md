@@ -23,7 +23,7 @@ Integration tests (`npm run test:integration`) require test fixtures in `tests/f
 - `src/adapters/` — platform adapters (node-ffmpeg, node-ffprobe, wasm-ffmpeg)
 - `src/engine.ts` — PlaysVideoEngine class (worker, hls.js, subtitles — no UI)
 - `src/worker.ts` — browser web worker (demux + segment processing)
-- `src/main.ts` — browser entry point (thin UI wiring to engine)
+- `src/pwa-player.ts` — browser entry point (thin UI wiring to engine)
 - `tests/unit/` — fast unit tests (no external dependencies)
 - `tests/integration/` — tests requiring ffmpeg/ffprobe and test fixtures
 - `tests/e2e/` — playwright browser tests

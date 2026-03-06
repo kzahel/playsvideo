@@ -39,7 +39,7 @@ src/pipeline/       Core modules (demux, mux, segment plan, audio transcode,
                     codec probe, playlist, subtitle extraction)
 src/adapters/       Platform adapters (ffmpeg.wasm for browser, node-ffmpeg for tests)
 src/worker.ts       Web worker — demux + on-demand segment processing
-src/main.ts         Browser entry — file picker, hls.js integration, subtitle tracks
+src/pwa-player.ts   Browser entry — file picker, hls.js integration, subtitle tracks
 tests/unit/         Fast tests, no external dependencies
 tests/integration/  Tests requiring ffmpeg/ffprobe and fixture files
 tests/e2e/          Playwright browser tests
