@@ -37,9 +37,9 @@ Video file (MKV, MP4, AVI, …)
 
 Video is **never** re-encoded. Only unsupported audio codecs go through ffmpeg.wasm — a few seconds at a time, entirely in-browser.
 
-### Why this exists
+### Under the hood
 
-There's no library that does this. The obvious approach — ffmpeg compiled to WebAssembly — can't handle large files (WORKERFS is catastrophically slow, MEMFS can't hold them). The trick is to split the problem:
+The obvious approach — ffmpeg compiled to WebAssembly — can't handle large files (WORKERFS is catastrophically slow, MEMFS can't hold them). The trick is to split the problem:
 
 - **[mediabunny](https://github.com/Vanilagy/mediabunny)** — streaming demux/remux in pure TypeScript, works on any size file
 - **[ffmpeg.wasm](https://github.com/nicolo-ribaudo/ffmpeg.wasm)** — only transcodes short audio segments via MEMFS
