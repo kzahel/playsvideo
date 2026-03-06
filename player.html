@@ -11,21 +11,58 @@
   <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
   <link rel="apple-touch-icon" href="/icons/icon-192.png">
   <style>
-    body { font-family: system-ui, sans-serif; margin: 2rem; background: #111; color: #eee; }
-    video { width: 100%; max-width: 1280px; display: none; margin-top: 1rem; background: #000; }
-    #status { margin-top: 0.5rem; color: #999; }
-    input[type="file"] { font-size: 1rem; }
+    :root { --bg: #fff; --fg: #111; --muted: #999; --video-bg: #000; --file-color: #111; }
+    @media (prefers-color-scheme: dark) {
+      :root { --bg: #111; --fg: #eee; --muted: #999; --video-bg: #000; --file-color: #eee; }
+    }
+    html[data-theme="light"] { --bg: #fff; --fg: #111; --muted: #999; --file-color: #111; }
+    html[data-theme="dark"] { --bg: #111; --fg: #eee; --muted: #999; --file-color: #eee; }
+    body { font-family: system-ui, sans-serif; margin: 2rem; background: var(--bg); color: var(--fg); }
+    video { width: 100%; max-width: 1280px; display: none; margin-top: 1rem; background: var(--video-bg); }
+    #status { margin-top: 0.5rem; color: var(--muted); }
+    input[type="file"] { font-size: 1rem; color: var(--file-color); }
+    .header { display: flex; align-items: center; gap: 0.75rem; margin-bottom: 1rem; }
+    .theme-toggle { background: none; border: 1px solid var(--muted); color: var(--fg); border-radius: 50%; width: 32px; height: 32px; cursor: pointer; font-size: 14px; display: flex; align-items: center; justify-content: center; opacity: 0.6; flex-shrink: 0; }
+    .theme-toggle:hover { opacity: 1; }
   </style>
+  <script>
+    (function() {
+      var t = localStorage.getItem('pv-theme');
+      if (t) document.documentElement.setAttribute('data-theme', t);
+    })();
+  </script>
 </head>
 <body>
-  <svg width="300" height="48" viewBox="0 0 340 48" style="margin-bottom: 1rem;">
-    <polygon points="2,4 2,44 32,24" fill="#fff"/>
-    <text x="44" y="38" font-family="'Inter', sans-serif" font-weight="700" font-size="38" fill="#fff" letter-spacing="-2">plays</text>
-    <text x="164" y="38" font-family="'Inter', sans-serif" font-weight="300" font-size="38" fill="#fff" letter-spacing="-2">video</text>
-  </svg>
+  <div class="header">
+    <svg width="300" height="48" viewBox="0 0 340 48">
+      <polygon points="2,4 2,44 32,24" fill="currentColor"/>
+      <text x="44" y="38" font-family="'Inter', sans-serif" font-weight="700" font-size="38" fill="currentColor" letter-spacing="-2">plays</text>
+      <text x="164" y="38" font-family="'Inter', sans-serif" font-weight="300" font-size="38" fill="currentColor" letter-spacing="-2">video</text>
+    </svg>
+    <button class="theme-toggle" id="theme-toggle" aria-label="Toggle theme"></button>
+  </div>
   <input type="file" id="file-input">
   <p id="status">Select a video file to play.</p>
   <video id="video" controls></video>
   <script type="module" src="/src/main.ts"></script>
+  <script>
+    (function() {
+      var btn = document.getElementById('theme-toggle');
+      function isDark() {
+        var t = document.documentElement.getAttribute('data-theme');
+        if (t) return t === 'dark';
+        return matchMedia('(prefers-color-scheme: dark)').matches;
+      }
+      function update() { btn.textContent = isDark() ? '\u2600' : '\u263E'; }
+      btn.addEventListener('click', function() {
+        var next = isDark() ? 'light' : 'dark';
+        document.documentElement.setAttribute('data-theme', next);
+        localStorage.setItem('pv-theme', next);
+        update();
+      });
+      update();
+      matchMedia('(prefers-color-scheme: dark)').addEventListener('change', update);
+    })();
+  </script>
 </body>
 </html>

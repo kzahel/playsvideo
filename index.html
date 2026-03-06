@@ -7,22 +7,56 @@
   <link rel="icon" type="image/svg+xml" href="/favicon.svg">
   <meta name="theme-color" content="#111111">
   <style>
-    body { font-family: system-ui, sans-serif; margin: 0; background: #111; color: #eee; display: flex; align-items: center; justify-content: center; min-height: 100vh; }
+    :root { --bg: #fff; --fg: #111; --muted: #999; --cta-bg: #111; --cta-fg: #fff; --cta-hover: #333; }
+    @media (prefers-color-scheme: dark) {
+      :root { --bg: #111; --fg: #eee; --muted: #999; --cta-bg: #fff; --cta-fg: #111; --cta-hover: #ddd; }
+    }
+    html[data-theme="light"] { --bg: #fff; --fg: #111; --muted: #999; --cta-bg: #111; --cta-fg: #fff; --cta-hover: #333; }
+    html[data-theme="dark"] { --bg: #111; --fg: #eee; --muted: #999; --cta-bg: #fff; --cta-fg: #111; --cta-hover: #ddd; }
+    body { font-family: system-ui, sans-serif; margin: 0; background: var(--bg); color: var(--fg); display: flex; align-items: center; justify-content: center; min-height: 100vh; }
     .landing { text-align: center; padding: 2rem; }
-    .tagline { color: #999; font-size: 1.1rem; margin: 1.5rem 0 2rem; }
-    .cta { display: inline-block; padding: 0.75rem 2rem; background: #fff; color: #111; text-decoration: none; border-radius: 6px; font-weight: 600; font-size: 1rem; }
-    .cta:hover { background: #ddd; }
+    .tagline { color: var(--muted); font-size: 1.1rem; margin: 1.5rem 0 2rem; }
+    .cta { display: inline-block; padding: 0.75rem 2rem; background: var(--cta-bg); color: var(--cta-fg); text-decoration: none; border-radius: 6px; font-weight: 600; font-size: 1rem; }
+    .cta:hover { background: var(--cta-hover); }
+    .theme-toggle { position: fixed; top: 1rem; right: 1rem; background: none; border: 1px solid var(--muted); color: var(--fg); border-radius: 50%; width: 36px; height: 36px; cursor: pointer; font-size: 16px; display: flex; align-items: center; justify-content: center; opacity: 0.6; }
+    .theme-toggle:hover { opacity: 1; }
   </style>
+  <script>
+    (function() {
+      var t = localStorage.getItem('pv-theme');
+      if (t) document.documentElement.setAttribute('data-theme', t);
+    })();
+  </script>
 </head>
 <body>
+  <button class="theme-toggle" id="theme-toggle" aria-label="Toggle theme"></button>
   <div class="landing">
-    <svg width="300" height="48" viewBox="0 0 340 48">
-      <polygon points="2,4 2,44 32,24" fill="#fff"/>
-      <text x="44" y="38" font-family="'Inter', sans-serif" font-weight="700" font-size="38" fill="#fff" letter-spacing="-2">plays</text>
-      <text x="164" y="38" font-family="'Inter', sans-serif" font-weight="300" font-size="38" fill="#fff" letter-spacing="-2">video</text>
+    <svg width="340" height="48" viewBox="0 0 340 48">
+      <polygon points="2,4 2,44 32,24" fill="currentColor"/>
+      <text x="44" y="38" font-family="'Inter', sans-serif" font-weight="700" font-size="38" fill="currentColor" letter-spacing="-2">plays</text>
+      <text x="164" y="38" font-family="'Inter', sans-serif" font-weight="300" font-size="38" fill="currentColor" letter-spacing="-2">video</text>
     </svg>
     <p class="tagline">Play any video file in the browser — no server needed.</p>
     <a class="cta" href="/player">Launch Player</a>
   </div>
+  <script>
+    (function() {
+      var btn = document.getElementById('theme-toggle');
+      function isDark() {
+        var t = document.documentElement.getAttribute('data-theme');
+        if (t) return t === 'dark';
+        return matchMedia('(prefers-color-scheme: dark)').matches;
+      }
+      function update() { btn.textContent = isDark() ? '\u2600' : '\u263E'; }
+      btn.addEventListener('click', function() {
+        var next = isDark() ? 'light' : 'dark';
+        document.documentElement.setAttribute('data-theme', next);
+        localStorage.setItem('pv-theme', next);
+        update();
+      });
+      update();
+      matchMedia('(prefers-color-scheme: dark)').addEventListener('change', update);
+    })();
+  </script>
 </body>
 </html>
