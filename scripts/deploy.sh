@@ -10,8 +10,11 @@ for f in $(find "$DIR" -type f); do
     *.html) ct="text/html" ;;
     *.js)   ct="application/javascript" ;;
     *.wasm) ct="application/wasm" ;;
+    *.json) ct="application/json" ;;
     *.map)  ct="application/json" ;;
     *.css)  ct="text/css" ;;
+    *.svg)  ct="image/svg+xml" ;;
+    *.png)  ct="image/png" ;;
     *)      ct="application/octet-stream" ;;
   esac
   echo "Uploading $key"

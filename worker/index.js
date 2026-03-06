@@ -18,8 +18,8 @@ export default {
     headers.set('Cross-Origin-Opener-Policy', 'same-origin');
     headers.set('Cross-Origin-Embedder-Policy', 'require-corp');
 
-    // HTML: always revalidate. Hashed JS/WASM assets: cache long-term.
-    if (key.endsWith('.html') || key === 'index.html') {
+    // HTML, SW, manifest: always revalidate. Hashed assets: cache long-term.
+    if (key.endsWith('.html') || key === 'index.html' || key === 'sw.js' || key === 'manifest.json') {
       headers.set('Cache-Control', 'no-cache');
     } else if (key.startsWith('assets/')) {
       headers.set('Cache-Control', 'public, max-age=31536000, immutable');
