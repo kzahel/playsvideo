@@ -4,6 +4,11 @@ All notable changes to playsvideo are documented here.
 
 ## [Unreleased]
 
+## [0.0.4] - 2026-03-06
+
+### Fixed
+- Move ffmpeg-dependent ADTS parse test from unit to integration tests (fixes CI failure)
+
 ## [0.0.3] - 2026-03-06
 
 ### Fixed
