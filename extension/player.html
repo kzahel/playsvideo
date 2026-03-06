@@ -1,0 +1,40 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>playsvideo</title>
+  <style>
+    :root { --bg: #111; --fg: #eee; --muted: #999; --video-bg: #000; --file-color: #eee; --drop-border: #555; }
+    body { font-family: system-ui, sans-serif; margin: 0; padding: 2rem; background: var(--bg); color: var(--fg); min-height: 100vh; box-sizing: border-box; }
+    video { width: 100%; max-width: 1280px; display: none; margin-top: 1rem; background: var(--video-bg); }
+    #status { margin-top: 0.5rem; color: var(--muted); }
+    input[type="file"] { font-size: 1rem; color: var(--file-color); }
+    .header { display: flex; align-items: center; gap: 0.75rem; margin-bottom: 1rem; }
+    .drop-overlay {
+      display: none;
+      position: fixed; inset: 0;
+      background: rgba(0, 0, 0, 0.7);
+      border: 4px dashed var(--drop-border);
+      z-index: 100;
+      align-items: center; justify-content: center;
+      font-size: 1.5rem; color: var(--fg);
+    }
+    .drop-overlay.active { display: flex; }
+  </style>
+</head>
+<body>
+  <div class="header">
+    <svg width="300" height="48" viewBox="0 0 340 48">
+      <polygon points="2,4 2,44 32,24" fill="currentColor"/>
+      <text x="44" y="38" font-family="'Inter', sans-serif" font-weight="700" font-size="38" fill="currentColor" letter-spacing="-2">plays</text>
+      <text x="164" y="38" font-family="'Inter', sans-serif" font-weight="300" font-size="38" fill="currentColor" letter-spacing="-2">video</text>
+    </svg>
+  </div>
+  <input type="file" id="file-input" accept="video/*">
+  <p id="status">Select or drop a video file to play.</p>
+  <video id="video" controls></video>
+  <div class="drop-overlay" id="drop-overlay">Drop video file here</div>
+  <script type="module" src="./player.ts"></script>
+</body>
+</html>

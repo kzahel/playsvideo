@@ -19,6 +19,7 @@
     "dev": "vite",
     "build": "vite build",
     "build:lib": "rm -rf dist && tsc -p tsconfig.lib.json",
+    "build:extension": "vite build --config vite.config.extension.ts",
     "test": "vitest run",
     "test:unit": "vitest run tests/unit",
     "test:integration": "vitest run tests/integration",

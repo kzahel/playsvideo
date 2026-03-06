@@ -1,0 +1,32 @@
+{
+  "manifest_version": 3,
+  "name": "playsvideo",
+  "description": "Play any video file — no server, no upload, no limits.",
+  "version": "0.0.5",
+  "action": {},
+  "background": {
+    "service_worker": "background.js"
+  },
+  "icons": {
+    "16": "icons/icon-16.png",
+    "48": "icons/icon-48.png",
+    "128": "icons/icon-128.png"
+  },
+  "file_handlers": [
+    {
+      "action": "/player.html",
+      "name": "Video",
+      "accept": {
+        "video/mp4": [".mp4", ".m4v"],
+        "video/webm": [".webm"],
+        "video/x-matroska": [".mkv"],
+        "video/quicktime": [".mov"],
+        "video/x-msvideo": [".avi"],
+        "video/mp2t": [".ts", ".mts"]
+      }
+    }
+  ],
+  "content_security_policy": {
+    "extension_pages": "script-src 'self' 'wasm-unsafe-eval'; object-src 'self';"
+  }
+}
