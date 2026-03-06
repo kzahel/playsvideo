@@ -1,17 +1,27 @@
 # playsvideo
 
-Play any video file in the browser. No server, no pre-transcoding, no install.
+Play video files in the browser. No server, no pre-transcoding, no install.
 
-Drop an MKV, MP4, AVI, TS, or WebM file and it just plays — including formats browsers can't handle natively (AC3 audio, MKV containers, etc.). All processing happens client-side in a web worker.
+Drop a file and it plays — remuxing containers and transcoding audio codecs that browsers can't handle natively. All processing happens client-side in a web worker.
+
+### Supported formats
+
+| | Supported | Notes |
+|---|---|---|
+| **Containers** | MKV, MP4, AVI, TS, WebM | Demuxed by mediabunny |
+| **Video** | H.264, H.265, VP9, AV1 | Passed through untouched. H.264 works everywhere. H.265 requires Chrome/Edge/Safari (not Chromium/Firefox). VP9/AV1 vary. |
+| **Audio (native)** | AAC, MP3 | Passed through |
+| **Audio (transcoded)** | AC-3, E-AC-3, FLAC, Opus | Transcoded to AAC 160k stereo via ffmpeg.wasm |
+| **Subtitles** | SRT, ASS/SSA (text-based) | Extracted to WebVTT |
 
 ## Why this exists
 
-There's no library or app that does this. The browser can decode most video codecs natively (H.264, H.265, VP9, AV1), but it can't *open* most video files because it doesn't understand the container formats or non-web audio codecs. The obvious solution — ffmpeg compiled to WebAssembly — doesn't work for large files because WORKERFS is catastrophically slow and MEMFS can't hold them.
+There's no library or app that does this. The browser can decode H.264, H.265, VP9, and AV1 natively, but it can't *open* most video files because it doesn't understand container formats like MKV or audio codecs like AC-3. The obvious solution — ffmpeg compiled to WebAssembly — doesn't work for large files because WORKERFS is catastrophically slow and MEMFS can't hold them.
 
 The trick is to split the problem:
 
 - **mediabunny** (pure TypeScript) handles demux and remux — streaming, no full-file copies, works on any size file
-- **ffmpeg.wasm** only transcodes short audio segments (AC3/DTS → AAC) via MEMFS — the one thing it's fast at
+- **ffmpeg.wasm** only transcodes short audio segments (AC-3, E-AC-3, FLAC, Opus → AAC) via MEMFS — the one thing it's fast at
 - **hls.js** handles playback via Media Source Extensions — battle-tested, avoids the manual MSE bug factory
 
 Each piece existed separately. Nobody combined them.
@@ -19,18 +29,18 @@ Each piece existed separately. Nobody combined them.
 ## How it works
 
 ```
-Video file (any format)
+Video file (MKV, MP4, AVI, TS, WebM)
   → mediabunny demux (extract video + audio packets)
   → keyframe index → segment plan
   → per segment:
-      video packets copied as-is
-      audio transcoded only if needed (AC3/DTS → AAC)
+      video packets (H.264/H.265/VP9/AV1) copied as-is
+      audio transcoded only if needed (AC-3/E-AC-3/FLAC/Opus → AAC)
       muxed to fMP4 via mediabunny
   → hls.js plays fMP4 segments on demand
   → subtitles extracted to WebVTT
 ```
 
-The web worker keeps the demux handle open and processes segments on-demand as hls.js requests them. Video is never transcoded — packets are passed through untouched. Only unsupported audio codecs go through ffmpeg.wasm, and only a few seconds of audio at a time.
+The web worker keeps the demux handle open and processes segments on-demand as hls.js requests them. Video is never transcoded — packets are passed through untouched. Only unsupported audio codecs (AC-3, E-AC-3, FLAC, Opus) go through ffmpeg.wasm, and only a few seconds at a time.
 
 ## Project structure
 
