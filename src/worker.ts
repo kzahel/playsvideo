@@ -163,6 +163,7 @@ async function processSegment(index: number): Promise<Uint8Array> {
       sampleRate,
       audioStartSec: audioPackets[0].timestamp,
       ffmpeg,
+      sourceCodec: demux.audioCodec ?? undefined,
     });
     wlog(
       `seg ${index} transcode ${elapsed(tXcode)} in=${audioPackets.length} out=${transcoded.packets.length}`,

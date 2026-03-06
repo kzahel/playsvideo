@@ -3,8 +3,16 @@ import { parseAdtsFrames } from './adts-parse.js';
 import type { FfmpegRunner } from './types.js';
 
 const SAMPLES_PER_AAC_FRAME = 1024;
-const INPUT_NAME = 'transcode-input.ac3';
 const OUTPUT_NAME = 'transcode-output.aac';
+
+/** Map short codec names to ffmpeg input format (-f) flags. */
+const INPUT_FORMAT: Record<string, string> = {
+  ac3: 'ac3',
+  eac3: 'eac3',
+  mp3: 'mp3',
+  flac: 'flac',
+  opus: 'ogg',
+};
 
 export interface TranscodeOptions {
   packets: EncodedPacket[];
@@ -12,6 +20,8 @@ export interface TranscodeOptions {
   /** Timestamp of the first original audio packet — used as base for transcoded timestamps */
   audioStartSec: number;
   ffmpeg: FfmpegRunner;
+  /** Source audio codec (e.g. 'ac3', 'mp3'). Determines ffmpeg input format. Defaults to 'ac3'. */
+  sourceCodec?: string;
 }
 
 export interface TranscodeResult {
@@ -36,16 +46,20 @@ export async function transcodeAudioSegment(opts: TranscodeOptions): Promise<Tra
     offset += pkt.data.byteLength;
   }
 
-  await opts.ffmpeg.writeInput(INPUT_NAME, rawAudio);
+  const codec = opts.sourceCodec ?? 'ac3';
+  const inputFormat = INPUT_FORMAT[codec] ?? codec;
+  const inputName = `transcode-input.${inputFormat}`;
+
+  await opts.ffmpeg.writeInput(inputName, rawAudio);
 
   const result = await opts.ffmpeg.run([
     '-hide_banner',
     '-loglevel',
     'error',
     '-f',
-    'ac3',
+    inputFormat,
     '-i',
-    INPUT_NAME,
+    inputName,
     '-c:a',
     'aac',
     '-ac',
@@ -63,7 +77,7 @@ export async function transcodeAudioSegment(opts: TranscodeOptions): Promise<Tra
   }
 
   const aacData = await opts.ffmpeg.readOutput(OUTPUT_NAME);
-  await opts.ffmpeg.deleteFile?.(INPUT_NAME);
+  await opts.ffmpeg.deleteFile?.(inputName);
   await opts.ffmpeg.deleteFile?.(OUTPUT_NAME);
 
   const frames = parseAdtsFrames(aacData);

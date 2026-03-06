@@ -77,6 +77,7 @@ export async function runPipeline(opts: PipelineOptions): Promise<PipelineResult
           sampleRate,
           audioStartSec: audioPackets[0].timestamp,
           ffmpeg: opts.ffmpeg,
+          sourceCodec: demux.audioCodec ?? undefined,
         });
         audioPackets = transcoded.packets;
         if (!audioDecoderConfig || audioDecoderConfig.codec !== 'mp4a.40.2') {

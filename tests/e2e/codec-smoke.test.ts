@@ -50,8 +50,8 @@ const CODEC_MATRIX: CodecEntry[] = [
   { id: 'h264-flac', file: 'codec-h264-flac.mkv', mseType: 'video/mp4; codecs="avc1.640028"' },
   { id: 'h264-opus', file: 'codec-h264-opus.mkv', mseType: 'video/mp4; codecs="avc1.640028"' },
 
-  // --- Unsupported audio codec (no-crash) ---
-  { id: 'h264-mp3', file: 'codec-h264-mp3.mkv', mseType: null },
+  // --- MP3 audio with H.264 video (MP3-in-fMP4 supported by MSE) ---
+  { id: 'h264-mp3', file: 'codec-h264-mp3.mkv', mseType: 'video/mp4; codecs="avc1.640028"' },
 
   // --- Special: video-only (should play) ---
   {
