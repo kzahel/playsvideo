@@ -95,7 +95,13 @@ export async function getKeyframeIndex(
   duration: number,
 ): Promise<KeyframeIndex> {
   const keyframes: KeyframeEntry[] = [];
+  // getKeyPacket(0) returns null if the first keyframe has PTS > 0 (non-zero
+  // initial offset). Fall back to getFirstPacket() which always works.
   let packet = await videoSink.getKeyPacket(0, { metadataOnly: true });
+  if (!packet) {
+    const first = await videoSink.getFirstPacket();
+    if (first?.type === 'key') packet = first;
+  }
 
   while (packet) {
     const ts = packet.timestamp;
