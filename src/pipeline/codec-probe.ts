@@ -60,8 +60,8 @@ export function createBrowserProber(): CodecProber {
   };
 }
 
-/** Conservative static whitelist for Node.js / tests. Matches prior behavior. */
-const NODE_SAFE_AUDIO = new Set(['aac', 'mp3']);
+/** Conservative static whitelist for Node.js / tests. Only AAC is universally safe in fMP4. */
+const NODE_SAFE_AUDIO = new Set(['aac']);
 const NODE_SAFE_VIDEO = new Set(['avc', 'hevc']);
 
 export function createNodeProber(): CodecProber {

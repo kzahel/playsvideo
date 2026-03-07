@@ -14,7 +14,7 @@
 | Codec       | Short Name | MSE Codec String | Playback              |
 |-------------|------------|------------------|-----------------------|
 | AAC         | `aac`      | `mp4a.40.2`      | Native                |
-| MP3         | `mp3`      | `mp4a.69`        | Native                |
+| MP3         | `mp3`      | `mp4a.69`        | Transcode to AAC (MP3-in-fMP4 not supported by Chrome MSE) |
 | AC-3        | `ac3`      | `ac-3`           | Transcode to AAC      |
 | E-AC-3      | `eac3`     | `ec-3`           | Transcode to AAC      |
 | DTS         | `dts`      | `dtsc`           | Transcode to AAC      |
@@ -23,7 +23,7 @@
 
 ## Transcode Details
 
-Audio codecs that can't be played natively in MSE/fMP4 are transcoded on-the-fly using ffmpeg.wasm (audio-only build, ~1.5 MB):
+Audio codecs that can't be played natively in MSE/fMP4 are transcoded on-the-fly using ffmpeg.wasm (audio-only build, ~1.8 MB):
 
 - **Input formats**: ac3, eac3, dts, mp3, flac, opus (via ogg)
 - **Output**: AAC stereo, 160 kbps, ADTS framing

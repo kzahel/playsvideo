@@ -10,12 +10,12 @@ describe('codec-probe', () => {
   const prober = createNodeProber();
 
   describe('createNodeProber audio', () => {
-    it('allows aac and mp3', () => {
+    it('allows aac only', () => {
       expect(prober.canPlayAudio('aac')).toBe(true);
-      expect(prober.canPlayAudio('mp3')).toBe(true);
     });
 
-    it('rejects ac3, eac3, dts, flac, opus', () => {
+    it('rejects mp3, ac3, eac3, dts, flac, opus', () => {
+      expect(prober.canPlayAudio('mp3')).toBe(false);
       expect(prober.canPlayAudio('ac3')).toBe(false);
       expect(prober.canPlayAudio('eac3')).toBe(false);
       expect(prober.canPlayAudio('dts')).toBe(false);

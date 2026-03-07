@@ -31,13 +31,13 @@ Video file (MKV, MP4, AVI, …)
   → keyframe-aligned segment plan
   → per segment:
       video passed through or transcoded if needed
-      audio transcoded only if needed (AC-3/DTS/FLAC → AAC)
+      audio transcoded only if needed (AC-3/DTS/MP3/FLAC/Opus → AAC)
       muxed to fMP4
   → hls.js plays segments on demand
   → subtitles extracted to WebVTT
 ```
 
-Video transcode is almost never needed — browsers natively decode the vast majority of video codecs. When audio transcode is needed, a lightweight 1.5 MB ffmpeg.wasm build is lazy-loaded entirely in-browser. No SharedArrayBuffer required — works on any host without special CORS headers.
+Video transcode is almost never needed — browsers natively decode the vast majority of video codecs. When audio transcode is needed, a lightweight 1.8 MB ffmpeg.wasm build is lazy-loaded entirely in-browser. No SharedArrayBuffer required — works on any host without special CORS headers.
 
 ### Under the hood
 
