@@ -1,6 +1,11 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
+# pnpm's bash subprocess loses nvm's node from PATH; re-initialize
+unset npm_config_prefix
+export NVM_DIR="$HOME/.nvm"
+[ -s "$NVM_DIR/nvm.sh" ] && \. "$NVM_DIR/nvm.sh"
+
 BUCKET="playsvideo"
 
 content_type() {
