@@ -1,0 +1,68 @@
+name: Extension Release
+
+on:
+  push:
+    tags:
+      - 'extension-v*'
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Typecheck
+        run: npm run typecheck
+
+      - name: Lint
+        run: npm run lint
+
+      - name: Format check
+        run: npm run format:check
+
+      - name: Unit tests
+        run: npm run test:unit
+
+      - name: Validate changelog
+        run: |
+          VERSION="${GITHUB_REF_NAME#extension-v}"
+          if ! grep -q "## \[${VERSION}\]" extension/CHANGELOG.md; then
+            echo "Error: extension/CHANGELOG.md missing entry for version ${VERSION}"
+            exit 1
+          fi
+
+      - name: Build extension
+        run: npm run build:extension
+
+      - name: Package extension
+        run: cd dist-extension && zip -r ../playsvideo-extension.zip .
+
+      - name: Extract changelog notes
+        id: changelog
+        run: |
+          VERSION="${GITHUB_REF_NAME#extension-v}"
+          NOTES=$(sed -n "/^## \[${VERSION}\]/,/^## \[/p" extension/CHANGELOG.md | head -n -1 | tail -n +2)
+          echo "notes<<EOF" >> "$GITHUB_OUTPUT"
+          echo "$NOTES" >> "$GITHUB_OUTPUT"
+          echo "EOF" >> "$GITHUB_OUTPUT"
+
+      - name: Create GitHub Release
+        run: |
+          gh release create "$GITHUB_REF_NAME" \
+            --title "Extension $GITHUB_REF_NAME" \
+            --notes "$NOTES" \
+            playsvideo-extension.zip
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          NOTES: ${{ steps.changelog.outputs.notes }}
