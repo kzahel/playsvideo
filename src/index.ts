@@ -1,5 +1,11 @@
 export { PlaysVideoEngine } from './engine.js';
-export type { EngineOptions, EnginePhase, ReadyDetail, ErrorDetail, LoadingDetail } from './engine.js';
+export type {
+  EngineOptions,
+  EnginePhase,
+  ReadyDetail,
+  ErrorDetail,
+  LoadingDetail,
+} from './engine.js';
 export { WasmFfmpegRunner } from './adapters/wasm-ffmpeg.js';
 export type { FfmpegRunner } from './pipeline/types.js';
 export type { KeyframeEntry, KeyframeIndex, SubtitleTrackInfo } from './pipeline/types.js';

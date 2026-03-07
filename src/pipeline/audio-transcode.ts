@@ -80,9 +80,7 @@ export interface TranscodeResult {
   metrics: TranscodeMetrics;
 }
 
-export function makeAacDecoderConfig(
-  sourceConfig: AudioDecoderConfig | null,
-): AudioDecoderConfig {
+export function makeAacDecoderConfig(sourceConfig: AudioDecoderConfig | null): AudioDecoderConfig {
   return {
     codec: 'mp4a.40.2',
     numberOfChannels: DEFAULT_OUTPUT_CHANNELS,
@@ -172,9 +170,11 @@ export function createEmptyTranscodeResult(sampleRate: number): TranscodeResult 
   };
 }
 
-export function concatEncodedPacketData(
-  packets: EncodedPacket[],
-): { data: Uint8Array; inputBytes: number; audioDurationSec: number } {
+export function concatEncodedPacketData(packets: EncodedPacket[]): {
+  data: Uint8Array;
+  inputBytes: number;
+  audioDurationSec: number;
+} {
   const inputBytes = packets.reduce((sum, p) => sum + p.data.byteLength, 0);
   const data = new Uint8Array(inputBytes);
   let offset = 0;
@@ -260,7 +260,8 @@ export function buildTranscodeResultFromAdts(params: {
     outputDurationSec: parsed.outputDurationSec,
     ffmpegSpeed: params.ffmpegMetrics.ffmpegSpeed,
     ffmpegTimeMs: params.ffmpegMetrics.ffmpegTimeMs,
-    realtimeRatio: params.audioDurationSec > 0 ? params.totalMs / (params.audioDurationSec * 1000) : 0,
+    realtimeRatio:
+      params.audioDurationSec > 0 ? params.totalMs / (params.audioDurationSec * 1000) : 0,
   };
 
   return {

@@ -74,10 +74,10 @@ export async function processSegmentWithAbort(
     const sampleRate = config.audioDecoderConfig?.sampleRate ?? 48000;
     const transcoded = await config.transcodeAudio(
       {
-      packets: audioPackets,
-      sampleRate,
-      audioStartSec: audioPackets[0].timestamp,
-      sourceCodec: config.sourceCodec,
+        packets: audioPackets,
+        sampleRate,
+        audioStartSec: audioPackets[0].timestamp,
+        sourceCodec: config.sourceCodec,
       },
       signal,
     );
