@@ -4,6 +4,11 @@ All notable changes to playsvideo are documented here.
 
 ## [Unreleased]
 
+## [0.0.7] - 2026-03-07
+
+### Fixed
+- Fix npm publish CI by adding `--provenance` flag for OIDC trusted publishing
+
 ## [0.0.6] - 2026-03-07
 
 ### Added
