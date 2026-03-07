@@ -7,7 +7,7 @@ All notable changes to playsvideo are documented here.
 ## [0.0.8] - 2026-03-07
 
 ### Fixed
-- Fix npm publish CI: add `attestations: write` permission and upgrade npm for OIDC trusted publishing
+- Fix npm publish CI: add `attestations: write` permission, upgrade npm for OIDC, add `repository` to package.json
 
 ## [0.0.7] - 2026-03-07
 
