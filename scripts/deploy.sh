@@ -2,23 +2,39 @@
 set -euo pipefail
 
 BUCKET="playsvideo"
-DIR="dist"
 
-for f in $(find "$DIR" -type f); do
-  key="${f#$DIR/}"
-  case "$f" in
-    *.html) ct="text/html" ;;
-    *.js)   ct="application/javascript" ;;
-    *.wasm) ct="application/wasm" ;;
-    *.json) ct="application/json" ;;
-    *.map)  ct="application/json" ;;
-    *.css)  ct="text/css" ;;
-    *.svg)  ct="image/svg+xml" ;;
-    *.png)  ct="image/png" ;;
-    *)      ct="application/octet-stream" ;;
+content_type() {
+  case "$1" in
+    *.html) echo "text/html" ;;
+    *.js)   echo "application/javascript" ;;
+    *.wasm) echo "application/wasm" ;;
+    *.json) echo "application/json" ;;
+    *.map)  echo "application/json" ;;
+    *.css)  echo "text/css" ;;
+    *.svg)  echo "image/svg+xml" ;;
+    *.png)  echo "image/png" ;;
+    *)      echo "application/octet-stream" ;;
   esac
-  echo "Uploading $key"
-  npx wrangler r2 object put "$BUCKET/$key" --file="$f" --content-type="$ct" --remote
-done
+}
+
+upload_dir() {
+  local dir="$1"
+  local prefix="$2"
+  for f in $(find "$dir" -type f); do
+    local key="${prefix}${f#$dir/}"
+    local ct
+    ct=$(content_type "$f")
+    echo "Uploading $key"
+    npx wrangler r2 object put "$BUCKET/$key" --file="$f" --content-type="$ct" --remote
+  done
+}
+
+# Upload main site
+upload_dir "dist" ""
+
+# Upload media player app under app/ prefix
+if [ -d "app/dist" ]; then
+  upload_dir "app/dist" "app/"
+fi
 
 echo "Deployed to https://playsvideo.com/"

@@ -35,11 +35,11 @@
     "lint": "biome lint .",
     "check": "biome check --write .",
     "download:ffmpeg-core": "node scripts/download-ffmpeg-core.mjs",
-    "setup": "npm install && npm run download:ffmpeg-core",
+    "setup": "pnpm install && pnpm run download:ffmpeg-core",
     "deploy:worker": "cd worker && npx wrangler deploy",
-    "deploy:site": "npm run build && bash scripts/deploy.sh",
-    "deploy": "npm run deploy:site && npm run deploy:worker",
-    "prepublishOnly": "npm run build:lib"
+    "deploy:site": "pnpm run build && pnpm --filter app build && bash scripts/deploy.sh",
+    "deploy": "pnpm run deploy:site && pnpm run deploy:worker",
+    "prepublishOnly": "pnpm run build:lib"
   },
   "dependencies": {
     "@ffmpeg/ffmpeg": "^0.12.15",
