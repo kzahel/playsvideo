@@ -77,6 +77,10 @@ See [engine API docs](docs/engine-api.md) for events, properties, and full usage
 - **WebCodecs** — replace ffmpeg.wasm audio transcode with `AudioDecoder`/`AudioEncoder` (smaller bundle, lower latency)
 - **Video transcode** — hardware-accelerated decode via `VideoDecoder` for edge-case codecs
 
+### License
+
+MIT. Dependencies include MPL-2.0 (mediabunny), Apache-2.0 (hls.js), and LGPL-2.1 (ffmpeg-core.wasm, loaded at runtime). No GPL codecs are compiled in. See [licensing details](docs/licensing.md) and [THIRD_PARTY_LICENSES](THIRD_PARTY_LICENSES).
+
 <details>
 <summary><strong>Development</strong></summary>
 

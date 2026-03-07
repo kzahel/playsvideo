@@ -1,0 +1,105 @@
+This file lists the third-party dependencies bundled with or loaded by
+playsvideo and their respective licenses.
+
+================================================================================
+mediabunny
+================================================================================
+
+License: MPL-2.0 (Mozilla Public License 2.0)
+Source:  https://github.com/Vanilagy/mediabunny
+Role:    Streaming demux and fMP4 mux
+
+Copyright (c) mediabunny contributors
+
+This Source Code Form is subject to the terms of the Mozilla Public
+License, v. 2.0. If a copy of the MPL was not distributed with this
+file, You can obtain one at https://mozilla.org/MPL/2.0/.
+
+================================================================================
+hls.js
+================================================================================
+
+License: Apache-2.0
+Source:  https://github.com/video-dev/hls.js
+Role:    HLS playback via Media Source Extensions
+
+Copyright (c) 2017 Dailymotion (http://www.dailymotion.com)
+
+Licensed under the Apache License, Version 2.0 (the "License");
+you may not use this file except in compliance with the License.
+You may obtain a copy of the License at
+
+    http://www.apache.org/licenses/LICENSE-2.0
+
+Unless required by applicable law or agreed to in writing, software
+distributed under the License is distributed on an "AS IS" BASIS,
+WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+See the License for the specific language governing permissions and
+limitations under the License.
+
+src/remux/mp4-generator.js and src/demux/exp-golomb.ts in hls.js are
+derived from the HLS library for video.js
+(https://github.com/videojs/videojs-contrib-hls), also Apache-2.0.
+Copyright (c) 2013-2015 Brightcove
+
+================================================================================
+@ffmpeg/ffmpeg
+================================================================================
+
+License: MIT
+Source:  https://github.com/ffmpegwasm/ffmpeg.wasm
+Role:    JavaScript wrapper for ffmpeg.wasm
+
+Copyright (c) 2019 ffmpeg.wasm contributors
+
+Permission is hereby granted, free of charge, to any person obtaining a copy
+of this software and associated documentation files (the "Software"), to deal
+in the Software without restriction, including without limitation the rights
+to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+copies of the Software, and to permit persons to whom the Software is
+furnished to do so, subject to the following conditions:
+
+The above copyright notice and this permission notice shall be included in all
+copies or substantial portions of the Software.
+
+THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
+SOFTWARE.
+
+================================================================================
+ffmpeg-core.wasm (loaded at runtime)
+================================================================================
+
+License: LGPL-2.1
+Source:  https://github.com/FFmpeg/FFmpeg
+Role:    Audio transcode and codec support
+
+Copyright (c) FFmpeg contributors
+
+This library is free software; you can redistribute it and/or modify it
+under the terms of the GNU Lesser General Public License as published by
+the Free Software Foundation; either version 2.1 of the License, or (at
+your option) any later version.
+
+This library is distributed in the hope that it will be useful, but
+WITHOUT ANY WARRANTY; without even the implied warranty of
+MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the GNU Lesser
+General Public License for more details.
+
+Two ffmpeg-core.wasm builds are included, both LGPL-2.1:
+
+  - Audio-only (~1.5 MB) — custom build with AC3/EAC3/DTS decoders and
+    AAC encoder. Loaded when only audio transcode is needed.
+  - Full (~32 MB) — stock @ffmpeg/core 0.12.10 build with all native
+    ffmpeg codecs. Loaded on demand as a fallback.
+
+Both binaries are loaded at runtime as separate .wasm files and are not
+compiled into the JavaScript bundle. Users may substitute them with
+modified versions, satisfying LGPL's relinkability requirement.
+
+Neither build includes GPL-licensed external libraries (x264, x265,
+libfdk-aac). Only native ffmpeg codecs (all LGPL) are compiled in.
