@@ -1,5 +1,6 @@
 node_modules/
 dist/
+dist-site/
 dist-extension/
 src/vendor/ffmpeg-core/
 ffmpegbuild/out/

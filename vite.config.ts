@@ -5,6 +5,7 @@ export default defineConfig({
   clearScreen: false,
   logLevel: 'error',
   build: {
+    outDir: 'dist-site',
     rollupOptions: {
       input: {
         main: resolve(__dirname, 'index.html'),

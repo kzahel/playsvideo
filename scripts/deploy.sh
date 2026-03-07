@@ -35,7 +35,7 @@ upload_dir() {
 }
 
 # Upload main site
-upload_dir "dist" ""
+upload_dir "dist-site" ""
 
 # Upload media player app under app/ prefix
 if [ -d "app/dist" ]; then

@@ -21,7 +21,8 @@
   ],
   "scripts": {
     "dev": "vite",
-    "build": "vite build",
+    "build": "pnpm run build:site && pnpm run build:lib",
+    "build:site": "vite build",
     "build:lib": "rm -rf dist && tsc -p tsconfig.lib.json && mkdir -p dist/vendor && cp -r src/vendor/ffmpeg-core-audio dist/vendor/ffmpeg-core-audio",
     "build:extension": "vite build --config vite.config.extension.ts",
     "test": "vitest run",
@@ -37,7 +38,7 @@
     "download:ffmpeg-core": "node scripts/download-ffmpeg-core.mjs",
     "setup": "pnpm install && pnpm run download:ffmpeg-core",
     "deploy:worker": "cd worker && npx wrangler deploy",
-    "deploy:site": "pnpm run build && pnpm --filter app build && bash scripts/deploy.sh",
+    "deploy:site": "pnpm run build:site && pnpm --filter app build && bash scripts/deploy.sh",
     "deploy": "pnpm run deploy:site && pnpm run deploy:worker",
     "prepublishOnly": "pnpm run build:lib"
   },
