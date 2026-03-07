@@ -1,5 +1,5 @@
 # Minimal ffmpeg.wasm build — audio transcode only
-# AC3/EAC3/DTS decode → AAC encode (~2-5 MB vs 32 MB full build)
+# AC3/EAC3/DTS/MP3/FLAC/Opus decode → AAC encode (~2-5 MB vs 32 MB full build)
 #
 # This follows the upstream ffmpegwasm/ffmpeg.wasm build process but strips
 # out all 14 external library stages and uses --disable-everything to include
@@ -39,10 +39,10 @@ WORKDIR /src/ffmpeg
 # need for audio transcode. This is the key to a small wasm binary.
 #
 # What we're enabling and why:
-#   Decoders: ac3, eac3, dca (DTS) — codecs MSE can't play natively
+#   Decoders: ac3, eac3, dca (DTS), mp3float, flac, opus — codecs MSE can't play in fMP4
 #   Encoder:  aac — our universal output format
-#   Parsers:  ac3, dca, aac — needed for format detection
-#   Demuxers: ac3, eac3, dts, dtshd — raw bitstream input (-f ac3 etc.)
+#   Parsers:  ac3, dca, aac, mpegaudio, flac, opus — needed for format detection
+#   Demuxers: ac3, eac3, dts, dtshd, mp3, flac, ogg — raw bitstream input
 #   Muxer:    adts — AAC output format (-f adts)
 #   Protocol: file — Emscripten MEMFS file I/O
 #   Filters:  abuffer, abuffersink, aformat, anull, aresample — full audio filter chain
@@ -65,14 +65,23 @@ RUN emconfigure ./configure \
       --enable-decoder=ac3 \
       --enable-decoder=eac3 \
       --enable-decoder=dca \
+      --enable-decoder=mp3float \
+      --enable-decoder=flac \
+      --enable-decoder=opus \
       --enable-encoder=aac \
       --enable-parser=ac3 \
       --enable-parser=dca \
       --enable-parser=aac \
+      --enable-parser=mpegaudio \
+      --enable-parser=flac \
+      --enable-parser=opus \
       --enable-demuxer=ac3 \
       --enable-demuxer=eac3 \
       --enable-demuxer=dts \
       --enable-demuxer=dtshd \
+      --enable-demuxer=mp3 \
+      --enable-demuxer=flac \
+      --enable-demuxer=ogg \
       --enable-muxer=adts \
       --enable-protocol=file \
       --enable-filter=abuffer \

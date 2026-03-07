@@ -1,10 +1,12 @@
 import {
+  type AudioCodec,
   EncodedAudioPacketSource,
   type EncodedPacket,
   EncodedVideoPacketSource,
   Mp4OutputFormat,
   NullTarget,
   Output,
+  type VideoCodec,
 } from 'mediabunny';
 
 export interface MuxInput {
@@ -58,8 +60,8 @@ export async function muxToFmp4(input: MuxInput): Promise<MuxResult> {
     target: new NullTarget(),
   });
 
-  const videoSource = new EncodedVideoPacketSource(input.videoCodec as 'avc');
-  const audioSource = new EncodedAudioPacketSource(input.audioCodec as 'aac');
+  const videoSource = new EncodedVideoPacketSource(input.videoCodec as VideoCodec);
+  const audioSource = new EncodedAudioPacketSource(input.audioCodec as AudioCodec);
 
   output.addVideoTrack(videoSource);
   output.addAudioTrack(audioSource);
