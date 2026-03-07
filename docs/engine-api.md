@@ -41,7 +41,7 @@ Everything you'd normally do with a `<video>` element works unchanged:
 const engine = new PlaysVideoEngine(video: HTMLVideoElement);
 ```
 
-Attaches to a `<video>` element. Does not start playback until `loadFile` or `loadUrl` is called.
+Attaches to a `<video>` element. Respects the `autoplay` attribute — if set, playback starts automatically after loading. Otherwise, call `video.play()` manually.
 
 ## Methods
 

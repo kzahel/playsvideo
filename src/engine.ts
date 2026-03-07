@@ -393,7 +393,9 @@ export class PlaysVideoEngine extends EventTarget {
 
     this.hls.on(Hls.Events.MANIFEST_PARSED, (_evt, data) => {
       mlog(`hls MANIFEST_PARSED levels=${data.levels.length}`);
-      this.video.play().catch(() => {});
+      if (this.video.autoplay) {
+        this.video.play().catch(() => {});
+      }
     });
 
     this.hls.on(Hls.Events.FRAG_LOADING, (_evt, data) => {
