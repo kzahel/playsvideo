@@ -13,11 +13,14 @@ interface UseEngineResult {
 export function useEngine(entry: LibraryEntry | null): UseEngineResult {
   const videoRef = useRef<HTMLVideoElement | null>(null);
   const engineRef = useRef<PlaysVideoEngine | null>(null);
+  const entryRef = useRef(entry);
+  entryRef.current = entry;
   const [status, setStatus] = useState('');
   const [phase, setPhase] = useState('idle');
 
   const savePosition = useCallback(async () => {
-    if (!entry || !videoRef.current) return;
+    const currentEntry = entryRef.current;
+    if (!currentEntry || !videoRef.current) return;
     const video = videoRef.current;
     const currentTime = video.currentTime;
     const duration = video.duration;
@@ -29,14 +32,14 @@ export function useEngine(entry: LibraryEntry | null): UseEngineResult {
       ? ('watched' as const)
       : currentTime > 10
         ? ('in-progress' as const)
-        : entry.watchState;
+        : currentEntry.watchState;
 
-    await db.library.update(entry.id, {
+    await db.library.update(currentEntry.id, {
       playbackPositionSec: currentTime,
       durationSec: duration,
       watchState,
     });
-  }, [entry]);
+  }, []);
 
   useEffect(() => {
     if (!entry || !videoRef.current) return;
@@ -87,7 +90,7 @@ export function useEngine(entry: LibraryEntry | null): UseEngineResult {
       engine.destroy();
       engineRef.current = null;
     };
-  }, [entry?.id, savePosition]);
+  }, [entry?.id]);
 
   return { videoRef, status, phase };
 }
