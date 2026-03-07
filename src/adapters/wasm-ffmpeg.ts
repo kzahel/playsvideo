@@ -1,33 +1,38 @@
 import { FFmpeg } from '@ffmpeg/ffmpeg';
 import type { FfmpegRunner } from '../pipeline/types.js';
 
-// Audio-only bundle (~1.5 MB) — AC3/EAC3/DTS decode → AAC encode
-import audioJsUrl from '../vendor/ffmpeg-core-audio/ffmpeg-core.js?url';
-import audioWasmUrl from '../vendor/ffmpeg-core-audio/ffmpeg-core.wasm?url';
-
-// Full bundle (~32 MB) — all codecs, fallback for anything the audio bundle can't handle
-import fullJsUrl from '../vendor/ffmpeg-core/ffmpeg-core.js?url';
-import fullWasmUrl from '../vendor/ffmpeg-core/ffmpeg-core.wasm?url';
+// Audio-only bundle (~1.5 MB) — AC3/EAC3/DTS/MP3/FLAC/Opus decode → AAC encode
+// Uses new URL(..., import.meta.url) so any bundler (Vite, Webpack, Rollup, esbuild) can resolve it.
+const audioJsUrl = new URL('../vendor/ffmpeg-core-audio/ffmpeg-core.js', import.meta.url).href;
+const audioWasmUrl = new URL('../vendor/ffmpeg-core-audio/ffmpeg-core.wasm', import.meta.url).href;
 
 export type FfmpegTier = 'audio' | 'full';
+
+/** Full tier is not currently used — reserved for future video transcode support. */
+const FULL_TIER_ENABLED = false;
 
 /** Codecs the minimal audio bundle can handle (all decoders built into ffmpeg-core-audio). */
 const AUDIO_TIER_CODECS = new Set(['ac3', 'eac3', 'dts', 'mp3', 'flac', 'opus']);
 
-const TIER_URLS: Record<FfmpegTier, { coreURL: string; wasmURL: string }> = {
+const TIER_URLS: Record<'audio', { coreURL: string; wasmURL: string }> = {
   audio: { coreURL: audioJsUrl, wasmURL: audioWasmUrl },
-  full: { coreURL: fullJsUrl, wasmURL: fullWasmUrl },
 };
-
-/** Full is a superset of audio — never downgrade. */
-const TIER_RANK: Record<FfmpegTier, number> = { audio: 0, full: 1 };
 
 let instance: FFmpeg | null = null;
 let loadedTier: FfmpegTier | null = null;
 let loadPromise: Promise<FFmpeg> | null = null;
 let pendingTier: FfmpegTier | null = null;
 
+/** Full is a superset of audio — never downgrade. */
+const TIER_RANK: Record<FfmpegTier, number> = { audio: 0, full: 1 };
+
 async function ensureTier(tier: FfmpegTier): Promise<FFmpeg> {
+  if (tier === 'full' && !FULL_TIER_ENABLED) {
+    throw new Error(
+      'Full ffmpeg tier is not currently enabled — only audio transcode is supported',
+    );
+  }
+
   // Already loaded a sufficient tier
   if (instance && loadedTier !== null && TIER_RANK[loadedTier] >= TIER_RANK[tier]) {
     return instance;
@@ -55,7 +60,7 @@ async function ensureTier(tier: FfmpegTier): Promise<FFmpeg> {
   loadPromise = (async () => {
     const ff = new FFmpeg();
     console.log(`[ffmpeg] loading ${tier} bundle`);
-    await ff.load(TIER_URLS[tier]);
+    await ff.load(TIER_URLS[tier as 'audio']);
     console.log(`[ffmpeg] ${tier} bundle ready`);
     instance = ff;
     loadedTier = tier;

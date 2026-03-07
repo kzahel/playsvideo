@@ -8,6 +8,7 @@ import type {
 } from 'hls.js';
 import Hls from 'hls.js';
 import type { Source } from 'mediabunny';
+import { WasmFfmpegRunner } from './adapters/wasm-ffmpeg.js';
 import { audioNeedsTranscode, createBrowserProber } from './pipeline/codec-probe.js';
 import type { DemuxResult } from './pipeline/demux.js';
 import { demuxSource, getKeyframeIndex } from './pipeline/demux.js';
@@ -547,6 +548,9 @@ export class PlaysVideoEngine extends EventTarget {
   }
 
   private makeSourceProcessorConfig() {
+    if (!this._sourceFfmpeg) {
+      this._sourceFfmpeg = new WasmFfmpegRunner();
+    }
     const demux = this._sourceDemux!;
     return {
       videoSink: demux.videoSink,
@@ -557,11 +561,7 @@ export class PlaysVideoEngine extends EventTarget {
       audioDecoderConfig: this._sourceAudioDecoderConfig,
       plan: this._sourcePlan,
       doTranscode: this._sourceDoTranscode,
-      ffmpeg: this._sourceFfmpeg ?? {
-        run: async () => ({ exitCode: 1, stderr: 'no ffmpeg' }),
-        writeInput: async () => {},
-        readOutput: async () => new Uint8Array(),
-      },
+      ffmpeg: this._sourceFfmpeg,
       sourceCodec: demux.audioCodec ?? undefined,
       log: mlog,
     };

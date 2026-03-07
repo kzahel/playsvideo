@@ -22,7 +22,7 @@
   "scripts": {
     "dev": "vite",
     "build": "vite build",
-    "build:lib": "rm -rf dist && tsc -p tsconfig.lib.json",
+    "build:lib": "rm -rf dist && tsc -p tsconfig.lib.json && mkdir -p dist/vendor && cp -r src/vendor/ffmpeg-core-audio dist/vendor/ffmpeg-core-audio",
     "build:extension": "vite build --config vite.config.extension.ts",
     "test": "vitest run",
     "test:unit": "vitest run tests/unit",

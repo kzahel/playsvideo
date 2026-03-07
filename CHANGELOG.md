@@ -4,6 +4,17 @@ All notable changes to playsvideo are documented here.
 
 ## [Unreleased]
 
+## [0.1.0] - 2026-03-07
+
+### Added
+- `WasmFfmpegRunner` and `FfmpegRunner` type exported from package
+- `loadSource()` auto-creates `WasmFfmpegRunner` when no ffmpeg instance provided — audio transcoding works out of the box for npm consumers
+- Audio-only ffmpeg.wasm bundle (1.7 MB) included in npm package
+
+### Changed
+- Replaced Vite-specific `?url` imports with universal `new URL(..., import.meta.url)` pattern for bundler compatibility
+- Disabled full ffmpeg tier (32 MB) — only audio transcode is currently supported
+
 ## [0.0.10] - 2026-03-07
 
 ### Fixed
