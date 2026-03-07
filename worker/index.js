@@ -9,6 +9,13 @@ export default {
       key = 'player.html';
     } else if (key === 'debug' || key === 'debug/') {
       key = 'debug.html';
+    } else if (key.startsWith('app')) {
+      // SPA fallback: serve app/index.html for all /app/* routes
+      // unless the exact file exists in R2 (e.g., hashed assets)
+      const exact = await env.BUCKET.get(key);
+      if (!exact) {
+        key = 'app/index.html';
+      }
     }
 
     const object = await env.BUCKET.get(key);

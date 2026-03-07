@@ -83,13 +83,14 @@ See [docs/roadmap.md](docs/roadmap.md) for the full list. Highlights:
 <summary><strong>Development</strong></summary>
 
 ```bash
-npm run setup              # install deps + download ffmpeg-core.wasm
-npm run dev                # vite dev server
-npm run typecheck          # tsc --noEmit
-npm run test:unit          # fast unit tests
-npm run lint               # biome lint
-npm run format             # biome format
-npm run test:integration   # requires test fixtures in tests/fixtures/
+pnpm run setup              # install deps + download ffmpeg-core.wasm
+pnpm run dev                # vite dev server (simple player)
+pnpm run typecheck          # tsc --noEmit
+pnpm run test:unit          # fast unit tests
+pnpm run lint               # biome lint
+pnpm run format             # biome format
+pnpm run test:integration   # requires test fixtures in tests/fixtures/
+pnpm --filter app dev       # media player dev server (React app)
 ```
 
 ```
@@ -99,6 +100,7 @@ src/adapters/       Platform adapters (ffmpeg.wasm for browser, node-ffmpeg for 
 src/worker.ts       Web worker — demux + on-demand segment processing
 src/engine.ts       PlaysVideoEngine class (worker, hls.js, subtitles)
 src/pwa-player.ts   Browser entry — file picker, drag-and-drop
+app/                React media player — library management, folder picker, playlists
 tests/              Unit, integration, and e2e (Playwright) tests
 ```
 

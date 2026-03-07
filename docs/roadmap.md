@@ -2,6 +2,15 @@
 
 Planned features, roughly in priority order.
 
+## Media player app (`/app`)
+
+Full-featured media player built with React, living in `app/` as a separate pnpm workspace. Current: folder picker (File System Access API), library grid, watch state tracking (unwatched/in-progress/watched), playback position resume. Planned:
+
+- **Playlists** — create, reorder, and manage playlists stored in IndexedDB
+- **Library thumbnails** — generate thumbnails via `VideoDecoder` single-frame capture, store in IDB
+- **Search/filter/sort** — filter library by name, sort by date/size/watch state
+- **Responsive sidebar** — permanent on desktop, hamburger on mobile
+
 ## User-imported subtitles
 
 Load external `.srt` or `.vtt` subtitle files alongside the video. The subtitle parsing pipeline (`parseSubtitleFile`) already exists — this just needs UI to select a file and wire it to the engine.

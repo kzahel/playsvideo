@@ -4,18 +4,28 @@ Client-side video player — play any video file in the browser without a server
 
 Do NOT use auto-memory (`~/.claude/projects/.../memory/`). All project context lives in this file.
 
+## Package Manager
+
+Uses **pnpm workspaces**. The root package is the core library (`playsvideo`). The `app/` directory is a separate workspace for the React media player.
+
+```bash
+pnpm install           # install all workspace deps
+pnpm -w run <script>   # run a root workspace script
+pnpm --filter app dev  # run the media player dev server
+```
+
 ## Green Gates
 
 Before considering work done, all of these must pass:
 
 ```bash
-npm run typecheck    # tsc --noEmit
-npm run test:unit    # vitest run tests/unit (fast, no fixtures needed)
-npm run lint         # biome lint .
-npm run format       # biome format --write . (then verify no unstaged changes)
+pnpm -w run typecheck    # tsc --noEmit
+pnpm -w run test:unit    # vitest run tests/unit (fast, no fixtures needed)
+pnpm -w run lint         # biome lint .
+pnpm -w run format       # biome format --write . (then verify no unstaged changes)
 ```
 
-Integration tests (`npm run test:integration`) require test fixtures in `tests/fixtures/`.
+Integration tests (`pnpm -w run test:integration`) require test fixtures in `tests/fixtures/`.
 
 ## Project Structure
 
@@ -27,6 +37,18 @@ Integration tests (`npm run test:integration`) require test fixtures in `tests/f
 - `tests/unit/` — fast unit tests (no external dependencies)
 - `tests/integration/` — tests requiring ffmpeg/ffprobe and test fixtures
 - `tests/e2e/` — playwright browser tests
+- `app/` — React media player (separate workspace, see below)
+
+### Media Player App (`app/`)
+
+React app with library management at `/app`. Separate workspace with its own `package.json`, `vite.config.ts`, `tsconfig.json`.
+
+- `app/src/db.ts` — Dexie IndexedDB schema (library, directories, playlists, settings)
+- `app/src/scan.ts` — File System Access API directory walker + IDB sync
+- `app/src/hooks/useEngine.ts` — React hook wrapping PlaysVideoEngine lifecycle
+- `app/src/pages/Library.tsx` — video library grid with folder picker
+- `app/src/pages/Player.tsx` — video player page
+- Uses `import { PlaysVideoEngine } from 'playsvideo'` via workspace link
 
 ## Key Conventions
 
@@ -91,7 +113,7 @@ Changelog-driven releases. The changelog entry must exist before the release scr
 ### npm package
 
 - Entry: `import { PlaysVideoEngine } from 'playsvideo'`
-- Lib build: `npm run build:lib` (tsc via `tsconfig.lib.json`, excludes Vite-specific files)
+- Lib build: `pnpm -w run build:lib` (tsc via `tsconfig.lib.json`, excludes Vite-specific files and `src/app/`)
 - Trusted publishing via OIDC (`id-token: write`) — no npm token needed, configure on npmjs.com package settings
 
 ## Deploy
@@ -99,9 +121,9 @@ Changelog-driven releases. The changelog entry must exist before the release scr
 Site is hosted on Cloudflare R2 + Workers at playsvideo.com.
 
 ```bash
-npm run deploy:site    # vite build + upload dist/ to R2
-npm run deploy:worker  # deploy Cloudflare Worker (serves files from R2)
-npm run deploy         # both
+pnpm -w run deploy:site    # vite build + upload dist/ to R2
+pnpm -w run deploy:worker  # deploy Cloudflare Worker (serves files from R2)
+pnpm -w run deploy         # both
 ```
 
 - `scripts/deploy.sh` — uploads built files to R2 bucket with correct content types

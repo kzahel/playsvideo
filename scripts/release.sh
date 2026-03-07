@@ -43,21 +43,21 @@ fi
 
 # Run green gates
 echo "Running green gates..."
-npm run typecheck
-npm run lint
-npm run format:check
-npm run test:unit
+pnpm run typecheck
+pnpm run lint
+pnpm run format:check
+pnpm run test:unit
 
 # Build library to verify it compiles
 echo "Building library..."
-npm run build:lib
+pnpm run build:lib
 
 # Update version in package.json
 echo "Updating package.json version to ${VERSION}..."
 npm version "$VERSION" --no-git-tag-version --allow-same-version
 
 # Commit and tag
-git add package.json package-lock.json
+git add package.json pnpm-lock.yaml
 git commit -m "Release ${TAG}"
 git tag "$TAG"
 
