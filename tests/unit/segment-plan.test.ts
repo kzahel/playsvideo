@@ -2,10 +2,15 @@ import { describe, expect, it } from 'vitest';
 import { buildSegmentPlan, normalizeKeyframeTimestamps } from '../../src/pipeline/segment-plan.js';
 
 describe('normalizeKeyframeTimestamps', () => {
-  it('adds 0 if missing and duration as final boundary', () => {
+  it('keeps first keyframe as first boundary (no synthetic 0)', () => {
     const result = normalizeKeyframeTimestamps([2, 4, 6], 10);
-    expect(result[0]).toBe(0);
+    expect(result[0]).toBe(2);
     expect(result[result.length - 1]).toBe(10);
+  });
+
+  it('adds 0 when keyframe list is empty', () => {
+    const result = normalizeKeyframeTimestamps([], 10);
+    expect(result).toEqual([0, 10]);
   });
 
   it('deduplicates timestamps within 1ms', () => {
@@ -82,6 +87,19 @@ describe('buildSegmentPlan', () => {
 
     expect(plan[0].sequence).toBe(5);
     expect(plan[0].uri).toBe('seg-5.m4s');
+  });
+
+  it('starts segment 0 at time 0 even when first keyframe is later', () => {
+    const plan = buildSegmentPlan({
+      keyframeTimestampsSec: [0.07, 2.5, 5.0],
+      durationSec: 5,
+    });
+
+    // Segment 0 starts at 0, not 0.07, so the full duration is covered
+    expect(plan[0]).toMatchObject({ sequence: 0, startSec: 0 });
+    expect(plan[0].durationSec).toBeCloseTo(2.5, 2);
+    // Segment 1 starts at the second keyframe
+    expect(plan[1]).toMatchObject({ sequence: 1, startSec: 2.5 });
   });
 
   it('covers the full duration', () => {

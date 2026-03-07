@@ -148,6 +148,10 @@ scp desktop:~/code/playsvideo/ffmpegbuild/out/ffmpeg-core.js \
 
 Build config: `ffmpegbuild/Dockerfile.ffmpeg-audio` (decoders, encoders, filters, etc.)
 
+## External Consumers
+
+JSTorrent (`~/code/jstorrent/`) imports playsvideo from `dist/`. After changing source, run `pnpm -w run build:lib` to rebuild — `pnpm dev` only serves source via Vite and does not update `dist/`.
+
 ## Reference Code
 
 - ffmpeg source: `~/code/references/ffmpeg` (key file: `libavformat/hlsenc.c`)

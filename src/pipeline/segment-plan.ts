@@ -17,7 +17,7 @@ export function normalizeKeyframeTimestamps(
     .map((v) => Math.max(0, Math.min(duration, v)))
     .sort((a, b) => a - b);
 
-  if (!normalized.length || normalized[0] > EPSILON_SEC) {
+  if (!normalized.length) {
     normalized.unshift(0);
   }
 
@@ -60,7 +60,9 @@ export function buildSegmentPlan(options: BuildSegmentPlanOptions): PlannedSegme
   // ffmpeg cuts at each keyframe regardless of hls_time; the target duration
   // only affects the M3U8 EXT-X-TARGETDURATION header, not segment boundaries.
   for (let i = 0; i < boundaries.length - 1; i++) {
-    const startSec = boundaries[i];
+    // Segment 0 always starts at 0 so the HLS playlist covers the full
+    // duration, even when the first video keyframe is slightly after 0.
+    const startSec = i === 0 ? 0 : boundaries[i];
     const endSec = boundaries[i + 1];
     const duration = Math.max(EPSILON_SEC, endSec - startSec);
     plan.push({

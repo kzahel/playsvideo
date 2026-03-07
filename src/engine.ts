@@ -292,6 +292,7 @@ export class PlaysVideoEngine extends EventTarget {
     const fullMime = `${mime}; codecs="${codecs}"`;
     const result = this.video.canPlayType(fullMime);
     mlog(`canPlayType("${fullMime}") = "${result}"`);
+    if (FORCE_REMUX) return false;
     return result === 'probably' || result === 'maybe';
   }
 
@@ -815,6 +816,9 @@ export class PlaysVideoEngine extends EventTarget {
     }
   }
 }
+
+/** Set to true to bypass native playback and force the remux pipeline (for testing). */
+const FORCE_REMUX = false;
 
 function mlog(msg: string): void {
   console.log(`[engine] ${msg}`);
