@@ -26,6 +26,7 @@ let doTranscode = false;
 let audioDecoderConfig: AudioDecoderConfig | null = null;
 let initSegment: Uint8Array | null = null;
 const segmentCache = new Map<number, Uint8Array>();
+let targetSegDuration = 4;
 
 // Serialize segment processing — concurrent ffmpeg.wasm calls corrupt shared MEMFS files
 let processingChain: Promise<void> = Promise.resolve();
@@ -35,14 +36,23 @@ self.onmessage = (event: MessageEvent) => {
 
   if (msg.type === 'open') {
     wlog('recv open');
-    processingChain = handleOpen(() => demuxBlob(msg.file), msg.targetSegmentDuration ?? 4).catch(
-      (err) => self.postMessage({ type: 'error', message: String(err) }),
+    targetSegDuration = msg.targetSegmentDuration ?? 4;
+    processingChain = handleProbe(() => demuxBlob(msg.file)).catch((err) =>
+      self.postMessage({ type: 'error', message: String(err) }),
     );
   } else if (msg.type === 'open-url') {
     wlog('recv open-url');
-    processingChain = handleOpen(() => demuxUrl(msg.url), msg.targetSegmentDuration ?? 4).catch(
-      (err) => self.postMessage({ type: 'error', message: String(err) }),
+    targetSegDuration = msg.targetSegmentDuration ?? 4;
+    processingChain = handleProbe(() => demuxUrl(msg.url)).catch((err) =>
+      self.postMessage({ type: 'error', message: String(err) }),
     );
+  } else if (msg.type === 'proceed') {
+    wlog('recv proceed');
+    processingChain = processingChain
+      .then(() => handleProceed())
+      .catch((err) => self.postMessage({ type: 'error', message: String(err) }));
+  } else if (msg.type === 'passthrough') {
+    wlog('recv passthrough — subtitle-only mode');
   } else if (msg.type === 'segment') {
     wlog(`recv segment idx=${msg.index}`);
     processingChain = processingChain
@@ -56,9 +66,8 @@ self.onmessage = (event: MessageEvent) => {
   }
 };
 
-async function handleOpen(demuxFn: () => Promise<DemuxResult>, targetSegmentDuration: number) {
-  const t0 = performance.now();
-
+/** Phase 1: demux and send codec info to engine for passthrough decision. */
+async function handleProbe(demuxFn: () => Promise<DemuxResult>) {
   if (demux) {
     demux.dispose();
   }
@@ -69,6 +78,21 @@ async function handleOpen(demuxFn: () => Promise<DemuxResult>, targetSegmentDura
     `demux done ${elapsed(tDemux)} codec=${demux.videoCodec}/${demux.audioCodec} dur=${demux.duration.toFixed(1)}s`,
   );
 
+  // Send codec info so engine can check canPlayType on the main thread
+  self.postMessage({
+    type: 'probed',
+    videoCodec: demux.videoDecoderConfig.codec,
+    audioCodec: demux.audioDecoderConfig?.codec ?? null,
+    durationSec: demux.duration,
+    subtitleTracks: demux.subtitleTracks,
+  });
+}
+
+/** Phase 2: full pipeline — engine told us native playback isn't possible. */
+async function handleProceed() {
+  if (!demux) throw new Error('No demux — handleProbe must run first');
+  const t0 = performance.now();
+
   const tIndex = performance.now();
   const index = await getKeyframeIndex(demux.videoSink, demux.duration);
   wlog(`keyframe-index done ${elapsed(tIndex)} keyframes=${index.keyframes.length}`);
@@ -77,7 +101,7 @@ async function handleOpen(demuxFn: () => Promise<DemuxResult>, targetSegmentDura
   plan = buildSegmentPlan({
     keyframeTimestampsSec: index.keyframes.map((k) => k.timestamp),
     durationSec: index.duration,
-    targetSegmentDurationSec: targetSegmentDuration,
+    targetSegmentDurationSec: targetSegDuration,
   });
   wlog(`segment-plan done ${elapsed(tPlan)} segments=${plan.length}`);
 
@@ -102,7 +126,7 @@ async function handleOpen(demuxFn: () => Promise<DemuxResult>, targetSegmentDura
   segmentCache.set(0, await processSegment(0));
   wlog(`seg0 preprocess done ${elapsed(tSeg0)}`);
 
-  wlog(`open complete ${elapsed(t0)} total`);
+  wlog(`pipeline complete ${elapsed(t0)} total`);
 
   self.postMessage(
     {

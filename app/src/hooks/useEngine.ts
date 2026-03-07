@@ -51,7 +51,8 @@ export function useEngine(entry: LibraryEntry | null): UseEngineResult {
     }) as EventListener);
 
     engine.addEventListener('ready', ((e: CustomEvent) => {
-      setStatus(`Ready \u2014 ${e.detail.totalSegments} segments`);
+      const mode = e.detail.passthrough ? 'direct playback' : `${e.detail.totalSegments} segments`;
+      setStatus(`Ready \u2014 ${mode}`);
       setPhase('ready');
 
       if (entry.playbackPositionSec > 0 && entry.watchState === 'in-progress') {

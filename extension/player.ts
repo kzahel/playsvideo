@@ -60,7 +60,8 @@ engine.addEventListener('loading', (e) => {
 });
 
 engine.addEventListener('ready', (e) => {
-  status.textContent = `Ready — ${e.detail.totalSegments} segments, ${formatTime(e.detail.durationSec)}`;
+  const mode = e.detail.passthrough ? 'direct playback' : `${e.detail.totalSegments} segments`;
+  status.textContent = `Ready — ${mode}, ${formatTime(e.detail.durationSec)}`;
   video.style.display = 'block';
 });
 

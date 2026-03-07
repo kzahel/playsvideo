@@ -7,14 +7,7 @@ import { existsSync } from 'node:fs';
 import { mkdir, readFile, writeFile } from 'node:fs/promises';
 import { join } from 'node:path';
 import { promisify } from 'node:util';
-import {
-  EncodedAudioPacketSource,
-  EncodedPacket,
-  EncodedVideoPacketSource,
-  Mp4OutputFormat,
-  NullTarget,
-  Output,
-} from 'mediabunny';
+import { EncodedVideoPacketSource, Mp4OutputFormat, NullTarget, Output } from 'mediabunny';
 import { describe, expect, it } from 'vitest';
 import { makeTempDir, NodeFfmpegRunner } from '../../src/adapters/node-ffmpeg.js';
 import { transcodeAudioSegment } from '../../src/pipeline/audio-transcode.js';

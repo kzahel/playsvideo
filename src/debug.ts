@@ -27,10 +27,11 @@ engine.addEventListener('loading', (e) => {
 });
 
 engine.addEventListener('ready', (e) => {
-  const { totalSegments, durationSec, subtitleTracks } = e.detail;
-  status.textContent = `Ready — ${totalSegments} segments, ${formatTime(durationSec)}`;
+  const { totalSegments, durationSec, subtitleTracks, passthrough } = e.detail;
+  const mode = passthrough ? 'direct playback' : `${totalSegments} segments`;
+  status.textContent = `Ready — ${mode}, ${formatTime(durationSec)}`;
   video.style.display = 'block';
-  log('ready', `ready segments=${totalSegments} duration=${durationSec.toFixed(1)}s`);
+  log('ready', `ready mode=${mode} duration=${durationSec.toFixed(1)}s`);
   if (subtitleTracks.length > 0) {
     for (const t of subtitleTracks) {
       log(

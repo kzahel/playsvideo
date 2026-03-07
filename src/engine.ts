@@ -15,6 +15,7 @@ export interface ReadyDetail {
   totalSegments: number;
   durationSec: number;
   subtitleTracks: SubtitleTrackInfo[];
+  passthrough?: boolean;
 }
 
 export interface ErrorDetail {
@@ -66,6 +67,11 @@ export class PlaysVideoEngine extends EventTarget {
   private _totalSegments = 0;
   private _durationSec = 0;
 
+  // Passthrough state
+  private _passthrough = false;
+  private _blobUrl: string | null = null;
+  private _pendingFileType: string | null = null;
+
   get phase(): EnginePhase {
     return this._phase;
   }
@@ -81,6 +87,9 @@ export class PlaysVideoEngine extends EventTarget {
   get subtitleTracks(): SubtitleTrackInfo[] {
     return this._subtitleTracks;
   }
+  get passthrough(): boolean {
+    return this._passthrough;
+  }
 
   constructor(video: HTMLVideoElement) {
     super();
@@ -88,25 +97,39 @@ export class PlaysVideoEngine extends EventTarget {
   }
 
   loadFile(file: File): void {
-    this.resetAndCreateWorker({ file });
+    this.reset({ file });
+    this._pendingFileType = file.type || null;
+    this._blobUrl = URL.createObjectURL(file);
+    this.createWorker();
     this.worker!.postMessage({ type: 'open', file });
-    mlog(`open file=${file.name} size=${(file.size / 1024 / 1024).toFixed(1)}MB`);
+    mlog(`open file=${file.name} size=${(file.size / 1024 / 1024).toFixed(1)}MB type=${file.type}`);
   }
 
   loadUrl(url: string): void {
-    this.resetAndCreateWorker({ url });
+    this.reset({ url });
+    this.createWorker();
     this.worker!.postMessage({ type: 'open-url', url });
     mlog(`open url=${url}`);
   }
 
-  private resetAndCreateWorker(detail: LoadingDetail): void {
+  private reset(detail: LoadingDetail): void {
     if (this.hls) {
       this.hls.destroy();
       this.hls = null;
     }
     if (this.worker) {
       this.worker.terminate();
+      this.worker = null;
     }
+    if (this._blobUrl) {
+      URL.revokeObjectURL(this._blobUrl);
+      this._blobUrl = null;
+    }
+    if (this._passthrough) {
+      this.video.removeAttribute('src');
+      this.video.load();
+    }
+
     this.playlist = null;
     this.initData = null;
     this.pendingSegments.clear();
@@ -119,9 +142,13 @@ export class PlaysVideoEngine extends EventTarget {
     this._totalSegments = 0;
     this._durationSec = 0;
     this._subtitleTracks = [];
+    this._passthrough = false;
+    this._pendingFileType = null;
 
     this.dispatchEvent(new CustomEvent('loading', { detail }));
+  }
 
+  private createWorker(): void {
     this.worker = new Worker(new URL('./worker.ts', import.meta.url), { type: 'module' });
     this.worker.onmessage = (e) => this.handleWorkerMessage(e);
     this.worker.onerror = (e) => {
@@ -139,12 +166,21 @@ export class PlaysVideoEngine extends EventTarget {
       this.worker.terminate();
       this.worker = null;
     }
+    if (this._blobUrl) {
+      URL.revokeObjectURL(this._blobUrl);
+      this._blobUrl = null;
+    }
+    if (this._passthrough) {
+      this.video.removeAttribute('src');
+      this.video.load();
+    }
     for (const url of this.subtitleBlobUrls) URL.revokeObjectURL(url);
     this.subtitleBlobUrls = [];
     this.removeSubtitleTracks();
     this.pendingSegments.clear();
     this.segmentRequestTimes.clear();
     this._phase = 'idle';
+    this._passthrough = false;
   }
 
   // Typed addEventListener overloads
@@ -166,10 +202,77 @@ export class PlaysVideoEngine extends EventTarget {
     super.addEventListener(type, listener as EventListenerOrEventListenerObject, options);
   }
 
+  private checkNativePlayback(videoCodec: string, audioCodec: string | null): boolean {
+    const mime = this._pendingFileType;
+    if (!mime) return false;
+
+    const codecs = audioCodec ? `${videoCodec}, ${audioCodec}` : videoCodec;
+    const fullMime = `${mime}; codecs="${codecs}"`;
+    const result = this.video.canPlayType(fullMime);
+    mlog(`canPlayType("${fullMime}") = "${result}"`);
+    return result === 'probably' || result === 'maybe';
+  }
+
+  private startPassthrough(src: string): void {
+    this._passthrough = true;
+    this._totalSegments = 0;
+    if (src.startsWith('blob:')) {
+      this._blobUrl = src;
+    }
+
+    this.video.src = src;
+
+    const fireReady = () => {
+      this._durationSec = this.video.duration;
+      this._phase = 'ready';
+      mlog(`passthrough ready dur=${this._durationSec.toFixed(1)}s`);
+      this.dispatchEvent(
+        new CustomEvent('ready', {
+          detail: {
+            totalSegments: 0,
+            durationSec: this._durationSec,
+            subtitleTracks: [],
+            passthrough: true,
+          },
+        }),
+      );
+    };
+
+    if (this.video.readyState >= 1) {
+      fireReady();
+    } else {
+      this.video.addEventListener('loadedmetadata', fireReady, { once: true });
+    }
+  }
+
   private handleWorkerMessage(event: MessageEvent): void {
     const msg = event.data;
 
-    if (msg.type === 'ready') {
+    if (msg.type === 'probed') {
+      // Worker finished demux — decide passthrough vs pipeline
+      const canPlay = this.checkNativePlayback(msg.videoCodec, msg.audioCodec);
+      this._subtitleTracks = msg.subtitleTracks ?? [];
+
+      if (canPlay && this._blobUrl) {
+        mlog(`passthrough: canPlayType accepted codecs=${msg.videoCodec}/${msg.audioCodec}`);
+        this.startPassthrough(this._blobUrl);
+        this.worker!.postMessage({ type: 'passthrough' });
+
+        for (const track of this._subtitleTracks) {
+          mlog(
+            `requesting subtitle track=${track.index} lang=${track.language} codec=${track.codec}`,
+          );
+          this.worker!.postMessage({ type: 'subtitle', trackIndex: track.index });
+        }
+      } else {
+        if (this._blobUrl) {
+          URL.revokeObjectURL(this._blobUrl);
+          this._blobUrl = null;
+        }
+        mlog(`pipeline: canPlayType rejected, proceeding with full pipeline`);
+        this.worker!.postMessage({ type: 'proceed' });
+      }
+    } else if (msg.type === 'ready') {
       this.playlist = msg.playlist;
       this.initData = msg.initData;
       this._totalSegments = msg.totalSegments;
