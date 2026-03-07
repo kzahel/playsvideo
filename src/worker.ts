@@ -1,11 +1,10 @@
 import { WasmFfmpegRunner } from './adapters/wasm-ffmpeg.js';
-import { transcodeAudioSegment } from './pipeline/audio-transcode.js';
 import { audioNeedsTranscode, createBrowserProber } from './pipeline/codec-probe.js';
 import type { DemuxResult } from './pipeline/demux.js';
-import { collectPacketsInRange, demuxBlob, demuxUrl, getKeyframeIndex } from './pipeline/demux.js';
-import { muxToFmp4 } from './pipeline/mux.js';
+import { demuxBlob, demuxUrl, getKeyframeIndex } from './pipeline/demux.js';
 import { generateVodPlaylist } from './pipeline/playlist.js';
 import { buildSegmentPlan } from './pipeline/segment-plan.js';
+import { processSegmentWithAbort } from './pipeline/segment-processor.js';
 import { extractSubtitleData, subtitleDataToWebVTT } from './pipeline/subtitle.js';
 import type { KeyframeIndex, PlannedSegment } from './pipeline/types.js';
 
@@ -30,6 +29,9 @@ let targetSegDuration = 4;
 
 // Serialize segment processing — concurrent ffmpeg.wasm calls corrupt shared MEMFS files
 let processingChain: Promise<void> = Promise.resolve();
+
+// Per-segment abort controllers for cancellation
+const segmentAbortControllers = new Map<number, AbortController>();
 
 self.onmessage = (event: MessageEvent) => {
   const msg = event.data;
@@ -58,6 +60,13 @@ self.onmessage = (event: MessageEvent) => {
     processingChain = processingChain
       .then(() => handleSegment(msg.index))
       .catch((err) => self.postMessage({ type: 'error', message: String(err) }));
+  } else if (msg.type === 'cancel') {
+    const controller = segmentAbortControllers.get(msg.index);
+    if (controller) {
+      wlog(`cancel segment idx=${msg.index}`);
+      controller.abort();
+      segmentAbortControllers.delete(msg.index);
+    }
   } else if (msg.type === 'subtitle') {
     wlog(`recv subtitle trackIndex=${msg.trackIndex}`);
     handleSubtitle(msg.trackIndex).catch((err) =>
@@ -129,7 +138,30 @@ async function handleRemuxPipeline(prebuiltKeyframeIndex?: KeyframeIndex) {
   });
 
   const tSeg0 = performance.now();
-  segmentCache.set(0, await processSegment(0));
+  const seg0Result = await processSegmentWithAbort(
+    {
+      videoSink: demux.videoSink,
+      audioSink: demux.audioSink,
+      videoCodec: demux.videoCodec,
+      audioCodec: demux.audioCodec,
+      videoDecoderConfig: demux.videoDecoderConfig,
+      audioDecoderConfig,
+      plan,
+      doTranscode,
+      ffmpeg,
+      sourceCodec: demux.audioCodec ?? undefined,
+      log: wlog,
+    },
+    0,
+  );
+  segmentCache.set(0, seg0Result.mediaData);
+  if (seg0Result.initSegment) {
+    initSegment = seg0Result.initSegment;
+    wlog(`init-segment captured size=${initSegment.byteLength}`);
+  }
+  if (seg0Result.audioDecoderConfig) {
+    audioDecoderConfig = seg0Result.audioDecoderConfig;
+  }
   wlog(`seg0 preprocess done ${elapsed(tSeg0)}`);
 
   wlog(`pipeline complete ${elapsed(t0)} total`);
@@ -163,82 +195,55 @@ async function handleSegment(index: number) {
     return;
   }
 
-  const t0 = performance.now();
-  const mediaData = await processSegment(index);
-  wlog(`seg ${index} done ${elapsed(t0)} size=${mediaData.byteLength}`);
+  const controller = new AbortController();
+  segmentAbortControllers.set(index, controller);
 
-  const buffer = mediaData.buffer.slice(
-    mediaData.byteOffset,
-    mediaData.byteOffset + mediaData.byteLength,
-  );
-  self.postMessage({ type: 'segment', index, data: buffer }, { transfer: [buffer] });
-}
-
-async function processSegment(index: number): Promise<Uint8Array> {
-  if (!demux) throw new Error('No file open');
-
-  const seg = plan[index];
-  const endSec = seg.startSec + seg.durationSec;
-  wlog(`seg ${index} start range=[${seg.startSec.toFixed(2)},${endSec.toFixed(2)})`);
-
-  const tVid = performance.now();
-  const videoPackets = await collectPacketsInRange(demux.videoSink, seg.startSec, endSec, {
-    startFromKeyframe: true,
-  });
-  wlog(`seg ${index} video-collect ${elapsed(tVid)} pkts=${videoPackets.length}`);
-
-  const tAud = performance.now();
-  let audioPackets = demux.audioSink
-    ? await collectPacketsInRange(demux.audioSink, seg.startSec, endSec)
-    : [];
-  wlog(`seg ${index} audio-collect ${elapsed(tAud)} pkts=${audioPackets.length}`);
-
-  if (doTranscode && audioPackets.length > 0) {
-    const sampleRate = demux.audioDecoderConfig?.sampleRate ?? 48000;
-    const transcoded = await transcodeAudioSegment({
-      packets: audioPackets,
-      sampleRate,
-      audioStartSec: audioPackets[0].timestamp,
-      ffmpeg,
-      sourceCodec: demux.audioCodec ?? undefined,
-    });
-    const m = transcoded.metrics;
-    const speed = m.ffmpegSpeed !== null ? ` speed=${m.ffmpegSpeed}x` : '';
-    wlog(
-      `seg ${index} transcode ${m.totalMs.toFixed(1)}ms audio=${m.audioDurationSec.toFixed(2)}s ratio=${m.realtimeRatio.toFixed(4)}x ffmpeg=${m.ffmpegMs.toFixed(1)}ms${speed} | concat=${m.concatMs.toFixed(1)} write=${m.writeMs.toFixed(1)} read=${m.readMs.toFixed(1)} parse=${m.parseMs.toFixed(1)} cleanup=${m.cleanupMs.toFixed(1)} in=${m.inputPackets}/${m.inputBytes}B out=${m.outputPackets}/${m.outputBytes}B`,
+  try {
+    const t0 = performance.now();
+    const result = await processSegmentWithAbort(
+      {
+        videoSink: demux.videoSink,
+        audioSink: demux.audioSink,
+        videoCodec: demux.videoCodec,
+        audioCodec: demux.audioCodec,
+        videoDecoderConfig: demux.videoDecoderConfig,
+        audioDecoderConfig,
+        plan,
+        doTranscode,
+        ffmpeg,
+        sourceCodec: demux.audioCodec ?? undefined,
+        log: wlog,
+      },
+      index,
+      controller.signal,
     );
-    audioPackets = transcoded.packets;
-    if (!audioDecoderConfig || audioDecoderConfig.codec !== 'mp4a.40.2') {
-      audioDecoderConfig = transcoded.decoderConfig;
+    segmentAbortControllers.delete(index);
+
+    // Update shared mutable state from result
+    if (!initSegment && result.initSegment) {
+      initSegment = result.initSegment;
+      wlog(`init-segment captured size=${initSegment.byteLength}`);
     }
+    if (result.audioDecoderConfig) {
+      audioDecoderConfig = result.audioDecoderConfig;
+    }
+
+    const mediaData = result.mediaData;
+    wlog(`seg ${index} done ${elapsed(t0)} size=${mediaData.byteLength}`);
+
+    const buffer = mediaData.buffer.slice(
+      mediaData.byteOffset,
+      mediaData.byteOffset + mediaData.byteLength,
+    );
+    self.postMessage({ type: 'segment', index, data: buffer }, { transfer: [buffer] });
+  } catch (err) {
+    segmentAbortControllers.delete(index);
+    if (err instanceof DOMException && err.name === 'AbortError') {
+      wlog(`seg ${index} aborted`);
+      return;
+    }
+    throw err;
   }
-
-  const tMux = performance.now();
-  const muxResult = await muxToFmp4({
-    videoPackets,
-    audioPackets,
-    videoCodec: demux.videoCodec,
-    audioCodec: doTranscode ? 'aac' : (demux.audioCodec ?? 'aac'),
-    videoDecoderConfig: demux.videoDecoderConfig,
-    audioDecoderConfig,
-  });
-  wlog(`seg ${index} mux ${elapsed(tMux)}`);
-
-  if (!initSegment) {
-    initSegment = muxResult.init;
-    wlog(`init-segment captured size=${initSegment.byteLength}`);
-  }
-
-  // Concatenate media fragments
-  const totalLen = muxResult.media.reduce((s, c) => s + c.byteLength, 0);
-  const mediaData = new Uint8Array(totalLen);
-  let offset = 0;
-  for (const chunk of muxResult.media) {
-    mediaData.set(chunk, offset);
-    offset += chunk.byteLength;
-  }
-
-  return mediaData;
 }
 
 async function handleSubtitle(trackIndex: number) {

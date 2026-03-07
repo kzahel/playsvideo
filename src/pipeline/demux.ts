@@ -7,6 +7,7 @@ import {
   Input,
   type InputAudioTrack,
   type InputVideoTrack,
+  type Source,
   UrlSource,
 } from 'mediabunny';
 import { getSubtitleTrackInfos } from './subtitle.js';
@@ -37,6 +38,10 @@ export async function demuxBlob(blob: Blob): Promise<DemuxResult> {
 
 export async function demuxUrl(url: string): Promise<DemuxResult> {
   return demuxInput(new Input({ formats: ALL_FORMATS, source: new UrlSource(url) }));
+}
+
+export async function demuxSource(source: Source): Promise<DemuxResult> {
+  return demuxInput(new Input({ formats: ALL_FORMATS, source }));
 }
 
 async function demuxInput(input: Input): Promise<DemuxResult> {

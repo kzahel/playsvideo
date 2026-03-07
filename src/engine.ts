@@ -7,7 +7,15 @@ import type {
   PlaylistLoaderContext,
 } from 'hls.js';
 import Hls from 'hls.js';
-import type { KeyframeIndex, SubtitleTrackInfo } from './pipeline/types.js';
+import type { Source } from 'mediabunny';
+import { audioNeedsTranscode, createBrowserProber } from './pipeline/codec-probe.js';
+import type { DemuxResult } from './pipeline/demux.js';
+import { demuxSource, getKeyframeIndex } from './pipeline/demux.js';
+import { generateVodPlaylist } from './pipeline/playlist.js';
+import { buildSegmentPlan } from './pipeline/segment-plan.js';
+import { processSegmentWithAbort } from './pipeline/segment-processor.js';
+import { isAbortableSource } from './pipeline/source-signal.js';
+import type { FfmpegRunner, KeyframeIndex, PlannedSegment, SubtitleTrackInfo } from './pipeline/types.js';
 
 export type EnginePhase = 'idle' | 'demuxing' | 'ready' | 'error';
 
@@ -75,6 +83,17 @@ export class PlaysVideoEngine extends EventTarget {
   // Pre-built keyframe index (e.g. from MKV cues) to skip mediabunny scan
   private _keyframeIndex: KeyframeIndex | null = null;
 
+  // Main-thread pipeline state (used by loadSource)
+  private _source: Source | null = null;
+  private _sourceDemux: DemuxResult | null = null;
+  private _sourcePlan: PlannedSegment[] = [];
+  private _sourceDoTranscode = false;
+  private _sourceAudioDecoderConfig: AudioDecoderConfig | null = null;
+  private _sourceInitSegment: Uint8Array | null = null;
+  private _sourceFfmpeg: FfmpegRunner | null = null;
+  private _sourceTargetSegDuration = 4;
+  private _sourceSegmentAbort: AbortController | null = null;
+
   get phase(): EnginePhase {
     return this._phase;
   }
@@ -117,6 +136,36 @@ export class PlaysVideoEngine extends EventTarget {
     mlog(`open url=${url}`);
   }
 
+  /**
+   * Load from an external Source (e.g. TorrentSource).
+   *
+   * Runs the pipeline on the main thread (no worker) because external Sources
+   * typically need access to objects on the main thread.
+   *
+   * If the Source implements AbortableSource, the pipeline will call
+   * setCurrentSignal() before each segment so the Source can abort in-flight
+   * reads on seek.
+   */
+  loadSource(
+    source: Source,
+    opts?: {
+      keyframeIndex?: KeyframeIndex;
+      ffmpeg?: FfmpegRunner;
+      targetSegmentDuration?: number;
+    },
+  ): void {
+    this.reset({});
+    this._keyframeIndex = opts?.keyframeIndex ?? null;
+    this._source = source;
+    this._sourcePlan = [];
+    this._sourceDoTranscode = false;
+    this._sourceAudioDecoderConfig = null;
+    this._sourceInitSegment = null;
+    this._sourceFfmpeg = opts?.ffmpeg ?? null;
+    this._sourceTargetSegDuration = opts?.targetSegmentDuration ?? 4;
+    this.startSourcePipeline(source);
+  }
+
   private reset(detail: LoadingDetail): void {
     if (this.hls) {
       this.hls.destroy();
@@ -150,6 +199,23 @@ export class PlaysVideoEngine extends EventTarget {
     this._passthrough = false;
     this._pendingFileType = null;
     this._keyframeIndex = null;
+
+    // Source pipeline cleanup
+    if (this._sourceSegmentAbort) {
+      this._sourceSegmentAbort.abort();
+      this._sourceSegmentAbort = null;
+    }
+    if (this._source && isAbortableSource(this._source)) {
+      this._source.setCurrentSignal(null);
+    }
+    this._source = null;
+    this._sourceDemux?.dispose();
+    this._sourceDemux = null;
+    this._sourcePlan = [];
+    this._sourceDoTranscode = false;
+    this._sourceAudioDecoderConfig = null;
+    this._sourceInitSegment = null;
+    this._sourceFfmpeg = null;
 
     this.dispatchEvent(new CustomEvent('loading', { detail }));
   }
@@ -378,6 +444,157 @@ export class PlaysVideoEngine extends EventTarget {
     });
   }
 
+  private cancelSegment(index: number): void {
+    const pending = this.pendingSegments.get(index);
+    if (pending) {
+      mlog(`cancel seg ${index}`);
+      pending.reject(new DOMException('Segment aborted', 'AbortError'));
+      this.pendingSegments.delete(index);
+      this.segmentRequestTimes.delete(index);
+      this.worker?.postMessage({ type: 'cancel', index });
+    }
+  }
+
+  private async startSourcePipeline(source: Source): Promise<void> {
+    try {
+      mlog('source pipeline: demuxing');
+      this._sourceDemux = await demuxSource(source);
+      const demux = this._sourceDemux;
+
+      // Build keyframe index
+      let index: KeyframeIndex;
+      if (this._keyframeIndex) {
+        index = this._keyframeIndex;
+        mlog(`source pipeline: pre-built keyframes=${index.keyframes.length}`);
+      } else {
+        index = await getKeyframeIndex(demux.videoSink, demux.duration);
+        mlog(`source pipeline: keyframe-index keyframes=${index.keyframes.length}`);
+      }
+
+      // Build segment plan
+      this._sourcePlan = buildSegmentPlan({
+        keyframeTimestampsSec: index.keyframes.map((k) => k.timestamp),
+        durationSec: index.duration,
+        targetSegmentDurationSec: this._sourceTargetSegDuration,
+      });
+
+      // Check transcode
+      const codecProber = createBrowserProber();
+      this._sourceDoTranscode =
+        demux.audioCodec !== null &&
+        audioNeedsTranscode(codecProber, demux.audioCodec, demux.audioDecoderConfig?.codec);
+      this._sourceAudioDecoderConfig = demux.audioDecoderConfig;
+
+      // Pre-process segment 0
+      const seg0Result = await processSegmentWithAbort(
+        this.makeSourceProcessorConfig(),
+        0,
+      );
+      if (seg0Result.initSegment) {
+        this._sourceInitSegment = seg0Result.initSegment;
+      }
+      if (seg0Result.audioDecoderConfig) {
+        this._sourceAudioDecoderConfig = seg0Result.audioDecoderConfig;
+      }
+
+      // Build playlist
+      const playlist = generateVodPlaylist({
+        targetDuration: Math.ceil(Math.max(...this._sourcePlan.map((s) => s.durationSec))),
+        mediaSequence: 0,
+        mapUri: 'init.mp4',
+        entries: this._sourcePlan.map((s) => ({
+          uri: `seg-${s.sequence}.m4s`,
+          durationSec: s.durationSec,
+        })),
+        endList: true,
+      });
+
+      this.playlist = playlist;
+      this.initData = (this._sourceInitSegment!.buffer as ArrayBuffer).slice(
+        this._sourceInitSegment!.byteOffset,
+        this._sourceInitSegment!.byteOffset + this._sourceInitSegment!.byteLength,
+      );
+      this._totalSegments = this._sourcePlan.length;
+      this._durationSec = demux.duration;
+      this._subtitleTracks = demux.subtitleTracks;
+      this._phase = 'ready';
+
+      mlog(
+        `source pipeline: ready segments=${this._totalSegments} dur=${this._durationSec.toFixed(1)}s`,
+      );
+
+      this.dispatchEvent(
+        new CustomEvent('ready', {
+          detail: {
+            totalSegments: this._totalSegments,
+            durationSec: this._durationSec,
+            subtitleTracks: this._subtitleTracks,
+          },
+        }),
+      );
+
+      this.startHls();
+    } catch (err) {
+      this._phase = 'error';
+      this.dispatchEvent(
+        new CustomEvent('error', { detail: { message: String(err) } }),
+      );
+    }
+  }
+
+  private makeSourceProcessorConfig() {
+    const demux = this._sourceDemux!;
+    return {
+      videoSink: demux.videoSink,
+      audioSink: demux.audioSink,
+      videoCodec: demux.videoCodec,
+      audioCodec: demux.audioCodec,
+      videoDecoderConfig: demux.videoDecoderConfig,
+      audioDecoderConfig: this._sourceAudioDecoderConfig,
+      plan: this._sourcePlan,
+      doTranscode: this._sourceDoTranscode,
+      ffmpeg: this._sourceFfmpeg ?? { run: async () => ({ exitCode: 1, stderr: 'no ffmpeg' }), writeInput: async () => {}, readOutput: async () => new Uint8Array() },
+      sourceCodec: demux.audioCodec ?? undefined,
+      log: mlog,
+    };
+  }
+
+  private async requestSourceSegment(index: number): Promise<ArrayBuffer> {
+    // Cancel previous in-flight segment if any
+    if (this._sourceSegmentAbort) {
+      this._sourceSegmentAbort.abort();
+    }
+
+    const controller = new AbortController();
+    this._sourceSegmentAbort = controller;
+
+    // Set signal on source for abort-aware Sources (e.g. TorrentSource)
+    if (this._source && isAbortableSource(this._source)) {
+      this._source.setCurrentSignal(controller.signal);
+    }
+
+    const result = await processSegmentWithAbort(
+      this.makeSourceProcessorConfig(),
+      index,
+      controller.signal,
+    );
+
+    this._sourceSegmentAbort = null;
+
+    // Update mutable state
+    if (!this._sourceInitSegment && result.initSegment) {
+      this._sourceInitSegment = result.initSegment;
+    }
+    if (result.audioDecoderConfig) {
+      this._sourceAudioDecoderConfig = result.audioDecoderConfig;
+    }
+
+    return (result.mediaData.buffer as ArrayBuffer).slice(
+      result.mediaData.byteOffset,
+      result.mediaData.byteOffset + result.mediaData.byteLength,
+    );
+  }
+
   private startHls(): void {
     if (!Hls.isSupported()) {
       this._phase = 'error';
@@ -429,6 +646,7 @@ export class PlaysVideoEngine extends EventTarget {
     class PipelineFragmentLoader implements Loader<FragmentLoaderContext> {
       context: FragmentLoaderContext | null = null;
       stats: LoaderStats = makeStats();
+      private currentSegmentIndex: number | null = null;
 
       load(
         context: FragmentLoaderContext,
@@ -480,20 +698,43 @@ export class PlaysVideoEngine extends EventTarget {
         context: FragmentLoaderContext,
         callbacks: LoaderCallbacks<FragmentLoaderContext>,
       ) {
-        engine
-          .requestSegment(index)
+        this.currentSegmentIndex = index;
+        const segmentPromise = engine._source
+          ? engine.requestSourceSegment(index)
+          : engine.requestSegment(index);
+        segmentPromise
           .then((data) => {
+            this.currentSegmentIndex = null;
             this.stats.loaded = data.byteLength;
             this.stats.loading.end = performance.now();
             callbacks.onSuccess({ url: context.url, data }, this.stats, context, null);
           })
           .catch((err) => {
+            this.currentSegmentIndex = null;
+            if (err instanceof DOMException && err.name === 'AbortError') {
+              this.stats.aborted = true;
+              return;
+            }
             callbacks.onError({ code: 0, text: err.message }, context, null, this.stats);
           });
       }
 
-      abort() {}
-      destroy() {}
+      abort() {
+        if (this.currentSegmentIndex !== null) {
+          if (engine._source) {
+            // Source mode: abort the in-flight main-thread processing
+            engine._sourceSegmentAbort?.abort();
+          } else {
+            // Worker mode: cancel via worker message
+            engine.cancelSegment(this.currentSegmentIndex);
+          }
+          this.currentSegmentIndex = null;
+        }
+      }
+
+      destroy() {
+        this.abort();
+      }
     }
 
     this.hls = new Hls({
