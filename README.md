@@ -4,20 +4,20 @@
   <img alt="playsvideo" src="https://raw.githubusercontent.com/kzahel/playsvideo/main/docs/wordmark-light.svg" width="340">
 </picture>
 
-**You may not need VLC.** Play any video file in the browser — no install, no upload.
+**You probably don't need VLC.** Play any video file in the browser — no install, no upload.
 
 [Try it at playsvideo.com](https://playsvideo.com) &nbsp;|&nbsp; Drop a file. It plays.
 
 ---
 
-Most video files won't play in a browser — not because the browser can't *decode* the video, but because it can't open the container or handle the audio codec. playsvideo fixes that entirely client-side: it remuxes containers and transcodes audio on the fly, so your MKV with AC-3 audio just works.
+Many video files won't play in a browser — not because the browser can't *decode* the video, but because it can't open the container or handle the audio codec. playsvideo fixes that entirely client-side: it remuxes containers and transcodes audio on the fly, so your MKV with AC-3 audio just works.
 
 ### What it handles
 
 | | Formats | Notes |
 |---|---|---|
 | **Containers** | MKV, MP4, AVI, TS, WebM | Demuxed and remuxed to fMP4 |
-| **Video** | H.264, H.265, VP9, AV1 | Passthrough — plays ~99% of files (~90% on Firefox; HEVC transcode planned) |
+| **Video** | H.264, H.265 (HEVC), VP9, AV1 | Passthrough — plays ~99% of files (~90% on Firefox; HEVC transcode planned) |
 | **Audio** | AAC, MP3, AC-3, E-AC-3, DTS, FLAC, Opus | Unsupported codecs transcoded to AAC on the fly |
 | **Subtitles** | SRT, ASS/SSA | Extracted and displayed as WebVTT |
 
@@ -37,7 +37,7 @@ Video file (MKV, MP4, AVI, …)
   → subtitles extracted to WebVTT
 ```
 
-Video transcode is almost never needed — browsers natively decode the vast majority of video codecs in the wild. When audio transcode is needed, a lightweight 1.5 MB ffmpeg.wasm build is lazy-loaded on demand — a few seconds at a time, entirely in-browser.
+Video transcode is almost never needed — browsers natively decode the vast majority of video codecs. When audio transcode is needed, a lightweight 1.5 MB ffmpeg.wasm build is lazy-loaded entirely in-browser. No SharedArrayBuffer required — works on any host without special CORS headers.
 
 ### Under the hood
 
