@@ -4,6 +4,16 @@ All notable changes to playsvideo are documented here.
 
 ## [Unreleased]
 
+## [0.2.0] - 2026-03-07
+
+### Changed
+- Drop `@ffmpeg/ffmpeg` dependency — load Emscripten `createFFmpegCore` directly for smaller bundle and simpler integration
+- Relax worker serialization for segment processing (concurrent non-transcode segments)
+- Add internal transcode worker pool for parallel audio transcode operations
+
+### Fixed
+- Fix playback for videos with non-zero initial video timestamp
+
 ## [0.1.0] - 2026-03-07
 
 ### Added
