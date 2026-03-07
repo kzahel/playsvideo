@@ -24,9 +24,29 @@ export interface TranscodeOptions {
   sampleRate: number;
   /** Timestamp of the first original audio packet — used as base for transcoded timestamps */
   audioStartSec: number;
-  ffmpeg: FfmpegRunner;
   /** Source audio codec (e.g. 'ac3', 'mp3'). Determines ffmpeg input format. Defaults to 'ac3'. */
   sourceCodec?: string;
+}
+
+export type AudioTranscodeExecutor = (
+  opts: TranscodeOptions,
+  signal?: AbortSignal,
+) => Promise<TranscodeResult>;
+
+export interface FfmpegTranscodeMetrics {
+  writeMs: number;
+  ffmpegMs: number;
+  readMs: number;
+  cleanupMs: number;
+  /** ffmpeg-reported realtime multiplier (e.g. 63 = 63x realtime), null if not parseable */
+  ffmpegSpeed: number | null;
+  /** ffmpeg-reported output duration in ms, null if not parseable */
+  ffmpegTimeMs: number | null;
+}
+
+export interface RawAudioTranscodeResult {
+  aacData: Uint8Array;
+  metrics: FfmpegTranscodeMetrics;
 }
 
 export interface TranscodeMetrics {
@@ -119,53 +139,142 @@ async function withRunnerLock<T>(runner: FfmpegRunner, fn: () => Promise<T>): Pr
   }
 }
 
-export async function transcodeAudioSegment(opts: TranscodeOptions): Promise<TranscodeResult> {
-  if (opts.packets.length === 0) {
-    return {
-      packets: [],
-      decoderConfig: makeAacDecoderConfig({
-        codec: 'mp4a.40.2',
-        numberOfChannels: DEFAULT_OUTPUT_CHANNELS,
-        sampleRate: opts.sampleRate,
-      }),
-      metrics: {
-        inputPackets: 0,
-        inputBytes: 0,
-        audioDurationSec: 0,
-        concatMs: 0,
-        writeMs: 0,
-        ffmpegMs: 0,
-        readMs: 0,
-        cleanupMs: 0,
-        parseMs: 0,
-        totalMs: 0,
-        outputPackets: 0,
-        outputBytes: 0,
-        outputDurationSec: 0,
-        ffmpegSpeed: null,
-        ffmpegTimeMs: null,
-        realtimeRatio: 0,
-      },
-    };
-  }
+export function createLocalAudioTranscoder(ffmpeg: FfmpegRunner): AudioTranscodeExecutor {
+  return (opts) => transcodeAudioSegment({ ...opts, ffmpeg });
+}
 
-  const tTotal = now();
+export function createEmptyTranscodeResult(sampleRate: number): TranscodeResult {
+  return {
+    packets: [],
+    decoderConfig: makeAacDecoderConfig({
+      codec: 'mp4a.40.2',
+      numberOfChannels: DEFAULT_OUTPUT_CHANNELS,
+      sampleRate,
+    }),
+    metrics: {
+      inputPackets: 0,
+      inputBytes: 0,
+      audioDurationSec: 0,
+      concatMs: 0,
+      writeMs: 0,
+      ffmpegMs: 0,
+      readMs: 0,
+      cleanupMs: 0,
+      parseMs: 0,
+      totalMs: 0,
+      outputPackets: 0,
+      outputBytes: 0,
+      outputDurationSec: 0,
+      ffmpegSpeed: null,
+      ffmpegTimeMs: null,
+      realtimeRatio: 0,
+    },
+  };
+}
 
-  // Concatenate source audio packets into raw bitstream
-  const tConcat = now();
-  const totalSize = opts.packets.reduce((sum, p) => sum + p.data.byteLength, 0);
-  const rawAudio = new Uint8Array(totalSize);
+export function concatEncodedPacketData(
+  packets: EncodedPacket[],
+): { data: Uint8Array; inputBytes: number; audioDurationSec: number } {
+  const inputBytes = packets.reduce((sum, p) => sum + p.data.byteLength, 0);
+  const data = new Uint8Array(inputBytes);
   let offset = 0;
-  for (const pkt of opts.packets) {
-    rawAudio.set(pkt.data, offset);
+  for (const pkt of packets) {
+    data.set(pkt.data, offset);
     offset += pkt.data.byteLength;
   }
-  const concatMs = now() - tConcat;
 
-  const firstPkt = opts.packets[0];
-  const lastPkt = opts.packets[opts.packets.length - 1];
+  const firstPkt = packets[0];
+  const lastPkt = packets[packets.length - 1];
   const audioDurationSec = lastPkt.timestamp + lastPkt.duration - firstPkt.timestamp;
 
+  return { data, inputBytes, audioDurationSec };
+}
+
+export function packetsFromAdtsData(
+  aacData: Uint8Array,
+  sampleRate: number,
+  audioStartSec: number,
+): {
+  packets: EncodedPacket[];
+  decoderConfig: AudioDecoderConfig;
+  parseMs: number;
+  outputBytes: number;
+  outputDurationSec: number;
+} {
+  const tParse = now();
+  const frames = parseAdtsFrames(aacData);
+  const frameDuration = SAMPLES_PER_AAC_FRAME / sampleRate;
+
+  let timestamp = audioStartSec;
+  const packets = frames.map((frame, i) => {
+    const pkt = new EncodedPacket(
+      frame.data,
+      'key', // all AAC frames are keyframes
+      timestamp,
+      frameDuration,
+      i,
+    );
+    timestamp += frameDuration;
+    return pkt;
+  });
+  const parseMs = now() - tParse;
+
+  return {
+    packets,
+    decoderConfig: {
+      codec: 'mp4a.40.2', // AAC-LC
+      numberOfChannels: frames[0]?.channels ?? DEFAULT_OUTPUT_CHANNELS,
+      sampleRate: frames[0]?.sampleRate ?? sampleRate,
+    },
+    parseMs,
+    outputBytes: aacData.byteLength,
+    outputDurationSec: frames.length * frameDuration,
+  };
+}
+
+export function buildTranscodeResultFromAdts(params: {
+  inputPackets: number;
+  inputBytes: number;
+  audioDurationSec: number;
+  concatMs: number;
+  sampleRate: number;
+  audioStartSec: number;
+  aacData: Uint8Array;
+  ffmpegMetrics: FfmpegTranscodeMetrics;
+  totalMs: number;
+}): TranscodeResult {
+  const parsed = packetsFromAdtsData(params.aacData, params.sampleRate, params.audioStartSec);
+  const metrics: TranscodeMetrics = {
+    inputPackets: params.inputPackets,
+    inputBytes: params.inputBytes,
+    audioDurationSec: params.audioDurationSec,
+    concatMs: params.concatMs,
+    writeMs: params.ffmpegMetrics.writeMs,
+    ffmpegMs: params.ffmpegMetrics.ffmpegMs,
+    readMs: params.ffmpegMetrics.readMs,
+    cleanupMs: params.ffmpegMetrics.cleanupMs,
+    parseMs: parsed.parseMs,
+    totalMs: params.totalMs,
+    outputPackets: parsed.packets.length,
+    outputBytes: parsed.outputBytes,
+    outputDurationSec: parsed.outputDurationSec,
+    ffmpegSpeed: params.ffmpegMetrics.ffmpegSpeed,
+    ffmpegTimeMs: params.ffmpegMetrics.ffmpegTimeMs,
+    realtimeRatio: params.audioDurationSec > 0 ? params.totalMs / (params.audioDurationSec * 1000) : 0,
+  };
+
+  return {
+    packets: parsed.packets,
+    decoderConfig: parsed.decoderConfig,
+    metrics,
+  };
+}
+
+export async function runFfmpegAudioTranscode(opts: {
+  ffmpeg: FfmpegRunner;
+  inputData: Uint8Array;
+  sourceCodec?: string;
+}): Promise<RawAudioTranscodeResult> {
   const codec = opts.sourceCodec ?? 'ac3';
   const inputFormat = INPUT_FORMAT[codec] ?? codec;
   const jobId = nextTranscodeJobId();
@@ -183,7 +292,7 @@ export async function transcodeAudioSegment(opts: TranscodeOptions): Promise<Tra
   await withRunnerLock(opts.ffmpeg, async () => {
     try {
       const tWrite = now();
-      await opts.ffmpeg.writeInput(inputName, rawAudio);
+      await opts.ffmpeg.writeInput(inputName, opts.inputData);
       writeMs = now() - tWrite;
 
       const tFfmpeg = now();
@@ -225,52 +334,46 @@ export async function transcodeAudioSegment(opts: TranscodeOptions): Promise<Tra
     }
   });
 
-  const tParse = now();
-  const frames = parseAdtsFrames(aacData);
-  const frameDuration = SAMPLES_PER_AAC_FRAME / opts.sampleRate;
+  return {
+    aacData,
+    metrics: {
+      writeMs,
+      ffmpegMs,
+      readMs,
+      cleanupMs,
+      ffmpegSpeed,
+      ffmpegTimeMs,
+    },
+  };
+}
 
-  let timestamp = opts.audioStartSec;
-  const packets = frames.map((frame, i) => {
-    const pkt = new EncodedPacket(
-      frame.data,
-      'key', // all AAC frames are keyframes
-      timestamp,
-      frameDuration,
-      i,
-    );
-    timestamp += frameDuration;
-    return pkt;
+export async function transcodeAudioSegment(
+  opts: TranscodeOptions & { ffmpeg: FfmpegRunner },
+): Promise<TranscodeResult> {
+  if (opts.packets.length === 0) {
+    return createEmptyTranscodeResult(opts.sampleRate);
+  }
+
+  const tTotal = now();
+  const tConcat = now();
+  const input = concatEncodedPacketData(opts.packets);
+  const concatMs = now() - tConcat;
+
+  const raw = await runFfmpegAudioTranscode({
+    ffmpeg: opts.ffmpeg,
+    inputData: input.data,
+    sourceCodec: opts.sourceCodec,
   });
-  const parseMs = now() - tParse;
 
-  const totalMs = now() - tTotal;
-  const outputBytes = aacData.byteLength;
-  const outputDurationSec = frames.length * frameDuration;
-
-  const decoderConfig: AudioDecoderConfig = {
-    codec: 'mp4a.40.2', // AAC-LC
-    numberOfChannels: frames[0]?.channels ?? DEFAULT_OUTPUT_CHANNELS,
-    sampleRate: frames[0]?.sampleRate ?? opts.sampleRate,
-  };
-
-  const metrics: TranscodeMetrics = {
+  return buildTranscodeResultFromAdts({
     inputPackets: opts.packets.length,
-    inputBytes: totalSize,
-    audioDurationSec,
+    inputBytes: input.inputBytes,
+    audioDurationSec: input.audioDurationSec,
     concatMs,
-    writeMs,
-    ffmpegMs,
-    readMs,
-    cleanupMs,
-    parseMs,
-    totalMs,
-    outputPackets: packets.length,
-    outputBytes,
-    outputDurationSec,
-    ffmpegSpeed,
-    ffmpegTimeMs,
-    realtimeRatio: audioDurationSec > 0 ? totalMs / (audioDurationSec * 1000) : 0,
-  };
-
-  return { packets, decoderConfig, metrics };
+    sampleRate: opts.sampleRate,
+    audioStartSec: opts.audioStartSec,
+    aacData: raw.aacData,
+    ffmpegMetrics: raw.metrics,
+    totalMs: now() - tTotal,
+  });
 }

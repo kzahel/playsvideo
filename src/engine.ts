@@ -9,7 +9,7 @@ import type {
 import Hls from 'hls.js';
 import type { Source } from 'mediabunny';
 import { WasmFfmpegRunner } from './adapters/wasm-ffmpeg.js';
-import { makeAacDecoderConfig } from './pipeline/audio-transcode.js';
+import { createLocalAudioTranscoder, makeAacDecoderConfig } from './pipeline/audio-transcode.js';
 import { audioNeedsTranscode, createBrowserProber } from './pipeline/codec-probe.js';
 import type { DemuxResult } from './pipeline/demux.js';
 import { demuxSource, getKeyframeIndex } from './pipeline/demux.js';
@@ -42,15 +42,37 @@ export interface LoadingDetail {
   url?: string;
 }
 
+export interface EngineOptions {
+  /**
+   * Number of internal audio transcode workers to create for worker-mode playback.
+   * Use 0 to disable the pool and keep all transcode work inside the coordinator worker.
+   */
+  transcodeWorkers?: number;
+}
+
 interface EngineEventMap {
   ready: CustomEvent<ReadyDetail>;
   error: CustomEvent<ErrorDetail>;
   loading: CustomEvent<LoadingDetail>;
 }
 
+interface TranscodeWorkerHandle {
+  worker: Worker;
+}
+
+function defaultTranscodeWorkerCount(): number {
+  const concurrency =
+    typeof navigator !== 'undefined' && Number.isFinite(navigator.hardwareConcurrency)
+      ? navigator.hardwareConcurrency
+      : 2;
+  return Math.max(1, Math.min(2, concurrency - 1));
+}
+
 export class PlaysVideoEngine extends EventTarget {
   readonly video: HTMLVideoElement;
+  readonly options: Required<EngineOptions>;
   private worker: Worker | null = null;
+  private transcodeWorkers: TranscodeWorkerHandle[] = [];
   private hls: Hls | null = null;
 
   // Pending segment requests from hls.js custom loader
@@ -120,9 +142,12 @@ export class PlaysVideoEngine extends EventTarget {
     return this._passthrough;
   }
 
-  constructor(video: HTMLVideoElement) {
+  constructor(video: HTMLVideoElement, options: EngineOptions = {}) {
     super();
     this.video = video;
+    this.options = {
+      transcodeWorkers: options.transcodeWorkers ?? defaultTranscodeWorkerCount(),
+    };
   }
 
   loadFile(file: File, opts?: { keyframeIndex?: KeyframeIndex }): void {
@@ -182,6 +207,7 @@ export class PlaysVideoEngine extends EventTarget {
       this.worker.terminate();
       this.worker = null;
     }
+    this.destroyTranscodeWorkers();
     if (this._blobUrl) {
       URL.revokeObjectURL(this._blobUrl);
       this._blobUrl = null;
@@ -240,6 +266,30 @@ export class PlaysVideoEngine extends EventTarget {
     };
   }
 
+  private ensureTranscodeWorkers(): void {
+    if (!this.worker || this.transcodeWorkers.length > 0 || this.options.transcodeWorkers <= 0) {
+      return;
+    }
+
+    const transcodeWorkerPath = './transcode-worker.js';
+    for (let i = 0; i < this.options.transcodeWorkers; i++) {
+      const worker = new Worker(new URL(transcodeWorkerPath, import.meta.url), {
+        type: 'module',
+      });
+      const channel = new MessageChannel();
+      worker.postMessage({ type: 'connect' }, [channel.port2]);
+      this.worker.postMessage({ type: 'transcode-port', id: i }, [channel.port1]);
+      this.transcodeWorkers.push({ worker });
+    }
+  }
+
+  private destroyTranscodeWorkers(): void {
+    for (const handle of this.transcodeWorkers) {
+      handle.worker.terminate();
+    }
+    this.transcodeWorkers = [];
+  }
+
   destroy(): void {
     if (this.hls) {
       this.hls.destroy();
@@ -249,6 +299,7 @@ export class PlaysVideoEngine extends EventTarget {
       this.worker.terminate();
       this.worker = null;
     }
+    this.destroyTranscodeWorkers();
     if (this._blobUrl) {
       URL.revokeObjectURL(this._blobUrl);
       this._blobUrl = null;
@@ -354,6 +405,7 @@ export class PlaysVideoEngine extends EventTarget {
           this._blobUrl = null;
         }
         mlog(`pipeline: canPlayType rejected, proceeding with remux pipeline`);
+        this.ensureTranscodeWorkers();
         const remuxMsg: Record<string, unknown> = { type: 'remux-pipeline' };
         if (this._keyframeIndex) remuxMsg.keyframeIndex = this._keyframeIndex;
         this.worker!.postMessage(remuxMsg);
@@ -562,7 +614,7 @@ export class PlaysVideoEngine extends EventTarget {
       audioDecoderConfig: this._sourceAudioDecoderConfig,
       plan: this._sourcePlan,
       doTranscode: this._sourceDoTranscode,
-      ffmpeg: this._sourceFfmpeg,
+      transcodeAudio: createLocalAudioTranscoder(this._sourceFfmpeg),
       sourceCodec: demux.audioCodec ?? undefined,
       log: mlog,
     };

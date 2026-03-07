@@ -1,9 +1,9 @@
 import type { EncodedPacket, EncodedPacketSink } from 'mediabunny';
-import { transcodeAudioSegment } from './audio-transcode.js';
+import type { AudioTranscodeExecutor } from './audio-transcode.js';
 import { collectPacketsInRange } from './demux.js';
 import { muxToFmp4 } from './mux.js';
 import { checkAbort } from './source-signal.js';
-import type { FfmpegRunner, PlannedSegment } from './types.js';
+import type { PlannedSegment } from './types.js';
 
 export interface SegmentProcessorConfig {
   videoSink: EncodedPacketSink;
@@ -14,7 +14,7 @@ export interface SegmentProcessorConfig {
   audioDecoderConfig: AudioDecoderConfig | null;
   plan: PlannedSegment[];
   doTranscode: boolean;
-  ffmpeg: FfmpegRunner;
+  transcodeAudio: AudioTranscodeExecutor;
   sourceCodec?: string;
   log?: (msg: string) => void;
 }
@@ -72,13 +72,15 @@ export async function processSegmentWithAbort(
   let audioDecoderConfig = config.audioDecoderConfig;
   if (config.doTranscode && audioPackets.length > 0) {
     const sampleRate = config.audioDecoderConfig?.sampleRate ?? 48000;
-    const transcoded = await transcodeAudioSegment({
+    const transcoded = await config.transcodeAudio(
+      {
       packets: audioPackets,
       sampleRate,
       audioStartSec: audioPackets[0].timestamp,
-      ffmpeg: config.ffmpeg,
       sourceCodec: config.sourceCodec,
-    });
+      },
+      signal,
+    );
     const m = transcoded.metrics;
     const speed = m.ffmpegSpeed !== null ? ` speed=${m.ffmpegSpeed}x` : '';
     log(
