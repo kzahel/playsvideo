@@ -4,6 +4,13 @@ All notable changes to playsvideo are documented here.
 
 ## [Unreleased]
 
+## [0.2.1] - 2026-03-07
+
+### Fixed
+- Fix app player restarting video every 5 seconds
+- Fix worker files missing from production builds
+- Separate site and lib build outputs so they don't clobber each other
+
 ## [0.2.0] - 2026-03-07
 
 ### Changed
