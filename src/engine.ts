@@ -15,7 +15,12 @@ import { generateVodPlaylist } from './pipeline/playlist.js';
 import { buildSegmentPlan } from './pipeline/segment-plan.js';
 import { processSegmentWithAbort } from './pipeline/segment-processor.js';
 import { isAbortableSource } from './pipeline/source-signal.js';
-import type { FfmpegRunner, KeyframeIndex, PlannedSegment, SubtitleTrackInfo } from './pipeline/types.js';
+import type {
+  FfmpegRunner,
+  KeyframeIndex,
+  PlannedSegment,
+  SubtitleTrackInfo,
+} from './pipeline/types.js';
 
 export type EnginePhase = 'idle' | 'demuxing' | 'ready' | 'error';
 
@@ -221,7 +226,7 @@ export class PlaysVideoEngine extends EventTarget {
   }
 
   private createWorker(): void {
-    this.worker = new Worker(new URL('./worker.ts', import.meta.url), { type: 'module' });
+    this.worker = new Worker(new URL('./worker.js', import.meta.url), { type: 'module' });
     this.worker.onmessage = (e) => this.handleWorkerMessage(e);
     this.worker.onerror = (e) => {
       this._phase = 'error';
@@ -486,10 +491,7 @@ export class PlaysVideoEngine extends EventTarget {
       this._sourceAudioDecoderConfig = demux.audioDecoderConfig;
 
       // Pre-process segment 0
-      const seg0Result = await processSegmentWithAbort(
-        this.makeSourceProcessorConfig(),
-        0,
-      );
+      const seg0Result = await processSegmentWithAbort(this.makeSourceProcessorConfig(), 0);
       if (seg0Result.initSegment) {
         this._sourceInitSegment = seg0Result.initSegment;
       }
@@ -536,9 +538,7 @@ export class PlaysVideoEngine extends EventTarget {
       this.startHls();
     } catch (err) {
       this._phase = 'error';
-      this.dispatchEvent(
-        new CustomEvent('error', { detail: { message: String(err) } }),
-      );
+      this.dispatchEvent(new CustomEvent('error', { detail: { message: String(err) } }));
     }
   }
 
@@ -553,7 +553,11 @@ export class PlaysVideoEngine extends EventTarget {
       audioDecoderConfig: this._sourceAudioDecoderConfig,
       plan: this._sourcePlan,
       doTranscode: this._sourceDoTranscode,
-      ffmpeg: this._sourceFfmpeg ?? { run: async () => ({ exitCode: 1, stderr: 'no ffmpeg' }), writeInput: async () => {}, readOutput: async () => new Uint8Array() },
+      ffmpeg: this._sourceFfmpeg ?? {
+        run: async () => ({ exitCode: 1, stderr: 'no ffmpeg' }),
+        writeInput: async () => {},
+        readOutput: async () => new Uint8Array(),
+      },
       sourceCodec: demux.audioCodec ?? undefined,
       log: mlog,
     };

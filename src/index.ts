@@ -4,3 +4,4 @@ export type { KeyframeEntry, KeyframeIndex, SubtitleTrackInfo } from './pipeline
 export type { AbortableSource } from './pipeline/source-signal.js';
 export { isAbortableSource, checkAbort } from './pipeline/source-signal.js';
 export { demuxSource } from './pipeline/demux.js';
+export { Source } from 'mediabunny';

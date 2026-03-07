@@ -4,6 +4,14 @@ All notable changes to playsvideo are documented here.
 
 ## [Unreleased]
 
+## [0.0.9] - 2026-03-07
+
+### Added
+- Export `Source` type from mediabunny
+
+### Fixed
+- Fix Worker URL extension (`.ts` → `.js`) for built library output
+
 ## [0.0.8] - 2026-03-07
 
 ### Fixed
