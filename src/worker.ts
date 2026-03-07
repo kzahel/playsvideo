@@ -7,7 +7,7 @@ import { muxToFmp4 } from './pipeline/mux.js';
 import { generateVodPlaylist } from './pipeline/playlist.js';
 import { buildSegmentPlan } from './pipeline/segment-plan.js';
 import { extractSubtitleData, subtitleDataToWebVTT } from './pipeline/subtitle.js';
-import type { PlannedSegment } from './pipeline/types.js';
+import type { KeyframeIndex, PlannedSegment } from './pipeline/types.js';
 
 function wlog(msg: string) {
   console.log(`[worker] ${msg}`);
@@ -46,13 +46,13 @@ self.onmessage = (event: MessageEvent) => {
     processingChain = handleProbe(() => demuxUrl(msg.url)).catch((err) =>
       self.postMessage({ type: 'error', message: String(err) }),
     );
-  } else if (msg.type === 'proceed') {
-    wlog('recv proceed');
+  } else if (msg.type === 'remux-pipeline') {
+    wlog('recv remux-pipeline');
     processingChain = processingChain
-      .then(() => handleProceed())
+      .then(() => handleRemuxPipeline(msg.keyframeIndex))
       .catch((err) => self.postMessage({ type: 'error', message: String(err) }));
-  } else if (msg.type === 'passthrough') {
-    wlog('recv passthrough — subtitle-only mode');
+  } else if (msg.type === 'passthrough-pipeline') {
+    wlog('recv passthrough-pipeline — subtitle-only mode');
   } else if (msg.type === 'segment') {
     wlog(`recv segment idx=${msg.index}`);
     processingChain = processingChain
@@ -89,13 +89,19 @@ async function handleProbe(demuxFn: () => Promise<DemuxResult>) {
 }
 
 /** Phase 2: full pipeline — engine told us native playback isn't possible. */
-async function handleProceed() {
+async function handleRemuxPipeline(prebuiltKeyframeIndex?: KeyframeIndex) {
   if (!demux) throw new Error('No demux — handleProbe must run first');
   const t0 = performance.now();
 
-  const tIndex = performance.now();
-  const index = await getKeyframeIndex(demux.videoSink, demux.duration);
-  wlog(`keyframe-index done ${elapsed(tIndex)} keyframes=${index.keyframes.length}`);
+  let index: KeyframeIndex;
+  if (prebuiltKeyframeIndex) {
+    index = prebuiltKeyframeIndex;
+    wlog(`keyframe-index pre-built keyframes=${index.keyframes.length}`);
+  } else {
+    const tIndex = performance.now();
+    index = await getKeyframeIndex(demux.videoSink, demux.duration);
+    wlog(`keyframe-index done ${elapsed(tIndex)} keyframes=${index.keyframes.length}`);
+  }
 
   const tPlan = performance.now();
   plan = buildSegmentPlan({

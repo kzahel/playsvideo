@@ -7,7 +7,7 @@ import type {
   PlaylistLoaderContext,
 } from 'hls.js';
 import Hls from 'hls.js';
-import type { SubtitleTrackInfo } from './pipeline/types.js';
+import type { KeyframeIndex, SubtitleTrackInfo } from './pipeline/types.js';
 
 export type EnginePhase = 'idle' | 'demuxing' | 'ready' | 'error';
 
@@ -72,6 +72,9 @@ export class PlaysVideoEngine extends EventTarget {
   private _blobUrl: string | null = null;
   private _pendingFileType: string | null = null;
 
+  // Pre-built keyframe index (e.g. from MKV cues) to skip mediabunny scan
+  private _keyframeIndex: KeyframeIndex | null = null;
+
   get phase(): EnginePhase {
     return this._phase;
   }
@@ -96,17 +99,19 @@ export class PlaysVideoEngine extends EventTarget {
     this.video = video;
   }
 
-  loadFile(file: File): void {
+  loadFile(file: File, opts?: { keyframeIndex?: KeyframeIndex }): void {
     this.reset({ file });
     this._pendingFileType = file.type || null;
     this._blobUrl = URL.createObjectURL(file);
+    this._keyframeIndex = opts?.keyframeIndex ?? null;
     this.createWorker();
     this.worker!.postMessage({ type: 'open', file });
     mlog(`open file=${file.name} size=${(file.size / 1024 / 1024).toFixed(1)}MB type=${file.type}`);
   }
 
-  loadUrl(url: string): void {
+  loadUrl(url: string, opts?: { keyframeIndex?: KeyframeIndex }): void {
     this.reset({ url });
+    this._keyframeIndex = opts?.keyframeIndex ?? null;
     this.createWorker();
     this.worker!.postMessage({ type: 'open-url', url });
     mlog(`open url=${url}`);
@@ -144,6 +149,7 @@ export class PlaysVideoEngine extends EventTarget {
     this._subtitleTracks = [];
     this._passthrough = false;
     this._pendingFileType = null;
+    this._keyframeIndex = null;
 
     this.dispatchEvent(new CustomEvent('loading', { detail }));
   }
@@ -256,7 +262,7 @@ export class PlaysVideoEngine extends EventTarget {
       if (canPlay && this._blobUrl) {
         mlog(`passthrough: canPlayType accepted codecs=${msg.videoCodec}/${msg.audioCodec}`);
         this.startPassthrough(this._blobUrl);
-        this.worker!.postMessage({ type: 'passthrough' });
+        this.worker!.postMessage({ type: 'passthrough-pipeline' });
 
         for (const track of this._subtitleTracks) {
           mlog(
@@ -269,8 +275,10 @@ export class PlaysVideoEngine extends EventTarget {
           URL.revokeObjectURL(this._blobUrl);
           this._blobUrl = null;
         }
-        mlog(`pipeline: canPlayType rejected, proceeding with full pipeline`);
-        this.worker!.postMessage({ type: 'proceed' });
+        mlog(`pipeline: canPlayType rejected, proceeding with remux pipeline`);
+        const remuxMsg: Record<string, unknown> = { type: 'remux-pipeline' };
+        if (this._keyframeIndex) remuxMsg.keyframeIndex = this._keyframeIndex;
+        this.worker!.postMessage(remuxMsg);
       }
     } else if (msg.type === 'ready') {
       this.playlist = msg.playlist;
