@@ -1,4 +1,3 @@
-import { FFmpeg } from '@ffmpeg/ffmpeg';
 import type { FfmpegRunner } from '../pipeline/types.js';
 
 // Audio-only bundle (~1.5 MB) — AC3/EAC3/DTS/MP3/FLAC/Opus decode → AAC encode
@@ -18,15 +17,30 @@ const TIER_URLS: Record<'audio', { coreURL: string; wasmURL: string }> = {
   audio: { coreURL: audioJsUrl, wasmURL: audioWasmUrl },
 };
 
-let instance: FFmpeg | null = null;
+/** Emscripten module interface returned by createFFmpegCore. */
+interface FFmpegCoreModule {
+  exec(...args: string[]): number;
+  ret: number;
+  FS: {
+    writeFile(name: string, data: Uint8Array): void;
+    readFile(name: string): Uint8Array;
+    unlink(name: string): void;
+  };
+  setLogger(fn: (data: { type: string; message: string }) => void): void;
+  reset(): void;
+}
+
+type CreateFFmpegCore = (opts: { mainScriptUrlOrBlob: string }) => Promise<FFmpegCoreModule>;
+
+let coreModule: FFmpegCoreModule | null = null;
 let loadedTier: FfmpegTier | null = null;
-let loadPromise: Promise<FFmpeg> | null = null;
+let loadPromise: Promise<FFmpegCoreModule> | null = null;
 let pendingTier: FfmpegTier | null = null;
 
 /** Full is a superset of audio — never downgrade. */
 const TIER_RANK: Record<FfmpegTier, number> = { audio: 0, full: 1 };
 
-async function ensureTier(tier: FfmpegTier): Promise<FFmpeg> {
+async function ensureTier(tier: FfmpegTier): Promise<FFmpegCoreModule> {
   if (tier === 'full' && !FULL_TIER_ENABLED) {
     throw new Error(
       'Full ffmpeg tier is not currently enabled — only audio transcode is supported',
@@ -34,8 +48,8 @@ async function ensureTier(tier: FfmpegTier): Promise<FFmpeg> {
   }
 
   // Already loaded a sufficient tier
-  if (instance && loadedTier !== null && TIER_RANK[loadedTier] >= TIER_RANK[tier]) {
-    return instance;
+  if (coreModule && loadedTier !== null && TIER_RANK[loadedTier] >= TIER_RANK[tier]) {
+    return coreModule;
   }
 
   // Already loading a sufficient tier
@@ -48,23 +62,27 @@ async function ensureTier(tier: FfmpegTier): Promise<FFmpeg> {
     await loadPromise;
   }
 
-  // Terminate existing instance if upgrading
-  if (instance) {
+  // Discard existing module if upgrading
+  if (coreModule) {
     console.log(`[ffmpeg] upgrading ${loadedTier} → ${tier}`);
-    instance.terminate();
-    instance = null;
+    coreModule = null;
     loadedTier = null;
   }
 
   pendingTier = tier;
   loadPromise = (async () => {
-    const ff = new FFmpeg();
+    const { coreURL, wasmURL } = TIER_URLS[tier as 'audio'];
     console.log(`[ffmpeg] loading ${tier} bundle`);
-    await ff.load(TIER_URLS[tier as 'audio']);
+    const { default: createFFmpegCore } = (await import(/* @vite-ignore */ coreURL)) as {
+      default: CreateFFmpegCore;
+    };
+    const core = await createFFmpegCore({
+      mainScriptUrlOrBlob: `${coreURL}#${btoa(JSON.stringify({ wasmURL, workerURL: '' }))}`,
+    });
     console.log(`[ffmpeg] ${tier} bundle ready`);
-    instance = ff;
+    coreModule = core;
     loadedTier = tier;
-    return ff;
+    return core;
   })();
 
   return loadPromise;
@@ -87,41 +105,39 @@ export class WasmFfmpegRunner implements FfmpegRunner {
     await ensureTier(this.tier);
   }
 
-  private getFFmpeg(): Promise<FFmpeg> {
+  private getCore(): Promise<FFmpegCoreModule> {
     return ensureTier(this.tier);
   }
 
   async writeInput(name: string, data: Uint8Array): Promise<void> {
-    const ff = await this.getFFmpeg();
-    await ff.writeFile(name, data);
+    const core = await this.getCore();
+    core.FS.writeFile(name, data);
   }
 
   async readOutput(name: string): Promise<Uint8Array> {
-    const ff = await this.getFFmpeg();
-    const data = await ff.readFile(name);
-    if (typeof data === 'string') throw new Error('Expected binary output');
-    return data;
+    const core = await this.getCore();
+    return core.FS.readFile(name);
   }
 
   async deleteFile(name: string): Promise<void> {
-    const ff = await this.getFFmpeg();
+    const core = await this.getCore();
     try {
-      await ff.deleteFile(name);
+      core.FS.unlink(name);
     } catch {
       // ignore — file may not exist
     }
   }
 
   async run(args: string[]): Promise<{ exitCode: number; stderr: string }> {
-    const ff = await this.getFFmpeg();
+    const core = await this.getCore();
     const stderr: string[] = [];
-    const handler = ({ message }: { message: string }) => stderr.push(message);
-    ff.on('log', handler);
+    core.setLogger(({ message }) => stderr.push(message));
     try {
-      const exitCode = await ff.exec(args);
+      const exitCode = core.exec(...args);
+      core.reset();
       return { exitCode, stderr: stderr.join('\n') };
     } finally {
-      ff.off('log', handler);
+      core.setLogger(() => {});
     }
   }
 }
