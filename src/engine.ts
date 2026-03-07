@@ -9,6 +9,7 @@ import type {
 import Hls from 'hls.js';
 import type { Source } from 'mediabunny';
 import { WasmFfmpegRunner } from './adapters/wasm-ffmpeg.js';
+import { makeAacDecoderConfig } from './pipeline/audio-transcode.js';
 import { audioNeedsTranscode, createBrowserProber } from './pipeline/codec-probe.js';
 import type { DemuxResult } from './pipeline/demux.js';
 import { demuxSource, getKeyframeIndex } from './pipeline/demux.js';
@@ -494,15 +495,14 @@ export class PlaysVideoEngine extends EventTarget {
       this._sourceDoTranscode =
         demux.audioCodec !== null &&
         audioNeedsTranscode(codecProber, demux.audioCodec, demux.audioDecoderConfig?.codec);
-      this._sourceAudioDecoderConfig = demux.audioDecoderConfig;
+      this._sourceAudioDecoderConfig = this._sourceDoTranscode
+        ? makeAacDecoderConfig(demux.audioDecoderConfig)
+        : demux.audioDecoderConfig;
 
       // Pre-process segment 0
       const seg0Result = await processSegmentWithAbort(this.makeSourceProcessorConfig(), 0);
       if (seg0Result.initSegment) {
         this._sourceInitSegment = seg0Result.initSegment;
-      }
-      if (seg0Result.audioDecoderConfig) {
-        this._sourceAudioDecoderConfig = seg0Result.audioDecoderConfig;
       }
 
       // Build playlist
@@ -593,9 +593,6 @@ export class PlaysVideoEngine extends EventTarget {
     // Update mutable state
     if (!this._sourceInitSegment && result.initSegment) {
       this._sourceInitSegment = result.initSegment;
-    }
-    if (result.audioDecoderConfig) {
-      this._sourceAudioDecoderConfig = result.audioDecoderConfig;
     }
 
     return (result.mediaData.buffer as ArrayBuffer).slice(

@@ -1,4 +1,5 @@
 import { WasmFfmpegRunner } from './adapters/wasm-ffmpeg.js';
+import { makeAacDecoderConfig } from './pipeline/audio-transcode.js';
 import { audioNeedsTranscode, createBrowserProber } from './pipeline/codec-probe.js';
 import type { DemuxResult } from './pipeline/demux.js';
 import { demuxBlob, demuxUrl, getKeyframeIndex } from './pipeline/demux.js';
@@ -27,8 +28,8 @@ let initSegment: Uint8Array | null = null;
 const segmentCache = new Map<number, Uint8Array>();
 let targetSegDuration = 4;
 
-// Serialize segment processing — concurrent ffmpeg.wasm calls corrupt shared MEMFS files
-let processingChain: Promise<void> = Promise.resolve();
+// Keep pipeline setup ordered, but let individual segment work run independently.
+let pipelineSetup: Promise<void> = Promise.resolve();
 
 // Per-segment abort controllers for cancellation
 const segmentAbortControllers = new Map<number, AbortController>();
@@ -39,27 +40,19 @@ self.onmessage = (event: MessageEvent) => {
   if (msg.type === 'open') {
     wlog('recv open');
     targetSegDuration = msg.targetSegmentDuration ?? 4;
-    processingChain = handleProbe(() => demuxBlob(msg.file)).catch((err) =>
-      self.postMessage({ type: 'error', message: String(err) }),
-    );
+    queuePipelineSetup(() => handleProbe(() => demuxBlob(msg.file)));
   } else if (msg.type === 'open-url') {
     wlog('recv open-url');
     targetSegDuration = msg.targetSegmentDuration ?? 4;
-    processingChain = handleProbe(() => demuxUrl(msg.url)).catch((err) =>
-      self.postMessage({ type: 'error', message: String(err) }),
-    );
+    queuePipelineSetup(() => handleProbe(() => demuxUrl(msg.url)));
   } else if (msg.type === 'remux-pipeline') {
     wlog('recv remux-pipeline');
-    processingChain = processingChain
-      .then(() => handleRemuxPipeline(msg.keyframeIndex))
-      .catch((err) => self.postMessage({ type: 'error', message: String(err) }));
+    queuePipelineSetup(() => handleRemuxPipeline(msg.keyframeIndex));
   } else if (msg.type === 'passthrough-pipeline') {
     wlog('recv passthrough-pipeline — subtitle-only mode');
   } else if (msg.type === 'segment') {
     wlog(`recv segment idx=${msg.index}`);
-    processingChain = processingChain
-      .then(() => handleSegment(msg.index))
-      .catch((err) => self.postMessage({ type: 'error', message: String(err) }));
+    void handleSegmentRequest(msg.index);
   } else if (msg.type === 'cancel') {
     const controller = segmentAbortControllers.get(msg.index);
     if (controller) {
@@ -74,6 +67,12 @@ self.onmessage = (event: MessageEvent) => {
     );
   }
 };
+
+function queuePipelineSetup(task: () => Promise<void>): void {
+  pipelineSetup = pipelineSetup.then(task).catch((err) => {
+    self.postMessage({ type: 'error', message: String(err) });
+  });
+}
 
 /** Phase 1: demux and send codec info to engine for passthrough decision. */
 async function handleProbe(demuxFn: () => Promise<DemuxResult>) {
@@ -126,7 +125,9 @@ async function handleRemuxPipeline(prebuiltKeyframeIndex?: KeyframeIndex) {
   if (doTranscode && demux.audioCodec) {
     await ffmpeg.loadForCodec(demux.audioCodec);
   }
-  audioDecoderConfig = demux.audioDecoderConfig;
+  audioDecoderConfig = doTranscode
+    ? makeAacDecoderConfig(demux.audioDecoderConfig)
+    : demux.audioDecoderConfig;
   initSegment = null;
 
   const playlist = generateVodPlaylist({
@@ -159,9 +160,6 @@ async function handleRemuxPipeline(prebuiltKeyframeIndex?: KeyframeIndex) {
     initSegment = seg0Result.initSegment;
     wlog(`init-segment captured size=${initSegment.byteLength}`);
   }
-  if (seg0Result.audioDecoderConfig) {
-    audioDecoderConfig = seg0Result.audioDecoderConfig;
-  }
   wlog(`seg0 preprocess done ${elapsed(tSeg0)}`);
 
   wlog(`pipeline complete ${elapsed(t0)} total`);
@@ -179,7 +177,25 @@ async function handleRemuxPipeline(prebuiltKeyframeIndex?: KeyframeIndex) {
   ); // don't transfer initData — we need to keep it
 }
 
-async function handleSegment(index: number) {
+async function handleSegmentRequest(index: number) {
+  const controller = new AbortController();
+  segmentAbortControllers.set(index, controller);
+
+  try {
+    await pipelineSetup;
+    await handleSegment(index, controller.signal);
+  } catch (err) {
+    if (err instanceof DOMException && err.name === 'AbortError') {
+      wlog(`seg ${index} aborted`);
+      return;
+    }
+    self.postMessage({ type: 'error', message: String(err) });
+  } finally {
+    segmentAbortControllers.delete(index);
+  }
+}
+
+async function handleSegment(index: number, signal: AbortSignal) {
   if (!demux || index >= plan.length) {
     self.postMessage({ type: 'error', message: `Invalid segment index: ${index}` });
     return;
@@ -194,9 +210,6 @@ async function handleSegment(index: number) {
     self.postMessage({ type: 'segment', index, data: buffer }, { transfer: [buffer] });
     return;
   }
-
-  const controller = new AbortController();
-  segmentAbortControllers.set(index, controller);
 
   try {
     const t0 = performance.now();
@@ -215,17 +228,11 @@ async function handleSegment(index: number) {
         log: wlog,
       },
       index,
-      controller.signal,
+      signal,
     );
-    segmentAbortControllers.delete(index);
-
-    // Update shared mutable state from result
     if (!initSegment && result.initSegment) {
       initSegment = result.initSegment;
       wlog(`init-segment captured size=${initSegment.byteLength}`);
-    }
-    if (result.audioDecoderConfig) {
-      audioDecoderConfig = result.audioDecoderConfig;
     }
 
     const mediaData = result.mediaData;
@@ -237,9 +244,8 @@ async function handleSegment(index: number) {
     );
     self.postMessage({ type: 'segment', index, data: buffer }, { transfer: [buffer] });
   } catch (err) {
-    segmentAbortControllers.delete(index);
     if (err instanceof DOMException && err.name === 'AbortError') {
-      wlog(`seg ${index} aborted`);
+      wlog(`seg ${index} aborted during processing`);
       return;
     }
     throw err;

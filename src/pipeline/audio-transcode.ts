@@ -3,7 +3,11 @@ import { parseAdtsFrames } from './adts-parse.js';
 import type { FfmpegRunner } from './types.js';
 
 const SAMPLES_PER_AAC_FRAME = 1024;
-const OUTPUT_NAME = 'transcode-output.aac';
+const DEFAULT_OUTPUT_SAMPLE_RATE = 48000;
+const DEFAULT_OUTPUT_CHANNELS = 2;
+
+const runnerLocks = new WeakMap<FfmpegRunner, { tail: Promise<void> }>();
+let transcodeJobCounter = 0;
 
 /** Map short codec names to ffmpeg input format (-f) flags. */
 const INPUT_FORMAT: Record<string, string> = {
@@ -56,6 +60,16 @@ export interface TranscodeResult {
   metrics: TranscodeMetrics;
 }
 
+export function makeAacDecoderConfig(
+  sourceConfig: AudioDecoderConfig | null,
+): AudioDecoderConfig {
+  return {
+    codec: 'mp4a.40.2',
+    numberOfChannels: DEFAULT_OUTPUT_CHANNELS,
+    sampleRate: sourceConfig?.sampleRate ?? DEFAULT_OUTPUT_SAMPLE_RATE,
+  };
+}
+
 /** Parse ffmpeg's final stats line for speed and time values. */
 function parseFfmpegStats(stderr: string): { speed: number | null; timeMs: number | null } {
   const speedMatch = stderr.match(/speed=\s*([\d.]+)x/);
@@ -75,11 +89,45 @@ function now(): number {
   return performance.now();
 }
 
+function nextTranscodeJobId(): number {
+  transcodeJobCounter += 1;
+  return transcodeJobCounter;
+}
+
+function getRunnerLockState(runner: FfmpegRunner): { tail: Promise<void> } {
+  let state = runnerLocks.get(runner);
+  if (!state) {
+    state = { tail: Promise.resolve() };
+    runnerLocks.set(runner, state);
+  }
+  return state;
+}
+
+async function withRunnerLock<T>(runner: FfmpegRunner, fn: () => Promise<T>): Promise<T> {
+  const state = getRunnerLockState(runner);
+  const previous = state.tail;
+  let release!: () => void;
+  state.tail = new Promise<void>((resolve) => {
+    release = resolve;
+  });
+
+  await previous;
+  try {
+    return await fn();
+  } finally {
+    release();
+  }
+}
+
 export async function transcodeAudioSegment(opts: TranscodeOptions): Promise<TranscodeResult> {
   if (opts.packets.length === 0) {
     return {
       packets: [],
-      decoderConfig: { codec: 'mp4a.40.2', numberOfChannels: 2, sampleRate: opts.sampleRate },
+      decoderConfig: makeAacDecoderConfig({
+        codec: 'mp4a.40.2',
+        numberOfChannels: DEFAULT_OUTPUT_CHANNELS,
+        sampleRate: opts.sampleRate,
+      }),
       metrics: {
         inputPackets: 0,
         inputBytes: 0,
@@ -120,48 +168,62 @@ export async function transcodeAudioSegment(opts: TranscodeOptions): Promise<Tra
 
   const codec = opts.sourceCodec ?? 'ac3';
   const inputFormat = INPUT_FORMAT[codec] ?? codec;
-  const inputName = `transcode-input.${inputFormat}`;
+  const jobId = nextTranscodeJobId();
+  const inputName = `transcode-input-${jobId}.${inputFormat}`;
+  const outputName = `transcode-output-${jobId}.aac`;
 
-  const tWrite = now();
-  await opts.ffmpeg.writeInput(inputName, rawAudio);
-  const writeMs = now() - tWrite;
+  let writeMs = 0;
+  let ffmpegMs = 0;
+  let readMs = 0;
+  let cleanupMs = 0;
+  let ffmpegSpeed: number | null = null;
+  let ffmpegTimeMs: number | null = null;
+  let aacData: Uint8Array = new Uint8Array(0);
 
-  const tFfmpeg = now();
-  const result = await opts.ffmpeg.run([
-    '-hide_banner',
-    '-loglevel',
-    'info',
-    '-f',
-    inputFormat,
-    '-i',
-    inputName,
-    '-c:a',
-    'aac',
-    '-ac',
-    '2',
-    '-b:a',
-    '160k',
-    '-f',
-    'adts',
-    '-y',
-    OUTPUT_NAME,
-  ]);
-  const ffmpegMs = now() - tFfmpeg;
+  await withRunnerLock(opts.ffmpeg, async () => {
+    try {
+      const tWrite = now();
+      await opts.ffmpeg.writeInput(inputName, rawAudio);
+      writeMs = now() - tWrite;
 
-  if (result.exitCode !== 0) {
-    throw new Error(`Audio transcode failed: ${result.stderr}`);
-  }
+      const tFfmpeg = now();
+      const result = await opts.ffmpeg.run([
+        '-hide_banner',
+        '-loglevel',
+        'info',
+        '-f',
+        inputFormat,
+        '-i',
+        inputName,
+        '-c:a',
+        'aac',
+        '-ac',
+        String(DEFAULT_OUTPUT_CHANNELS),
+        '-b:a',
+        '160k',
+        '-f',
+        'adts',
+        '-y',
+        outputName,
+      ]);
+      ffmpegMs = now() - tFfmpeg;
 
-  const { speed: ffmpegSpeed, timeMs: ffmpegTimeMs } = parseFfmpegStats(result.stderr);
+      if (result.exitCode !== 0) {
+        throw new Error(`Audio transcode failed: ${result.stderr}`);
+      }
 
-  const tRead = now();
-  const aacData = await opts.ffmpeg.readOutput(OUTPUT_NAME);
-  const readMs = now() - tRead;
+      ({ speed: ffmpegSpeed, timeMs: ffmpegTimeMs } = parseFfmpegStats(result.stderr));
 
-  const tCleanup = now();
-  await opts.ffmpeg.deleteFile?.(inputName);
-  await opts.ffmpeg.deleteFile?.(OUTPUT_NAME);
-  const cleanupMs = now() - tCleanup;
+      const tRead = now();
+      aacData = await opts.ffmpeg.readOutput(outputName);
+      readMs = now() - tRead;
+    } finally {
+      const tCleanup = now();
+      await opts.ffmpeg.deleteFile?.(inputName);
+      await opts.ffmpeg.deleteFile?.(outputName);
+      cleanupMs = now() - tCleanup;
+    }
+  });
 
   const tParse = now();
   const frames = parseAdtsFrames(aacData);
@@ -187,7 +249,7 @@ export async function transcodeAudioSegment(opts: TranscodeOptions): Promise<Tra
 
   const decoderConfig: AudioDecoderConfig = {
     codec: 'mp4a.40.2', // AAC-LC
-    numberOfChannels: frames[0]?.channels ?? 2,
+    numberOfChannels: frames[0]?.channels ?? DEFAULT_OUTPUT_CHANNELS,
     sampleRate: frames[0]?.sampleRate ?? opts.sampleRate,
   };
 
