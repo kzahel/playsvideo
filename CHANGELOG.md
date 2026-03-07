@@ -4,6 +4,15 @@ All notable changes to playsvideo are documented here.
 
 ## [Unreleased]
 
+## [0.0.6] - 2026-03-07
+
+### Added
+- `engine.video` is now a public readonly property (was private)
+- Export `SubtitleTrackInfo` type from package
+
+### Changed
+- Engine API docs rewritten to clarify relationship with native `<video>` element
+
 ## [0.0.5] - 2026-03-06
 
 ### Added

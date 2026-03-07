@@ -8,6 +8,33 @@ npm install playsvideo
 import { PlaysVideoEngine } from 'playsvideo';
 ```
 
+## How it works
+
+PlaysVideoEngine wraps a standard `<video>` element — the same pattern as [hls.js](https://github.com/video-dev/hls.js). The video element you pass in **is** the playback surface — all native HTMLVideoElement properties, methods, and events work exactly as usual. The engine just replaces `video.src` with a pipeline that can play formats the browser doesn't natively support (MKV, AVI, non-MP4 containers, non-native audio codecs, embedded subtitles, etc.).
+
+The underlying video element is accessible as `engine.video`.
+
+### What stays the same (use the `<video>` element directly)
+
+Everything you'd normally do with a `<video>` element works unchanged:
+
+- **Playback control**: `video.play()`, `video.pause()`, `video.playbackRate`
+- **Seeking**: `video.currentTime = 30`
+- **Volume**: `video.volume`, `video.muted`
+- **State**: `video.paused`, `video.ended`, `video.readyState`, `video.duration`
+- **Events**: `timeupdate`, `play`, `pause`, `ended`, `seeking`, `seeked`, `volumechange`, `canplay`, etc.
+- **UI**: `video.controls`, fullscreen, Picture-in-Picture, CSS styling
+- **Text tracks**: `video.textTracks` (engine adds subtitle `<track>` elements automatically)
+
+### What's different (use the engine)
+
+| Instead of | Use |
+|---|---|
+| `video.src = '...'` | `engine.loadFile(file)` or `engine.loadUrl(url)` |
+| — | `engine.destroy()` to release resources |
+| — | `engine.addEventListener('loading' \| 'ready' \| 'error', ...)` for engine lifecycle |
+| — | `engine.phase`, `engine.loading`, `engine.subtitleTracks` for engine state |
+
 ## Constructor
 
 ```ts
@@ -45,15 +72,16 @@ Tear down the engine, terminate the worker, and release all resources. Safe to c
 
 | Property | Type | Description |
 |----------|------|-------------|
+| `video` | `HTMLVideoElement` | The underlying video element (readonly) |
 | `phase` | `'idle' \| 'demuxing' \| 'ready' \| 'error'` | Current engine state |
 | `loading` | `boolean` | `true` while demuxing (shorthand for `phase === 'demuxing'`) |
 | `totalSegments` | `number` | Number of segments in the plan (0 until ready) |
 | `durationSec` | `number` | Video duration in seconds (0 until ready) |
 | `subtitleTracks` | `SubtitleTrackInfo[]` | Embedded subtitle tracks (empty until ready) |
 
-## Events
+## Engine Events
 
-`PlaysVideoEngine` extends `EventTarget`. All events are `CustomEvent` with typed `detail`.
+The engine extends `EventTarget` and emits a small number of lifecycle events. These are separate from the native video events (which fire on the `<video>` element as usual).
 
 ### `loading`
 
@@ -115,6 +143,7 @@ const video = document.querySelector('video')!;
 const status = document.querySelector('#status')!;
 const engine = new PlaysVideoEngine(video);
 
+// Engine lifecycle events
 engine.addEventListener('loading', () => {
   status.textContent = 'Loading...';
 });
@@ -131,6 +160,11 @@ engine.addEventListener('ready', (e) => {
 
 engine.addEventListener('error', (e) => {
   status.textContent = `Error: ${e.detail.message}`;
+});
+
+// Standard <video> events work as usual
+video.addEventListener('timeupdate', () => {
+  console.log(`Position: ${video.currentTime.toFixed(1)}s`);
 });
 
 // Load from file input

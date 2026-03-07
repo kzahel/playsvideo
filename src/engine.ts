@@ -33,7 +33,7 @@ interface EngineEventMap {
 }
 
 export class PlaysVideoEngine extends EventTarget {
-  private video: HTMLVideoElement;
+  readonly video: HTMLVideoElement;
   private worker: Worker | null = null;
   private hls: Hls | null = null;
 
