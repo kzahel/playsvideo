@@ -254,11 +254,7 @@ export class PlaysVideoEngine extends EventTarget {
   }
 
   private createWorker(): void {
-    // Variable indirection prevents Vite/Rollup from statically detecting this as a
-    // worker entry point. Consumers that only use loadSource() don't need the worker,
-    // but without this, bundlers try to resolve & bundle worker.js (which isn't in dist).
-    const workerPath = './worker.js';
-    this.worker = new Worker(new URL(workerPath, import.meta.url), { type: 'module' });
+    this.worker = new Worker(new URL('./worker.js', import.meta.url), { type: 'module' });
     this.worker.onmessage = (e) => this.handleWorkerMessage(e);
     this.worker.onerror = (e) => {
       this._phase = 'error';
@@ -271,9 +267,8 @@ export class PlaysVideoEngine extends EventTarget {
       return;
     }
 
-    const transcodeWorkerPath = './transcode-worker.js';
     for (let i = 0; i < this.options.transcodeWorkers; i++) {
-      const worker = new Worker(new URL(transcodeWorkerPath, import.meta.url), {
+      const worker = new Worker(new URL('./transcode-worker.js', import.meta.url), {
         type: 'module',
       });
       const channel = new MessageChannel();
