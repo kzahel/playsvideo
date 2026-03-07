@@ -74,8 +74,10 @@ See [engine API docs](docs/engine-api.md) for events, properties, and full usage
 
 ### Roadmap
 
-- **WebCodecs** — replace ffmpeg.wasm audio transcode with `AudioDecoder`/`AudioEncoder` (smaller bundle, lower latency)
-- **Video transcode** — hardware-accelerated decode via `VideoDecoder` for edge-case codecs
+See [docs/roadmap.md](docs/roadmap.md) for the full list. Highlights:
+
+- **User-imported subtitles** — load external `.srt`/`.vtt` files alongside the video
+- **WebCodecs** — replace ffmpeg.wasm with hardware-accelerated `AudioDecoder`/`AudioEncoder` and `VideoDecoder`/`VideoEncoder`
 
 <details>
 <summary><strong>Development</strong></summary>

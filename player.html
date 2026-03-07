@@ -24,6 +24,12 @@
     .header { display: flex; align-items: center; gap: 0.75rem; margin-bottom: 1rem; }
     .theme-toggle { background: none; border: 1px solid var(--muted); color: var(--fg); border-radius: 50%; width: 32px; height: 32px; cursor: pointer; font-size: 14px; display: flex; align-items: center; justify-content: center; opacity: 0.6; flex-shrink: 0; }
     .theme-toggle:hover { opacity: 1; }
+    .drop-target { border: 2px dashed var(--muted); border-radius: 12px; padding: 3rem 2rem; text-align: center; color: var(--muted); margin: 1rem 0; cursor: pointer; transition: border-color 0.15s, color 0.15s; }
+    .drop-target:hover { border-color: var(--fg); color: var(--fg); }
+    .drop-target.dragover { border-color: var(--fg); color: var(--fg); background: rgba(128,128,128,0.08); }
+    .drop-target.hidden { display: none; }
+    #open-another { display: none; margin-top: 0.5rem; background: none; border: 1px solid var(--muted); color: var(--fg); padding: 0.4rem 1rem; border-radius: 6px; cursor: pointer; font-size: 0.9rem; }
+    #open-another:hover { border-color: var(--fg); }
   </style>
   <script>
     (function() {
@@ -41,9 +47,11 @@
     </svg>
     <button class="theme-toggle" id="theme-toggle" aria-label="Toggle theme"></button>
   </div>
-  <input type="file" id="file-input">
-  <p id="status">Select a video file to play.</p>
+  <input type="file" id="file-input" class="hidden" style="display:none">
+  <div class="drop-target" id="drop-target">Drop a video file here, or click to browse</div>
+  <p id="status"></p>
   <video id="video" controls autoplay></video>
+  <button id="open-another">Open another file</button>
   <script type="module" src="/src/pwa-player.ts"></script>
   <script>
     (function() {

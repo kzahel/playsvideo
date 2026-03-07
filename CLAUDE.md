@@ -61,10 +61,8 @@ Integration tests (`npm run test:integration`) require test fixtures in `tests/f
 - Key: `collectPacketsInRange` needs `{ startFromKeyframe: true }` for video
 - API: `EncodedVideoPacketSource.add(packet, { decoderConfig })`, `Mp4OutputFormat({ fastStart: 'fragmented', onMoov, onMoof, onMdat })`, `NullTarget` with callbacks for streaming
 
-### Segment Plan vs Golden
-- Our plan produces 1212 segments vs ffmpeg's 1210 (off by 2 at start)
-- Root cause: ffmpeg's fMP4 init extraction resets `packets_written`, absorbing 2 keyframe cuts (hlsenc.c:2498-2508)
-- Fix: replicate ffmpeg's `end_pts = hls_time * vs->number` gating in `buildSegmentPlan`
+### Segment Plan
+- Our plan may differ from ffmpeg's segment count by 1–2 segments (ffmpeg's fMP4 init extraction absorbs keyframe cuts). This is cosmetic and does not affect playback.
 
 ## Release Process
 

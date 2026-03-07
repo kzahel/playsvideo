@@ -3,17 +3,51 @@ import { PlaysVideoEngine } from './engine.js';
 const fileInput = document.getElementById('file-input') as HTMLInputElement;
 const video = document.getElementById('video') as HTMLVideoElement;
 const status = document.getElementById('status') as HTMLElement;
+const dropTarget = document.getElementById('drop-target') as HTMLElement;
+const openAnother = document.getElementById('open-another') as HTMLButtonElement;
 
 const engine = new PlaysVideoEngine(video);
+
+function loadFile(file: File) {
+  engine.loadFile(file);
+}
 
 // Register service worker
 if ('serviceWorker' in navigator) {
   navigator.serviceWorker.register('/sw.js', { scope: '/player' });
 }
 
+// File input (hidden, triggered by drop target click or "open another")
 fileInput.addEventListener('change', () => {
   const file = fileInput.files?.[0];
-  if (file) engine.loadFile(file);
+  if (file) loadFile(file);
+});
+
+// Drop target — click to browse
+dropTarget.addEventListener('click', () => {
+  fileInput.click();
+});
+
+// Drop target — drag and drop
+dropTarget.addEventListener('dragover', (e) => {
+  e.preventDefault();
+  dropTarget.classList.add('dragover');
+});
+
+dropTarget.addEventListener('dragleave', () => {
+  dropTarget.classList.remove('dragover');
+});
+
+dropTarget.addEventListener('drop', (e) => {
+  e.preventDefault();
+  dropTarget.classList.remove('dragover');
+  const file = e.dataTransfer?.files[0];
+  if (file) loadFile(file);
+});
+
+// "Open another file" button
+openAnother.addEventListener('click', () => {
+  fileInput.click();
 });
 
 // File Handling API (desktop Chrome/Edge — OS file association)
@@ -22,7 +56,7 @@ if ('launchQueue' in window) {
     if (!launchParams.files?.length) return;
     const handle = launchParams.files[0];
     const file = await handle.getFile();
-    engine.loadFile(file);
+    loadFile(file);
   });
 }
 
@@ -36,7 +70,7 @@ async function handleShareTarget() {
   if (response) {
     const blob = await response.blob();
     const file = new File([blob], 'shared-video', { type: blob.type });
-    engine.loadFile(file);
+    loadFile(file);
     await cache.delete('/shared-video-file');
   }
   // Clean the URL
@@ -46,16 +80,22 @@ handleShareTarget();
 
 engine.addEventListener('loading', (e) => {
   status.textContent = `Opening ${e.detail.file?.name ?? e.detail.url ?? ''}...`;
+  dropTarget.classList.add('hidden');
   video.style.display = 'none';
+  openAnother.style.display = 'none';
 });
 
 engine.addEventListener('ready', (e) => {
   status.textContent = `Ready — ${e.detail.totalSegments} segments, ${formatTime(e.detail.durationSec)}`;
+  dropTarget.classList.add('hidden');
   video.style.display = 'block';
+  openAnother.style.display = 'inline-block';
 });
 
 engine.addEventListener('error', (e) => {
   status.textContent = `Error: ${e.detail.message}`;
+  dropTarget.classList.remove('hidden');
+  openAnother.style.display = 'none';
 });
 
 function formatTime(sec: number): string {
