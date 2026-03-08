@@ -386,6 +386,8 @@ async function handleProbe(demuxFn: () => Promise<DemuxResult>) {
   // Send codec info so engine can check canPlayType on the main thread
   self.postMessage({
     type: 'probed',
+    sourceVideoCodec: demux.videoCodec,
+    sourceAudioCodec: demux.audioCodec,
     videoCodec: demux.videoDecoderConfig.codec,
     audioCodec: demux.audioDecoderConfig?.codec ?? null,
     durationSec: demux.duration,
@@ -455,6 +457,14 @@ async function handleRemuxPipeline(prebuiltKeyframeIndex?: KeyframeIndex) {
       initData: initSegment!.buffer,
       totalSegments: plan.length,
       durationSec: demux.duration,
+      sourceVideoCodec: demux.videoCodec,
+      sourceVideoCodecFull: demux.videoDecoderConfig.codec,
+      sourceAudioCodec: demux.audioCodec,
+      sourceAudioCodecFull: demux.audioDecoderConfig?.codec ?? null,
+      outputVideoCodec: demux.videoCodec,
+      outputVideoCodecFull: demux.videoDecoderConfig.codec,
+      outputAudioCodec: doTranscode ? 'aac' : demux.audioCodec,
+      outputAudioCodecFull: audioDecoderConfig?.codec ?? null,
       subtitleTracks: demux.subtitleTracks,
     },
     { transfer: [] },

@@ -34,6 +34,7 @@ export interface ReadyDetail {
   durationSec: number;
   subtitleTracks: SubtitleTrackInfo[];
   passthrough?: boolean;
+  codecPath: CodecPath;
 }
 
 export interface ErrorDetail {
@@ -99,6 +100,19 @@ export interface ExternalSubtitleOptions {
   label?: string;
   language?: string;
   kind?: 'subtitles' | 'captions';
+}
+
+export interface CodecDescriptor {
+  short: string | null;
+  full: string | null;
+}
+
+export interface CodecPath {
+  mode: 'passthrough' | 'pipeline';
+  sourceVideo: CodecDescriptor;
+  sourceAudio: CodecDescriptor;
+  outputVideo: CodecDescriptor;
+  outputAudio: CodecDescriptor;
 }
 
 interface EngineEventMap {
@@ -169,6 +183,13 @@ export class PlaysVideoEngine extends EventTarget {
   private _passthrough = false;
   private _blobUrl: string | null = null;
   private _pendingFileType: string | null = null;
+  private _codecPath: CodecPath = {
+    mode: 'pipeline',
+    sourceVideo: { short: null, full: null },
+    sourceAudio: { short: null, full: null },
+    outputVideo: { short: null, full: null },
+    outputAudio: { short: null, full: null },
+  };
 
   // Pre-built keyframe index (e.g. from MKV cues) to skip mediabunny scan
   private _keyframeIndex: KeyframeIndex | null = null;
@@ -201,6 +222,15 @@ export class PlaysVideoEngine extends EventTarget {
   }
   get passthrough(): boolean {
     return this._passthrough;
+  }
+  get codecPath(): CodecPath {
+    return {
+      mode: this._codecPath.mode,
+      sourceVideo: { ...this._codecPath.sourceVideo },
+      sourceAudio: { ...this._codecPath.sourceAudio },
+      outputVideo: { ...this._codecPath.outputVideo },
+      outputAudio: { ...this._codecPath.outputAudio },
+    };
   }
   get transcodeWorkerStates(): WasmWorkerState[] {
     return this._transcodeWorkerStates.map((worker) => ({ ...worker }));
@@ -331,6 +361,13 @@ export class PlaysVideoEngine extends EventTarget {
     this._passthrough = false;
     this._pendingFileType = null;
     this._keyframeIndex = null;
+    this._codecPath = {
+      mode: 'pipeline',
+      sourceVideo: { short: null, full: null },
+      sourceAudio: { short: null, full: null },
+      outputVideo: { short: null, full: null },
+      outputAudio: { short: null, full: null },
+    };
 
     // Source pipeline cleanup
     if (this._sourceSegmentAbort) {
@@ -593,6 +630,7 @@ export class PlaysVideoEngine extends EventTarget {
             durationSec: this._durationSec,
             subtitleTracks: [],
             passthrough: true,
+            codecPath: this.codecPath,
           },
         }),
       );
@@ -612,6 +650,25 @@ export class PlaysVideoEngine extends EventTarget {
       // Worker finished demux — decide passthrough vs pipeline
       const canPlay = this.checkNativePlayback(msg.videoCodec, msg.audioCodec);
       this._subtitleTracks = msg.subtitleTracks ?? [];
+      this._codecPath = {
+        mode: canPlay ? 'passthrough' : 'pipeline',
+        sourceVideo: {
+          short: msg.sourceVideoCodec ?? null,
+          full: msg.videoCodec ?? null,
+        },
+        sourceAudio: {
+          short: msg.sourceAudioCodec ?? null,
+          full: msg.audioCodec ?? null,
+        },
+        outputVideo: {
+          short: msg.sourceVideoCodec ?? null,
+          full: msg.videoCodec ?? null,
+        },
+        outputAudio: {
+          short: msg.sourceAudioCodec ?? null,
+          full: msg.audioCodec ?? null,
+        },
+      };
 
       if (canPlay && this._blobUrl) {
         mlog(`passthrough: canPlayType accepted codecs=${msg.videoCodec}/${msg.audioCodec}`);
@@ -642,6 +699,25 @@ export class PlaysVideoEngine extends EventTarget {
       this._durationSec = msg.durationSec;
       this._subtitleTracks = msg.subtitleTracks ?? [];
       this._phase = 'ready';
+      this._codecPath = {
+        mode: 'pipeline',
+        sourceVideo: {
+          short: msg.sourceVideoCodec ?? this._codecPath.sourceVideo.short,
+          full: msg.sourceVideoCodecFull ?? this._codecPath.sourceVideo.full,
+        },
+        sourceAudio: {
+          short: msg.sourceAudioCodec ?? this._codecPath.sourceAudio.short,
+          full: msg.sourceAudioCodecFull ?? this._codecPath.sourceAudio.full,
+        },
+        outputVideo: {
+          short: msg.outputVideoCodec ?? this._codecPath.outputVideo.short,
+          full: msg.outputVideoCodecFull ?? this._codecPath.outputVideo.full,
+        },
+        outputAudio: {
+          short: msg.outputAudioCodec ?? this._codecPath.outputAudio.short,
+          full: msg.outputAudioCodecFull ?? this._codecPath.outputAudio.full,
+        },
+      };
 
       mlog(`ready segments=${msg.totalSegments} dur=${msg.durationSec.toFixed(1)}s`);
 
@@ -669,6 +745,7 @@ export class PlaysVideoEngine extends EventTarget {
             totalSegments: this._totalSegments,
             durationSec: this._durationSec,
             subtitleTracks: this._subtitleTracks,
+            codecPath: this.codecPath,
           },
         }),
       );
@@ -791,6 +868,25 @@ export class PlaysVideoEngine extends EventTarget {
       this._sourceAudioDecoderConfig = this._sourceDoTranscode
         ? makeAacDecoderConfig(demux.audioDecoderConfig)
         : demux.audioDecoderConfig;
+      this._codecPath = {
+        mode: 'pipeline',
+        sourceVideo: {
+          short: demux.videoCodec,
+          full: demux.videoDecoderConfig.codec,
+        },
+        sourceAudio: {
+          short: demux.audioCodec,
+          full: demux.audioDecoderConfig?.codec ?? null,
+        },
+        outputVideo: {
+          short: demux.videoCodec,
+          full: demux.videoDecoderConfig.codec,
+        },
+        outputAudio: {
+          short: this._sourceDoTranscode ? 'aac' : demux.audioCodec,
+          full: this._sourceAudioDecoderConfig?.codec ?? null,
+        },
+      };
 
       // Pre-process segment 0
       const seg0Result = await processSegmentWithAbort(this.makeSourceProcessorConfig(), 0);
@@ -830,6 +926,7 @@ export class PlaysVideoEngine extends EventTarget {
             totalSegments: this._totalSegments,
             durationSec: this._durationSec,
             subtitleTracks: this._subtitleTracks,
+            codecPath: this.codecPath,
           },
         }),
       );
@@ -946,6 +1043,8 @@ export class PlaysVideoEngine extends EventTarget {
       context: FragmentLoaderContext | null = null;
       stats: LoaderStats = makeStats();
       private currentSegmentIndex: number | null = null;
+      private callbacks: LoaderCallbacks<FragmentLoaderContext> | null = null;
+      private aborted = false;
 
       load(
         context: FragmentLoaderContext,
@@ -953,6 +1052,8 @@ export class PlaysVideoEngine extends EventTarget {
         callbacks: LoaderCallbacks<FragmentLoaderContext>,
       ) {
         this.context = context;
+        this.callbacks = callbacks;
+        this.aborted = false;
         const url = context.url;
 
         if (url.includes('init.mp4')) {
@@ -1003,15 +1104,22 @@ export class PlaysVideoEngine extends EventTarget {
           : engine.requestSegment(index);
         segmentPromise
           .then((data) => {
+            if (this.aborted) {
+              return;
+            }
             this.currentSegmentIndex = null;
             this.stats.loaded = data.byteLength;
             this.stats.loading.end = performance.now();
             callbacks.onSuccess({ url: context.url, data }, this.stats, context, null);
           })
           .catch((err) => {
+            if (this.aborted) {
+              return;
+            }
             this.currentSegmentIndex = null;
             if (err instanceof DOMException && err.name === 'AbortError') {
               this.stats.aborted = true;
+              callbacks.onAbort?.(this.stats, context, null);
               return;
             }
             callbacks.onError({ code: 0, text: err.message }, context, null, this.stats);
@@ -1019,7 +1127,14 @@ export class PlaysVideoEngine extends EventTarget {
       }
 
       abort() {
+        if (this.aborted) {
+          return;
+        }
+        this.aborted = true;
+        this.stats.aborted = true;
+        let abortedActiveSegment = false;
         if (this.currentSegmentIndex !== null) {
+          abortedActiveSegment = true;
           if (engine._source) {
             // Source mode: abort the in-flight main-thread processing
             engine._sourceSegmentAbort?.abort();
@@ -1029,10 +1144,15 @@ export class PlaysVideoEngine extends EventTarget {
           }
           this.currentSegmentIndex = null;
         }
+        if (abortedActiveSegment && this.callbacks && this.context) {
+          this.callbacks.onAbort?.(this.stats, this.context, null);
+        }
       }
 
       destroy() {
         this.abort();
+        this.callbacks = null;
+        this.context = null;
       }
     }
 
@@ -1163,7 +1283,7 @@ export class PlaysVideoEngine extends EventTarget {
 }
 
 /** Set to true to bypass native playback and force the remux pipeline (for testing). */
-const FORCE_REMUX = false;
+const FORCE_REMUX = true;
 
 function mlog(msg: string): void {
   console.log(`[engine] ${msg}`);

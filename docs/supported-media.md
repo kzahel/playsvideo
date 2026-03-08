@@ -32,5 +32,6 @@ Audio codecs that can't be played natively in MSE/fMP4 are transcoded on-the-fly
 ## Notes
 
 - Browser playback uses `MediaSource.isTypeSupported()` for runtime detection — VP9, AV1, and HEVC support varies by browser/platform.
+- AC-3 and E-AC-3 are treated as pipeline-unsafe even when a browser reports MSE support. In Safari testing, remuxed AC-3 playback produced audible stalls around scene cuts, so the pipeline transcodes those codecs to AAC for HLS/MSE playback.
 - Node/test environment uses a conservative whitelist: only AAC/MP3 audio and AVC/HEVC video are considered natively playable.
 - Unknown codecs default to requiring transcode (safe fallback).

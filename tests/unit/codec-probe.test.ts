@@ -160,7 +160,18 @@ describe('codec-probe', () => {
       expect(bp.canPlayAudio('ac3')).toBe(false);
       expect(spy).toHaveBeenCalledWith('audio/mp4; codecs="mp4a.40.2"');
       expect(spy).toHaveBeenCalledWith('audio/mp4; codecs="mp4a.69"');
-      expect(spy).toHaveBeenCalledWith('audio/mp4; codecs="ac-3"');
+      expect(spy).not.toHaveBeenCalledWith('audio/mp4; codecs="ac-3"');
+    });
+
+    it('treats ac3 and eac3 as pipeline-unsafe even if MSE reports support', () => {
+      const spy = mockMediaSource(
+        new Set(['audio/mp4; codecs="ac-3"', 'audio/mp4; codecs="ec-3"']),
+      );
+      const bp = createBrowserProber();
+      expect(bp.canPlayAudio('ac3')).toBe(false);
+      expect(bp.canPlayAudio('eac3')).toBe(false);
+      expect(spy).not.toHaveBeenCalledWith('audio/mp4; codecs="ac-3"');
+      expect(spy).not.toHaveBeenCalledWith('audio/mp4; codecs="ec-3"');
     });
   });
 });

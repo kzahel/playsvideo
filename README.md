@@ -18,7 +18,7 @@ Many video files won't play in a browser — not because the browser can't *deco
 |---|---|---|
 | **Containers** | MKV, MP4, AVI, TS, WebM | Demuxed and remuxed to fMP4 |
 | **Video** | H.264, H.265 (HEVC), VP9, AV1 | Passthrough — plays ~99% of files (~90% on Firefox; HEVC transcode planned) |
-| **Audio** | AAC, MP3, AC-3, E-AC-3, DTS, FLAC, Opus | Unsupported codecs transcoded to AAC on the fly |
+| **Audio** | AAC, MP3, AC-3, E-AC-3, DTS, FLAC, Opus | Unsupported or pipeline-unsafe codecs transcoded to AAC on the fly |
 | **Subtitles** | SRT, ASS/SSA | Extracted and displayed as WebVTT |
 
 See [supported media](docs/supported-media.md) for the full codec matrix, browser compatibility, and transcode details.
@@ -30,12 +30,14 @@ Video file (MKV, MP4, AVI, …)
   → mediabunny demux (streaming, any file size)
   → keyframe-aligned segment plan
   → per segment:
-      video passed through or transcoded if needed
-      audio transcoded only if needed (AC-3/DTS/MP3/FLAC/Opus → AAC)
+      video remuxed / passed through
+      audio transcoded only if needed (AC-3/E-AC-3/DTS/MP3/FLAC/Opus → AAC)
       muxed to fMP4
   → hls.js plays segments on demand
   → subtitles extracted to WebVTT
 ```
+
+Note: during Safari testing, direct AC-3 playback in the remux/HLS pipeline produced audible stalls around scene cuts and GOP transitions. The pipeline now treats AC-3/E-AC-3 as unsafe for MSE playback and transcodes them to AAC instead of relying on native AC-3 support.
 
 Video transcode is almost never needed — browsers natively decode the vast majority of video codecs. When audio transcode is needed, a lightweight 1.8 MB ffmpeg.wasm build is lazy-loaded entirely in-browser. No SharedArrayBuffer required — works on any host without special CORS headers.
 

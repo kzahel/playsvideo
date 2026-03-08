@@ -1,4 +1,4 @@
-import type { SegmentPhase, SegmentState, WasmWorkerState } from './engine.js';
+import type { CodecPath, SegmentPhase, SegmentState, WasmWorkerState } from './engine.js';
 import { PlaysVideoEngine } from './engine.js';
 import { bindExternalSubtitlePicker } from './external-subtitle-picker.js';
 
@@ -10,6 +10,8 @@ const subtitleStatus = document.getElementById('subtitle-status') as HTMLElement
 const logEl = document.getElementById('log') as HTMLElement;
 const workerSummaryEl = document.getElementById('worker-summary') as HTMLElement;
 const workerListEl = document.getElementById('worker-list') as HTMLElement;
+const codecSummaryEl = document.getElementById('codec-summary') as HTMLElement;
+const codecListEl = document.getElementById('codec-list') as HTMLElement;
 const segmentSummaryEl = document.getElementById('segment-summary') as HTMLElement;
 const segmentLegendEl = document.getElementById('segment-legend') as HTMLElement;
 const segmentListEl = document.getElementById('segment-list') as HTMLElement;
@@ -26,6 +28,7 @@ const subtitlePicker = bindExternalSubtitlePicker({
 });
 let workerStates: WasmWorkerState[] = [];
 let segmentStates: SegmentState[] = [];
+let codecPath: CodecPath | null = null;
 
 const ACTIVE_SEGMENT_PHASES = new Set<SegmentPhase>([
   'requested',
@@ -69,7 +72,9 @@ engine.addEventListener('loading', (e) => {
 });
 
 engine.addEventListener('ready', (e) => {
-  const { totalSegments, durationSec, subtitleTracks, passthrough } = e.detail;
+  const { totalSegments, durationSec, subtitleTracks, passthrough, codecPath: nextCodecPath } =
+    e.detail;
+  codecPath = nextCodecPath;
   const mode = passthrough ? 'direct playback' : `${totalSegments} segments`;
   status.textContent = `Ready — ${mode}, ${formatTime(durationSec)}`;
   video.style.display = 'block';
@@ -84,6 +89,7 @@ engine.addEventListener('ready', (e) => {
     }
   }
   renderWorkerStates();
+  renderCodecPath();
 });
 
 engine.addEventListener('error', (e) => {
@@ -97,7 +103,9 @@ engine.addEventListener('error', (e) => {
 engine.addEventListener('loading', () => {
   workerStates = [];
   segmentStates = [];
+  codecPath = null;
   renderWorkerStates();
+  renderCodecPath();
   renderSegmentTimeline();
 });
 
@@ -227,6 +235,28 @@ function renderWorkerStates() {
   }
 }
 
+function renderCodecPath() {
+  codecListEl.replaceChildren();
+
+  if (!codecPath) {
+    codecSummaryEl.textContent = 'Codec path unavailable until probe completes.';
+    return;
+  }
+
+  codecSummaryEl.textContent =
+    codecPath.mode === 'passthrough'
+      ? 'Direct playback uses the source codecs as-is.'
+      : 'Pipeline playback remuxes video and may transcode audio.';
+
+  codecListEl.append(
+    makeWorkerLine('mode', codecPath.mode),
+    makeWorkerLine('input video', formatCodec(codecPath.sourceVideo)),
+    makeWorkerLine('input audio', formatCodec(codecPath.sourceAudio)),
+    makeWorkerLine('output video', formatCodec(codecPath.outputVideo)),
+    makeWorkerLine('output audio', formatCodec(codecPath.outputAudio)),
+  );
+}
+
 function renderSegmentLegend() {
   segmentLegendEl.replaceChildren();
   for (const item of SEGMENT_LEGEND) {
@@ -353,6 +383,13 @@ function formatMs(value: number | null): string {
   return `${value.toFixed(1)} ms`;
 }
 
+function formatCodec(codec: CodecPath['sourceVideo']): string {
+  if (!codec.short && !codec.full) return 'none';
+  if (!codec.short) return codec.full ?? 'none';
+  if (!codec.full || codec.full === codec.short) return codec.short;
+  return `${codec.short} (${codec.full})`;
+}
+
 function formatSegmentStats(segment: SegmentState): string {
   const parts = [`${segment.requestCount} req`, segment.prefetched ? 'prefetched' : 'on-demand'];
   if (segment.latencyMs !== null) {
@@ -391,4 +428,5 @@ function formatTime(sec: number): string {
 
 renderSegmentLegend();
 renderWorkerStates();
+renderCodecPath();
 renderSegmentTimeline();

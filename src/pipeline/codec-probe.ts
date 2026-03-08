@@ -24,6 +24,12 @@ const VIDEO_CODEC_MAP: Record<string, string> = {
   av1: 'av01.0.01M.08',
 };
 
+// Even when MSE reports AC-3/E-AC-3 support, fragmented MP4 playback through
+// hls.js is not reliably gap-free across browsers, especially Safari/WebKit.
+// Use AAC for the pipeline path and leave direct passthrough decisions to
+// HTMLMediaElement.canPlayType().
+const PIPELINE_UNSAFE_AUDIO = new Set(['ac3', 'eac3']);
+
 export interface CodecProber {
   /** Can MSE play this audio codec in an fMP4 container? */
   canPlayAudio(shortCodec: string, fullCodecString?: string): boolean;
@@ -48,6 +54,9 @@ export function createBrowserProber(): CodecProber {
 
   return {
     canPlayAudio(shortCodec, fullCodecString) {
+      if (PIPELINE_UNSAFE_AUDIO.has(shortCodec)) {
+        return false;
+      }
       const codecStr = fullCodecString ?? AUDIO_CODEC_MAP[shortCodec];
       if (!codecStr) return false;
       return isSupported(`audio/mp4; codecs="${codecStr}"`);

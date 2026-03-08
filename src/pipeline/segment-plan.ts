@@ -51,27 +51,44 @@ export interface BuildSegmentPlanOptions {
 export function buildSegmentPlan(options: BuildSegmentPlanOptions): PlannedSegment[] {
   const durationSec = Number(options.durationSec);
   const sequenceStart = Math.max(0, Math.floor(Number(options.sequenceStart) || 0));
+  const targetSegmentDurationSec = Math.max(
+    EPSILON_SEC,
+    Number(options.targetSegmentDurationSec) || 4,
+  );
 
   const boundaries = normalizeKeyframeTimestamps(options.keyframeTimestampsSec, durationSec);
   const plan: PlannedSegment[] = [];
   let sequence = sequenceStart;
+  let segmentStartSec = 0;
+  let nextTargetCutSec = targetSegmentDurationSec;
 
-  // Cut at every keyframe boundary — matches ffmpeg HLS behavior.
-  // ffmpeg cuts at each keyframe regardless of hls_time; the target duration
-  // only affects the M3U8 EXT-X-TARGETDURATION header, not segment boundaries.
-  for (let i = 0; i < boundaries.length - 1; i++) {
-    // Segment 0 always starts at 0 so the HLS playlist covers the full
-    // duration, even when the first video keyframe is slightly after 0.
-    const startSec = i === 0 ? 0 : boundaries[i];
-    const endSec = boundaries[i + 1];
-    const duration = Math.max(EPSILON_SEC, endSec - startSec);
+  // Match FFmpeg HLS behavior: cut on the first keyframe at or after each
+  // global hls_time boundary (4s, 8s, 12s, ...), not after each segment's
+  // local elapsed duration.
+  for (const boundarySec of boundaries) {
+    if (boundarySec < nextTargetCutSec - EPSILON_SEC) continue;
+    if (boundarySec <= segmentStartSec + EPSILON_SEC) continue;
+
     plan.push({
       sequence,
       uri: `seg-${sequence}.m4s`,
-      startSec,
-      durationSec: duration,
+      startSec: segmentStartSec,
+      durationSec: Math.max(EPSILON_SEC, boundarySec - segmentStartSec),
     });
     sequence += 1;
+    segmentStartSec = boundarySec;
+    nextTargetCutSec =
+      (Math.floor((boundarySec + EPSILON_SEC) / targetSegmentDurationSec) + 1) *
+      targetSegmentDurationSec;
+  }
+
+  if (durationSec > segmentStartSec + EPSILON_SEC) {
+    plan.push({
+      sequence,
+      uri: `seg-${sequence}.m4s`,
+      startSec: segmentStartSec,
+      durationSec: Math.max(EPSILON_SEC, durationSec - segmentStartSec),
+    });
   }
 
   return plan;
