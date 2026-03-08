@@ -4,10 +4,36 @@ import type {
   ConnectTranscodeWorkerMessage,
   TranscodeJobRequest,
   TranscodeJobResponse,
+  TranscodeWorkerSnapshot,
+  TranscodeWorkerStateMessage,
 } from './transcode-protocol.js';
 
 const ffmpeg = new WasmFfmpegRunner();
 let port: MessagePort | null = null;
+const state: TranscodeWorkerSnapshot = {
+  phase: 'starting',
+  sourceCodec: null,
+  jobId: null,
+  inputBytes: null,
+  outputBytes: null,
+  totalMs: null,
+  ffmpegMs: null,
+  jobsCompleted: 0,
+  lastError: null,
+};
+
+function publishState(): void {
+  const message: TranscodeWorkerStateMessage = {
+    type: 'worker-state',
+    state: { ...state },
+  };
+  self.postMessage(message);
+}
+
+function updateState(patch: Partial<TranscodeWorkerSnapshot>): void {
+  Object.assign(state, patch);
+  publishState();
+}
 
 self.onmessage = (event: MessageEvent<ConnectTranscodeWorkerMessage>) => {
   if (event.data?.type !== 'connect' || event.ports.length === 0) {
@@ -19,6 +45,7 @@ self.onmessage = (event: MessageEvent<ConnectTranscodeWorkerMessage>) => {
     void handleJob(messageEvent.data);
   };
   port.start?.();
+  updateState({ phase: 'idle', lastError: null });
 };
 
 async function handleJob(msg: TranscodeJobRequest): Promise<void> {
@@ -26,9 +53,22 @@ async function handleJob(msg: TranscodeJobRequest): Promise<void> {
     return;
   }
 
+  const startedAt = performance.now();
+  updateState({
+    phase: msg.sourceCodec ? 'loading-codec' : 'transcoding',
+    sourceCodec: msg.sourceCodec ?? state.sourceCodec,
+    jobId: msg.jobId,
+    inputBytes: msg.inputData.byteLength,
+    outputBytes: null,
+    totalMs: null,
+    ffmpegMs: null,
+    lastError: null,
+  });
+
   try {
     if (msg.sourceCodec) {
       await ffmpeg.loadForCodec(msg.sourceCodec);
+      updateState({ phase: 'transcoding' });
     }
     const result = await runFfmpegAudioTranscode({
       ffmpeg,
@@ -45,6 +85,16 @@ async function handleJob(msg: TranscodeJobRequest): Promise<void> {
       metrics: result.metrics,
     };
     port.postMessage(response, [outputBuffer]);
+    updateState({
+      phase: 'idle',
+      sourceCodec: msg.sourceCodec ?? state.sourceCodec,
+      jobId: null,
+      outputBytes: result.aacData.byteLength,
+      totalMs: performance.now() - startedAt,
+      ffmpegMs: result.metrics.ffmpegMs,
+      jobsCompleted: state.jobsCompleted + 1,
+      lastError: null,
+    });
   } catch (err) {
     const response: TranscodeJobResponse = {
       type: 'transcode-result',
@@ -53,5 +103,14 @@ async function handleJob(msg: TranscodeJobRequest): Promise<void> {
       error: String(err),
     };
     port.postMessage(response);
+    updateState({
+      phase: 'error',
+      sourceCodec: msg.sourceCodec ?? state.sourceCodec,
+      jobId: null,
+      outputBytes: null,
+      totalMs: performance.now() - startedAt,
+      ffmpegMs: null,
+      lastError: String(err),
+    });
   }
 }

@@ -23,6 +23,7 @@ import type {
   PlannedSegment,
   SubtitleTrackInfo,
 } from './pipeline/types.js';
+import type { TranscodeWorkerSnapshot, TranscodeWorkerStateMessage } from './transcode-protocol.js';
 
 export type EnginePhase = 'idle' | 'demuxing' | 'ready' | 'error';
 
@@ -42,6 +43,14 @@ export interface LoadingDetail {
   url?: string;
 }
 
+export interface WasmWorkerState extends TranscodeWorkerSnapshot {
+  id: number;
+}
+
+export interface WorkerStateDetail {
+  workers: WasmWorkerState[];
+}
+
 export interface EngineOptions {
   /**
    * Number of internal audio transcode workers to create for worker-mode playback.
@@ -54,6 +63,7 @@ interface EngineEventMap {
   ready: CustomEvent<ReadyDetail>;
   error: CustomEvent<ErrorDetail>;
   loading: CustomEvent<LoadingDetail>;
+  workerstatechange: CustomEvent<WorkerStateDetail>;
 }
 
 interface TranscodeWorkerHandle {
@@ -73,6 +83,7 @@ export class PlaysVideoEngine extends EventTarget {
   readonly options: Required<EngineOptions>;
   private worker: Worker | null = null;
   private transcodeWorkers: TranscodeWorkerHandle[] = [];
+  private _transcodeWorkerStates: WasmWorkerState[] = [];
   private hls: Hls | null = null;
 
   // Pending segment requests from hls.js custom loader
@@ -140,6 +151,9 @@ export class PlaysVideoEngine extends EventTarget {
   }
   get passthrough(): boolean {
     return this._passthrough;
+  }
+  get transcodeWorkerStates(): WasmWorkerState[] {
+    return this._transcodeWorkerStates.map((worker) => ({ ...worker }));
   }
 
   constructor(video: HTMLVideoElement, options: EngineOptions = {}) {
@@ -271,11 +285,32 @@ export class PlaysVideoEngine extends EventTarget {
       const worker = new Worker(new URL('./transcode-worker.js', import.meta.url), {
         type: 'module',
       });
+      worker.onmessage = (event) => this.handleTranscodeWorkerMessage(i, event);
+      worker.onerror = (event) => {
+        this.updateTranscodeWorkerState(i, {
+          phase: 'error',
+          jobId: null,
+          lastError: event.message || 'Transcode worker crashed',
+        });
+      };
       const channel = new MessageChannel();
       worker.postMessage({ type: 'connect' }, [channel.port2]);
       this.worker.postMessage({ type: 'transcode-port', id: i }, [channel.port1]);
       this.transcodeWorkers.push({ worker });
+      this._transcodeWorkerStates.push({
+        id: i,
+        phase: 'starting',
+        sourceCodec: null,
+        jobId: null,
+        inputBytes: null,
+        outputBytes: null,
+        totalMs: null,
+        ffmpegMs: null,
+        jobsCompleted: 0,
+        lastError: null,
+      });
     }
+    this.dispatchWorkerStateChange();
   }
 
   private destroyTranscodeWorkers(): void {
@@ -283,6 +318,8 @@ export class PlaysVideoEngine extends EventTarget {
       handle.worker.terminate();
     }
     this.transcodeWorkers = [];
+    this._transcodeWorkerStates = [];
+    this.dispatchWorkerStateChange();
   }
 
   destroy(): void {
@@ -329,6 +366,40 @@ export class PlaysVideoEngine extends EventTarget {
     options?: boolean | AddEventListenerOptions,
   ): void {
     super.addEventListener(type, listener as EventListenerOrEventListenerObject, options);
+  }
+
+  private dispatchWorkerStateChange(): void {
+    this.dispatchEvent(
+      new CustomEvent('workerstatechange', {
+        detail: {
+          workers: this.transcodeWorkerStates,
+        },
+      }),
+    );
+  }
+
+  private handleTranscodeWorkerMessage(
+    id: number,
+    event: MessageEvent<TranscodeWorkerStateMessage>,
+  ) {
+    const msg = event.data;
+    if (!msg || msg.type !== 'worker-state') {
+      return;
+    }
+    this.updateTranscodeWorkerState(id, msg.state);
+  }
+
+  private updateTranscodeWorkerState(id: number, patch: Partial<TranscodeWorkerSnapshot>): void {
+    const index = this._transcodeWorkerStates.findIndex((worker) => worker.id === id);
+    if (index === -1) {
+      return;
+    }
+    this._transcodeWorkerStates[index] = {
+      ...this._transcodeWorkerStates[index],
+      ...patch,
+      id,
+    };
+    this.dispatchWorkerStateChange();
   }
 
   private checkNativePlayback(videoCodec: string, audioCodec: string | null): boolean {

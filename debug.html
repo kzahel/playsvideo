@@ -6,12 +6,12 @@
   <title>playsvideo — debug</title>
   <link rel="icon" type="image/svg+xml" href="/favicon.svg">
   <style>
-    :root { --bg: #fff; --fg: #111; --muted: #999; --video-bg: #000; --file-color: #111; --log-bg: #f5f5f5; --log-border: #ddd; }
+    :root { --bg: #fff; --fg: #111; --muted: #999; --video-bg: #000; --file-color: #111; --log-bg: #f5f5f5; --log-border: #ddd; --panel-bg: #fafafa; --panel-border: #e5e5e5; --phase-idle: #4ade80; --phase-busy: #60a5fa; --phase-error: #f87171; }
     @media (prefers-color-scheme: dark) {
-      :root { --bg: #111; --fg: #eee; --muted: #999; --file-color: #eee; --log-bg: #0a0a0a; --log-border: #333; }
+      :root { --bg: #111; --fg: #eee; --muted: #999; --file-color: #eee; --log-bg: #0a0a0a; --log-border: #333; --panel-bg: #151515; --panel-border: #2e2e2e; --phase-idle: #4ade80; --phase-busy: #93c5fd; --phase-error: #f87171; }
     }
-    html[data-theme="light"] { --bg: #fff; --fg: #111; --muted: #999; --file-color: #111; --log-bg: #f5f5f5; --log-border: #ddd; }
-    html[data-theme="dark"] { --bg: #111; --fg: #eee; --muted: #999; --file-color: #eee; --log-bg: #0a0a0a; --log-border: #333; }
+    html[data-theme="light"] { --bg: #fff; --fg: #111; --muted: #999; --file-color: #111; --log-bg: #f5f5f5; --log-border: #ddd; --panel-bg: #fafafa; --panel-border: #e5e5e5; --phase-idle: #16a34a; --phase-busy: #2563eb; --phase-error: #dc2626; }
+    html[data-theme="dark"] { --bg: #111; --fg: #eee; --muted: #999; --file-color: #eee; --log-bg: #0a0a0a; --log-border: #333; --panel-bg: #151515; --panel-border: #2e2e2e; --phase-idle: #4ade80; --phase-busy: #93c5fd; --phase-error: #f87171; }
     body { font-family: system-ui, sans-serif; margin: 2rem; background: var(--bg); color: var(--fg); }
     video { width: 100%; max-width: 1280px; display: none; margin-top: 1rem; background: var(--video-bg); }
     #status { margin-top: 0.5rem; color: var(--muted); }
@@ -19,6 +19,65 @@
     .header { display: flex; align-items: center; gap: 0.75rem; margin-bottom: 1rem; }
     .theme-toggle { background: none; border: 1px solid var(--muted); color: var(--fg); border-radius: 50%; width: 32px; height: 32px; cursor: pointer; font-size: 14px; display: flex; align-items: center; justify-content: center; opacity: 0.6; flex-shrink: 0; }
     .theme-toggle:hover { opacity: 1; }
+    .workers {
+      margin-top: 1rem;
+      padding: 1rem;
+      background: var(--panel-bg);
+      border: 1px solid var(--panel-border);
+      border-radius: 8px;
+    }
+    .workers-header {
+      display: flex;
+      align-items: baseline;
+      justify-content: space-between;
+      gap: 1rem;
+      margin-bottom: 0.75rem;
+    }
+    .workers-title { font-size: 14px; font-weight: 600; }
+    .workers-summary { color: var(--muted); font-size: 12px; }
+    .worker-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+      gap: 0.75rem;
+    }
+    .worker-card {
+      padding: 0.9rem;
+      background: var(--bg);
+      border: 1px solid var(--panel-border);
+      border-radius: 8px;
+    }
+    .worker-card-header {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 0.75rem;
+      margin-bottom: 0.75rem;
+    }
+    .worker-phase {
+      padding: 0.2rem 0.5rem;
+      border-radius: 999px;
+      font-size: 11px;
+      font-weight: 600;
+      text-transform: uppercase;
+      letter-spacing: 0.04em;
+      border: 1px solid currentColor;
+    }
+    .worker-phase-idle { color: var(--phase-idle); }
+    .worker-phase-starting, .worker-phase-loading-codec, .worker-phase-transcoding { color: var(--phase-busy); }
+    .worker-phase-error { color: var(--phase-error); }
+    .worker-line {
+      display: flex;
+      align-items: flex-start;
+      justify-content: space-between;
+      gap: 0.75rem;
+      font-family: 'JetBrains Mono', 'SF Mono', monospace;
+      font-size: 12px;
+      line-height: 1.5;
+    }
+    .worker-line + .worker-line { margin-top: 0.2rem; }
+    .worker-line-label { color: var(--muted); }
+    .worker-line-value { text-align: right; word-break: break-word; }
+    .worker-line-error .worker-line-value { color: var(--phase-error); }
     #log {
       margin-top: 1rem;
       padding: 1rem;
@@ -61,6 +120,13 @@
   <input type="file" id="file-input">
   <p id="status">Select a video file to play.</p>
   <video id="video" controls autoplay></video>
+  <section class="workers">
+    <div class="workers-header">
+      <div class="workers-title">Wasm workers</div>
+      <div class="workers-summary" id="worker-summary"></div>
+    </div>
+    <div class="worker-grid" id="worker-list"></div>
+  </section>
   <div id="log"></div>
   <script type="module" src="/src/debug.ts"></script>
   <script>
