@@ -2,7 +2,7 @@
   "manifest_version": 3,
   "name": "playsvideo",
   "description": "Play any video file — no server, no upload, no limits.",
-  "version": "0.0.5",
+  "version": "0.1.0",
   "action": { "default_title": "Open video player" },
   "background": {
     "service_worker": "background.js"
