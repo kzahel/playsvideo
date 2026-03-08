@@ -24,6 +24,7 @@ import type {
   SubtitleTrackInfo,
 } from './pipeline/types.js';
 import type { TranscodeWorkerSnapshot, TranscodeWorkerStateMessage } from './transcode-protocol.js';
+import type { WorkerSegmentStateMessage } from './worker-protocol.js';
 
 export type EnginePhase = 'idle' | 'demuxing' | 'ready' | 'error';
 
@@ -51,6 +52,40 @@ export interface WorkerStateDetail {
   workers: WasmWorkerState[];
 }
 
+export type SegmentPhase =
+  | 'requested'
+  | 'queued'
+  | 'prefetching'
+  | 'processing'
+  | 'ready'
+  | 'cache-hit'
+  | 'delivered'
+  | 'canceled'
+  | 'aborted'
+  | 'error';
+
+export interface SegmentTimelineEvent {
+  phase: SegmentPhase;
+  atMs: number;
+  sizeBytes: number | null;
+  message: string | null;
+}
+
+export interface SegmentState {
+  index: number;
+  phase: SegmentPhase;
+  requestCount: number;
+  sizeBytes: number | null;
+  latencyMs: number | null;
+  error: string | null;
+  prefetched: boolean;
+  events: SegmentTimelineEvent[];
+}
+
+export interface SegmentStateDetail {
+  segments: SegmentState[];
+}
+
 export interface EngineOptions {
   /**
    * Number of internal audio transcode workers to create for worker-mode playback.
@@ -64,6 +99,7 @@ interface EngineEventMap {
   error: CustomEvent<ErrorDetail>;
   loading: CustomEvent<LoadingDetail>;
   workerstatechange: CustomEvent<WorkerStateDetail>;
+  segmentstatechange: CustomEvent<SegmentStateDetail>;
 }
 
 interface TranscodeWorkerHandle {
@@ -84,6 +120,7 @@ export class PlaysVideoEngine extends EventTarget {
   private worker: Worker | null = null;
   private transcodeWorkers: TranscodeWorkerHandle[] = [];
   private _transcodeWorkerStates: WasmWorkerState[] = [];
+  private _segmentStates = new Map<number, SegmentState>();
   private hls: Hls | null = null;
 
   // Pending segment requests from hls.js custom loader
@@ -154,6 +191,14 @@ export class PlaysVideoEngine extends EventTarget {
   }
   get transcodeWorkerStates(): WasmWorkerState[] {
     return this._transcodeWorkerStates.map((worker) => ({ ...worker }));
+  }
+  get segmentStates(): SegmentState[] {
+    return Array.from(this._segmentStates.values())
+      .sort((a, b) => a.index - b.index)
+      .map((segment) => ({
+        ...segment,
+        events: segment.events.map((event) => ({ ...event })),
+      }));
   }
 
   constructor(video: HTMLVideoElement, options: EngineOptions = {}) {
@@ -263,8 +308,10 @@ export class PlaysVideoEngine extends EventTarget {
     this._sourceAudioDecoderConfig = null;
     this._sourceInitSegment = null;
     this._sourceFfmpeg = null;
+    this._segmentStates.clear();
 
     this.dispatchEvent(new CustomEvent('loading', { detail }));
+    this.dispatchSegmentStateChange();
   }
 
   private createWorker(): void {
@@ -347,6 +394,8 @@ export class PlaysVideoEngine extends EventTarget {
     this.segmentRequestTimes.clear();
     this._phase = 'idle';
     this._passthrough = false;
+    this._segmentStates.clear();
+    this.dispatchSegmentStateChange();
   }
 
   // Typed addEventListener overloads
@@ -378,6 +427,16 @@ export class PlaysVideoEngine extends EventTarget {
     );
   }
 
+  private dispatchSegmentStateChange(): void {
+    this.dispatchEvent(
+      new CustomEvent('segmentstatechange', {
+        detail: {
+          segments: this.segmentStates,
+        },
+      }),
+    );
+  }
+
   private handleTranscodeWorkerMessage(
     id: number,
     event: MessageEvent<TranscodeWorkerStateMessage>,
@@ -400,6 +459,68 @@ export class PlaysVideoEngine extends EventTarget {
       id,
     };
     this.dispatchWorkerStateChange();
+  }
+
+  private noteSegmentState(
+    index: number,
+    phase: SegmentPhase,
+    opts: {
+      sizeBytes?: number;
+      message?: string;
+      latencyMs?: number;
+      incrementRequestCount?: boolean;
+      prefetched?: boolean;
+    } = {},
+  ): void {
+    const existing = this._segmentStates.get(index);
+    const next: SegmentState = existing
+      ? {
+          ...existing,
+          events: [...existing.events],
+        }
+      : {
+          index,
+          phase,
+          requestCount: 0,
+          sizeBytes: null,
+          latencyMs: null,
+          error: null,
+          prefetched: false,
+          events: [],
+        };
+
+    next.phase = phase;
+    if (opts.incrementRequestCount) {
+      next.requestCount += 1;
+    }
+    if (opts.prefetched !== undefined) {
+      next.prefetched = opts.prefetched;
+    } else if (phase === 'prefetching') {
+      next.prefetched = true;
+    }
+    if (opts.sizeBytes !== undefined) {
+      next.sizeBytes = opts.sizeBytes;
+    }
+    if (opts.latencyMs !== undefined) {
+      next.latencyMs = opts.latencyMs;
+    }
+    next.error = phase === 'error' ? (opts.message ?? next.error) : null;
+    next.events.push({
+      phase,
+      atMs: performance.now(),
+      sizeBytes: opts.sizeBytes ?? null,
+      message: opts.message ?? null,
+    });
+
+    this._segmentStates.set(index, next);
+    this.dispatchSegmentStateChange();
+  }
+
+  private handleWorkerSegmentState(msg: WorkerSegmentStateMessage): void {
+    this.noteSegmentState(msg.index, msg.phase, {
+      sizeBytes: msg.sizeBytes,
+      message: msg.message,
+    });
   }
 
   private checkNativePlayback(videoCodec: string, audioCodec: string | null): boolean {
@@ -518,10 +639,13 @@ export class PlaysVideoEngine extends EventTarget {
     } else if (msg.type === 'subtitle') {
       mlog(`subtitle arrived track=${msg.trackIndex} codec=${msg.codec} len=${msg.webvtt?.length}`);
       this.addSubtitleTrack(msg.webvtt, msg.trackIndex);
+    } else if (msg.type === 'segment-state') {
+      this.handleWorkerSegmentState(msg);
     } else if (msg.type === 'segment') {
       const pending = this.pendingSegments.get(msg.index);
       const reqTime = this.segmentRequestTimes.get(msg.index);
-      const latency = reqTime ? (performance.now() - reqTime).toFixed(1) : '?';
+      const latencyMs = reqTime ? performance.now() - reqTime : null;
+      const latency = latencyMs !== null ? latencyMs.toFixed(1) : '?';
       const size = msg.data?.byteLength ?? 0;
       this.segmentRequestTimes.delete(msg.index);
 
@@ -529,6 +653,11 @@ export class PlaysVideoEngine extends EventTarget {
         pending.resolve(msg.data);
         this.pendingSegments.delete(msg.index);
       }
+
+      this.noteSegmentState(msg.index, 'delivered', {
+        sizeBytes: size,
+        latencyMs: latencyMs ?? undefined,
+      });
 
       mlog(
         `seg ${msg.index} arrived latency=${latency}ms size=${size} pending=${this.pendingSegments.size}`,
@@ -539,7 +668,8 @@ export class PlaysVideoEngine extends EventTarget {
       this.dispatchEvent(new CustomEvent('error', { detail: { message: msg.message } }));
 
       // Reject all pending requests
-      for (const [, p] of this.pendingSegments) {
+      for (const [index, p] of this.pendingSegments) {
+        this.noteSegmentState(index, 'error', { message: msg.message });
         p.reject(new Error(msg.message));
       }
       this.pendingSegments.clear();
@@ -567,6 +697,7 @@ export class PlaysVideoEngine extends EventTarget {
 
     mlog(`req seg ${index} pending=${pendingCount}`);
     this.segmentRequestTimes.set(index, performance.now());
+    this.noteSegmentState(index, 'requested', { incrementRequestCount: true });
 
     return new Promise((resolve, reject) => {
       this.pendingSegments.set(index, { resolve, reject });
@@ -578,6 +709,7 @@ export class PlaysVideoEngine extends EventTarget {
     const pending = this.pendingSegments.get(index);
     if (pending) {
       mlog(`cancel seg ${index}`);
+      this.noteSegmentState(index, 'canceled');
       pending.reject(new DOMException('Segment aborted', 'AbortError'));
       this.pendingSegments.delete(index);
       this.segmentRequestTimes.delete(index);

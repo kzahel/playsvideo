@@ -1,11 +1,11 @@
 import { WasmFfmpegRunner } from './adapters/wasm-ffmpeg.js';
 import {
+  type AudioTranscodeExecutor,
   buildTranscodeResultFromAdts,
   concatEncodedPacketData,
   createEmptyTranscodeResult,
   createLocalAudioTranscoder,
   makeAacDecoderConfig,
-  type AudioTranscodeExecutor,
   type TranscodeOptions,
 } from './pipeline/audio-transcode.js';
 import { audioNeedsTranscode, createBrowserProber } from './pipeline/codec-probe.js';
@@ -21,6 +21,7 @@ import type {
   TranscodeJobResponse,
   TranscodePortMessage,
 } from './transcode-protocol.js';
+import type { WorkerSegmentPhase, WorkerSegmentStateMessage } from './worker-protocol.js';
 
 function wlog(msg: string) {
   console.log(`[worker] ${msg}`);
@@ -32,6 +33,20 @@ function elapsed(start: number): string {
 
 function makeAbortError(): DOMException {
   return new DOMException('Segment aborted', 'AbortError');
+}
+
+function emitSegmentState(
+  index: number,
+  phase: WorkerSegmentPhase,
+  opts: { sizeBytes?: number; message?: string } = {},
+): void {
+  const msg: WorkerSegmentStateMessage = {
+    type: 'segment-state',
+    index,
+    phase,
+    ...opts,
+  };
+  self.postMessage(msg);
 }
 
 interface TranscodeQueueJob {
@@ -291,7 +306,9 @@ function schedulePrefetch(startIndex: number): void {
   let nextIndex = startIndex;
   while (segmentTasks.size < maxInFlight && nextIndex < plan.length) {
     if (!segmentCache.has(nextIndex) && !segmentTasks.has(nextIndex)) {
+      emitSegmentState(nextIndex, 'prefetching');
       void ensureSegmentTask(nextIndex).catch((err) => {
+        emitSegmentState(nextIndex, 'error', { message: String(err) });
         self.postMessage({ type: 'error', message: String(err) });
       });
     }
@@ -312,6 +329,7 @@ async function ensureSegmentTask(index: number): Promise<Uint8Array> {
 
   const task = (async () => {
     const t0 = performance.now();
+    emitSegmentState(index, 'processing');
     const result = await processSegmentWithAbort(makeProcessorConfig(), index);
     if (!initSegment && result.initSegment) {
       initSegment = result.initSegment;
@@ -320,6 +338,7 @@ async function ensureSegmentTask(index: number): Promise<Uint8Array> {
 
     const mediaData = result.mediaData;
     segmentCache.set(index, mediaData);
+    emitSegmentState(index, 'ready', { sizeBytes: mediaData.byteLength });
     wlog(`seg ${index} done ${elapsed(t0)} size=${mediaData.byteLength}`);
     return mediaData;
   })().finally(() => {
@@ -447,15 +466,18 @@ async function handleRemuxPipeline(prebuiltKeyframeIndex?: KeyframeIndex) {
 async function handleSegmentRequest(index: number) {
   const controller = new AbortController();
   segmentAbortControllers.set(index, controller);
+  emitSegmentState(index, 'queued');
 
   try {
     await pipelineSetup;
     await handleSegment(index, controller.signal);
   } catch (err) {
     if (err instanceof DOMException && err.name === 'AbortError') {
+      emitSegmentState(index, 'aborted');
       wlog(`seg ${index} aborted`);
       return;
     }
+    emitSegmentState(index, 'error', { message: String(err) });
     self.postMessage({ type: 'error', message: String(err) });
   } finally {
     segmentAbortControllers.delete(index);
@@ -472,6 +494,7 @@ async function handleSegment(index: number, signal: AbortSignal) {
   const cached = segmentCache.get(index);
   if (cached) {
     segmentCache.delete(index);
+    emitSegmentState(index, 'cache-hit', { sizeBytes: cached.byteLength });
     wlog(`seg ${index} cache-hit size=${cached.byteLength}`);
     const buffer = cached.buffer.slice(cached.byteOffset, cached.byteOffset + cached.byteLength);
     self.postMessage({ type: 'segment', index, data: buffer }, { transfer: [buffer] });
@@ -489,9 +512,11 @@ async function handleSegment(index: number, signal: AbortSignal) {
     schedulePrefetch(index + 1);
   } catch (err) {
     if (err instanceof DOMException && err.name === 'AbortError') {
+      emitSegmentState(index, 'aborted');
       wlog(`seg ${index} aborted during processing`);
       return;
     }
+    emitSegmentState(index, 'error', { message: String(err) });
     throw err;
   }
 }

@@ -6,12 +6,12 @@
   <title>playsvideo — debug</title>
   <link rel="icon" type="image/svg+xml" href="/favicon.svg">
   <style>
-    :root { --bg: #fff; --fg: #111; --muted: #999; --video-bg: #000; --file-color: #111; --log-bg: #f5f5f5; --log-border: #ddd; --panel-bg: #fafafa; --panel-border: #e5e5e5; --phase-idle: #4ade80; --phase-busy: #60a5fa; --phase-error: #f87171; }
+    :root { --bg: #fff; --fg: #111; --muted: #999; --video-bg: #000; --file-color: #111; --log-bg: #f5f5f5; --log-border: #ddd; --panel-bg: #fafafa; --panel-border: #e5e5e5; --phase-idle: #4ade80; --phase-busy: #60a5fa; --phase-error: #f87171; --seg-requested: #2563eb; --seg-queued: #7c3aed; --seg-prefetching: #0f766e; --seg-processing: #ea580c; --seg-ready: #16a34a; --seg-cache-hit: #0891b2; --seg-delivered: #65a30d; --seg-canceled: #6b7280; --seg-aborted: #94a3b8; --seg-error: #dc2626; }
     @media (prefers-color-scheme: dark) {
-      :root { --bg: #111; --fg: #eee; --muted: #999; --file-color: #eee; --log-bg: #0a0a0a; --log-border: #333; --panel-bg: #151515; --panel-border: #2e2e2e; --phase-idle: #4ade80; --phase-busy: #93c5fd; --phase-error: #f87171; }
+      :root { --bg: #111; --fg: #eee; --muted: #999; --file-color: #eee; --log-bg: #0a0a0a; --log-border: #333; --panel-bg: #151515; --panel-border: #2e2e2e; --phase-idle: #4ade80; --phase-busy: #93c5fd; --phase-error: #f87171; --seg-requested: #60a5fa; --seg-queued: #a78bfa; --seg-prefetching: #2dd4bf; --seg-processing: #fb923c; --seg-ready: #4ade80; --seg-cache-hit: #22d3ee; --seg-delivered: #a3e635; --seg-canceled: #9ca3af; --seg-aborted: #cbd5e1; --seg-error: #f87171; }
     }
-    html[data-theme="light"] { --bg: #fff; --fg: #111; --muted: #999; --file-color: #111; --log-bg: #f5f5f5; --log-border: #ddd; --panel-bg: #fafafa; --panel-border: #e5e5e5; --phase-idle: #16a34a; --phase-busy: #2563eb; --phase-error: #dc2626; }
-    html[data-theme="dark"] { --bg: #111; --fg: #eee; --muted: #999; --file-color: #eee; --log-bg: #0a0a0a; --log-border: #333; --panel-bg: #151515; --panel-border: #2e2e2e; --phase-idle: #4ade80; --phase-busy: #93c5fd; --phase-error: #f87171; }
+    html[data-theme="light"] { --bg: #fff; --fg: #111; --muted: #999; --file-color: #111; --log-bg: #f5f5f5; --log-border: #ddd; --panel-bg: #fafafa; --panel-border: #e5e5e5; --phase-idle: #16a34a; --phase-busy: #2563eb; --phase-error: #dc2626; --seg-requested: #2563eb; --seg-queued: #7c3aed; --seg-prefetching: #0f766e; --seg-processing: #ea580c; --seg-ready: #16a34a; --seg-cache-hit: #0891b2; --seg-delivered: #65a30d; --seg-canceled: #6b7280; --seg-aborted: #94a3b8; --seg-error: #dc2626; }
+    html[data-theme="dark"] { --bg: #111; --fg: #eee; --muted: #999; --file-color: #eee; --log-bg: #0a0a0a; --log-border: #333; --panel-bg: #151515; --panel-border: #2e2e2e; --phase-idle: #4ade80; --phase-busy: #93c5fd; --phase-error: #f87171; --seg-requested: #60a5fa; --seg-queued: #a78bfa; --seg-prefetching: #2dd4bf; --seg-processing: #fb923c; --seg-ready: #4ade80; --seg-cache-hit: #22d3ee; --seg-delivered: #a3e635; --seg-canceled: #9ca3af; --seg-aborted: #cbd5e1; --seg-error: #f87171; }
     body { font-family: system-ui, sans-serif; margin: 2rem; background: var(--bg); color: var(--fg); }
     video { width: 100%; max-width: 1280px; display: none; margin-top: 1rem; background: var(--video-bg); }
     #status { margin-top: 0.5rem; color: var(--muted); }
@@ -78,6 +78,130 @@
     .worker-line-label { color: var(--muted); }
     .worker-line-value { text-align: right; word-break: break-word; }
     .worker-line-error .worker-line-value { color: var(--phase-error); }
+    .segments {
+      margin-top: 1rem;
+      padding: 1rem;
+      background: var(--panel-bg);
+      border: 1px solid var(--panel-border);
+      border-radius: 8px;
+    }
+    .segments-header {
+      display: flex;
+      align-items: baseline;
+      justify-content: space-between;
+      gap: 1rem;
+      margin-bottom: 0.75rem;
+    }
+    .segments-title { font-size: 14px; font-weight: 600; }
+    .segments-summary { color: var(--muted); font-size: 12px; }
+    .segment-legend {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 0.5rem 0.75rem;
+      margin-bottom: 0.9rem;
+    }
+    .segment-legend-item {
+      display: inline-flex;
+      align-items: center;
+      gap: 0.4rem;
+      font-size: 12px;
+      color: var(--muted);
+    }
+    .segment-swatch {
+      width: 10px;
+      height: 10px;
+      border-radius: 999px;
+      background: currentColor;
+    }
+    .segment-list {
+      display: flex;
+      flex-direction: column;
+      gap: 0.6rem;
+    }
+    .segment-empty {
+      color: var(--muted);
+      font-size: 12px;
+    }
+    .segment-row {
+      display: grid;
+      grid-template-columns: minmax(180px, 220px) 1fr;
+      gap: 0.9rem;
+      align-items: center;
+    }
+    .segment-meta {
+      display: flex;
+      flex-direction: column;
+      gap: 0.3rem;
+      min-width: 0;
+    }
+    .segment-meta-top {
+      display: flex;
+      align-items: center;
+      gap: 0.5rem;
+      min-width: 0;
+    }
+    .segment-index {
+      font-family: 'JetBrains Mono', 'SF Mono', monospace;
+      font-size: 12px;
+      font-weight: 700;
+    }
+    .segment-phase-pill {
+      padding: 0.15rem 0.45rem;
+      border-radius: 999px;
+      border: 1px solid currentColor;
+      font-size: 10px;
+      font-weight: 700;
+      letter-spacing: 0.04em;
+      text-transform: uppercase;
+      white-space: nowrap;
+    }
+    .segment-stats {
+      color: var(--muted);
+      font-size: 11px;
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+    }
+    .segment-track {
+      position: relative;
+      height: 18px;
+      border-radius: 999px;
+      background: color-mix(in srgb, var(--panel-border) 55%, transparent);
+      overflow: hidden;
+    }
+    .segment-block {
+      position: absolute;
+      top: 0;
+      bottom: 0;
+      border-radius: 999px;
+      min-width: 3px;
+      opacity: 0.95;
+    }
+    .segment-phase-requested { color: var(--seg-requested); }
+    .segment-phase-queued { color: var(--seg-queued); }
+    .segment-phase-prefetching { color: var(--seg-prefetching); }
+    .segment-phase-processing { color: var(--seg-processing); }
+    .segment-phase-ready { color: var(--seg-ready); }
+    .segment-phase-cache-hit { color: var(--seg-cache-hit); }
+    .segment-phase-delivered { color: var(--seg-delivered); }
+    .segment-phase-canceled { color: var(--seg-canceled); }
+    .segment-phase-aborted { color: var(--seg-aborted); }
+    .segment-phase-error { color: var(--seg-error); }
+    .segment-block.segment-phase-requested { background: var(--seg-requested); }
+    .segment-block.segment-phase-queued { background: var(--seg-queued); }
+    .segment-block.segment-phase-prefetching { background: var(--seg-prefetching); }
+    .segment-block.segment-phase-processing { background: var(--seg-processing); }
+    .segment-block.segment-phase-ready { background: var(--seg-ready); }
+    .segment-block.segment-phase-cache-hit { background: var(--seg-cache-hit); }
+    .segment-block.segment-phase-delivered { background: var(--seg-delivered); }
+    .segment-block.segment-phase-canceled { background: var(--seg-canceled); }
+    .segment-block.segment-phase-aborted { background: var(--seg-aborted); }
+    .segment-block.segment-phase-error { background: var(--seg-error); }
+    @media (max-width: 760px) {
+      .segment-row {
+        grid-template-columns: 1fr;
+      }
+    }
     #log {
       margin-top: 1rem;
       padding: 1rem;
@@ -126,6 +250,14 @@
       <div class="workers-summary" id="worker-summary"></div>
     </div>
     <div class="worker-grid" id="worker-list"></div>
+  </section>
+  <section class="segments">
+    <div class="segments-header">
+      <div class="segments-title">Segment timeline</div>
+      <div class="segments-summary" id="segment-summary"></div>
+    </div>
+    <div class="segment-legend" id="segment-legend"></div>
+    <div class="segment-list" id="segment-list"></div>
   </section>
   <div id="log"></div>
   <script type="module" src="/src/debug.ts"></script>
