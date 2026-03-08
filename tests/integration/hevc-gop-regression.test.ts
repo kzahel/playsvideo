@@ -81,7 +81,9 @@ describe('HEVC GOP timestamp regression', () => {
     expect(gop!.packets.length).toBeGreaterThan(1);
     expect(gop!.packets[0].type).toBe('key');
     expect(
-      gop!.packets.some((packet, index) => index > 0 && packet.timestamp < gop!.packets[0].timestamp),
+      gop!.packets.some(
+        (packet, index) => index > 0 && packet.timestamp < gop!.packets[0].timestamp,
+      ),
     ).toBe(true);
 
     const endSec = gop!.nextKeyframeTimestamp ?? demux.duration;

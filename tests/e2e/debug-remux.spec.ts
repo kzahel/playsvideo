@@ -3,7 +3,9 @@ import { expect, test } from '@playwright/test';
 const DEFAULT_VIDEO =
   '/Users/kgraehl/Downloads/JSTorrent/Z00topia.2.2025.1080p.hevc.x265.RMTeam.mkv';
 
-test('debug player remuxes the local HEVC MKV without GOP timestamp regression', async ({ page }) => {
+test('debug player remuxes the local HEVC MKV without GOP timestamp regression', async ({
+  page,
+}) => {
   const videoPath = process.env.PLAYSVIDEO_TEST_FILE || DEFAULT_VIDEO;
   const muxerError = /Timestamps cannot be smaller than the largest timestamp of the previous GOP/;
 

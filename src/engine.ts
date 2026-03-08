@@ -1077,9 +1077,7 @@ export class PlaysVideoEngine extends EventTarget {
         const message = underlyingMessage
           ? `Playback error: ${data.details} (${underlyingMessage})`
           : `Playback error: ${data.details}`;
-        this.dispatchEvent(
-          new CustomEvent('error', { detail: { message } }),
-        );
+        this.dispatchEvent(new CustomEvent('error', { detail: { message } }));
       }
     });
 
@@ -1109,7 +1107,9 @@ export class PlaysVideoEngine extends EventTarget {
     const blob = new Blob([webvtt], { type: 'text/vtt' });
     const url = URL.createObjectURL(blob);
     const info =
-      trackIndex === undefined ? undefined : this._subtitleTracks.find((t) => t.index === trackIndex);
+      trackIndex === undefined
+        ? undefined
+        : this._subtitleTracks.find((t) => t.index === trackIndex);
     const track = document.createElement('track');
     track.kind = kind ?? (info?.disposition.hearingImpaired ? 'captions' : 'subtitles');
     track.src = url;
@@ -1117,7 +1117,10 @@ export class PlaysVideoEngine extends EventTarget {
     track.label =
       label ??
       info?.name ??
-      languageLabel(info?.language ?? 'und', trackIndex ?? this.video.querySelectorAll('track').length);
+      languageLabel(
+        info?.language ?? 'und',
+        trackIndex ?? this.video.querySelectorAll('track').length,
+      );
     track.default = defaultTrack;
     this.video.appendChild(track);
     this.attachedSubtitleTracks.push({ element: track, url, source });
