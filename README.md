@@ -67,6 +67,9 @@ engine.loadFile(file);
 // Or play from a URL (requires CORS + range request support)
 engine.loadUrl('https://example.com/video.mkv');
 
+// Or attach an external .srt/.vtt subtitle file after loading
+await engine.loadExternalSubtitle(subtitleFile);
+
 engine.destroy(); // clean up
 ```
 

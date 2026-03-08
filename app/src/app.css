@@ -246,10 +246,25 @@ body {
   background: var(--video-bg);
   border-radius: 4px;
 }
+.player-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+  margin-top: 0.75rem;
+}
+.player-subtitle-input {
+  display: none;
+}
 .player-status {
   color: var(--muted);
   margin-top: 0.5rem;
   font-size: 0.9rem;
+}
+.player-subtitle-status {
+  color: var(--muted);
+  margin-top: 0.35rem;
+  font-size: 0.9rem;
+  min-height: 1.25rem;
 }
 
 .player-back {

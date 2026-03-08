@@ -15,6 +15,7 @@ import type { DemuxResult } from './pipeline/demux.js';
 import { demuxSource, getKeyframeIndex } from './pipeline/demux.js';
 import { generateVodPlaylist } from './pipeline/playlist.js';
 import { buildSegmentPlan } from './pipeline/segment-plan.js';
+import { parseSubtitleFile, subtitleDataToWebVTT } from './pipeline/subtitle.js';
 import { processSegmentWithAbort } from './pipeline/segment-processor.js';
 import { isAbortableSource } from './pipeline/source-signal.js';
 import type {
@@ -94,6 +95,12 @@ export interface EngineOptions {
   transcodeWorkers?: number;
 }
 
+export interface ExternalSubtitleOptions {
+  label?: string;
+  language?: string;
+  kind?: 'subtitles' | 'captions';
+}
+
 interface EngineEventMap {
   ready: CustomEvent<ReadyDetail>;
   error: CustomEvent<ErrorDetail>;
@@ -104,6 +111,12 @@ interface EngineEventMap {
 
 interface TranscodeWorkerHandle {
   worker: Worker;
+}
+
+interface AttachedSubtitleTrack {
+  element: HTMLTrackElement;
+  url: string;
+  source: 'embedded' | 'external';
 }
 
 function defaultTranscodeWorkerCount(): number {
@@ -144,7 +157,7 @@ export class PlaysVideoEngine extends EventTarget {
   private segmentRequestTimes = new Map<number, number>();
 
   // Subtitle state
-  private subtitleBlobUrls: string[] = [];
+  private attachedSubtitleTracks: AttachedSubtitleTrack[] = [];
   private _subtitleTracks: SubtitleTrackInfo[] = [];
 
   // Public read-only state
@@ -227,6 +240,35 @@ export class PlaysVideoEngine extends EventTarget {
     mlog(`open url=${url}`);
   }
 
+  async loadExternalSubtitle(file: File, options: ExternalSubtitleOptions = {}): Promise<void> {
+    if (this._phase !== 'ready') {
+      throw new Error('Load a video before adding an external subtitle file');
+    }
+
+    const text = await file.text();
+    const data = parseSubtitleFile(text, file.name);
+    if (data.codec === 'ass' || data.codec === 'ssa') {
+      throw new Error('External .ass/.ssa subtitles are not supported yet');
+    }
+
+    const webvtt = subtitleDataToWebVTT(data);
+    this.clearExternalSubtitles();
+    this.addSubtitleTrack({
+      webvtt,
+      source: 'external',
+      label: options.label ?? file.name.replace(/\.[^.]+$/, ''),
+      language: options.language ?? 'und',
+      kind: options.kind ?? 'subtitles',
+      defaultTrack: true,
+      selectTrack: true,
+    });
+  }
+
+  clearExternalSubtitles(): void {
+    this.removeSubtitleTracks('external');
+    this.restoreDefaultTextTrack();
+  }
+
   /**
    * Load from an external Source (e.g. TorrentSource).
    *
@@ -280,8 +322,6 @@ export class PlaysVideoEngine extends EventTarget {
     this.initData = null;
     this.pendingSegments.clear();
     this.segmentRequestTimes.clear();
-    for (const url of this.subtitleBlobUrls) URL.revokeObjectURL(url);
-    this.subtitleBlobUrls = [];
     this.removeSubtitleTracks();
 
     this._phase = 'demuxing';
@@ -387,8 +427,6 @@ export class PlaysVideoEngine extends EventTarget {
       this.video.removeAttribute('src');
       this.video.load();
     }
-    for (const url of this.subtitleBlobUrls) URL.revokeObjectURL(url);
-    this.subtitleBlobUrls = [];
     this.removeSubtitleTracks();
     this.pendingSegments.clear();
     this.segmentRequestTimes.clear();
@@ -638,7 +676,12 @@ export class PlaysVideoEngine extends EventTarget {
       this.startHls();
     } else if (msg.type === 'subtitle') {
       mlog(`subtitle arrived track=${msg.trackIndex} codec=${msg.codec} len=${msg.webvtt?.length}`);
-      this.addSubtitleTrack(msg.webvtt, msg.trackIndex);
+      this.addSubtitleTrack({
+        webvtt: msg.webvtt,
+        source: 'embedded',
+        trackIndex: msg.trackIndex,
+        defaultTrack: msg.trackIndex === 0,
+      });
     } else if (msg.type === 'segment-state') {
       this.handleWorkerSegmentState(msg);
     } else if (msg.type === 'segment') {
@@ -1023,12 +1066,19 @@ export class PlaysVideoEngine extends EventTarget {
     });
 
     this.hls.on(Hls.Events.ERROR, (_evt, data) => {
-      mlog(`hls ERROR fatal=${data.fatal} type=${data.type} details=${data.details}`);
+      const underlyingMessage =
+        data.error?.message ?? data.reason ?? data.response?.text ?? data.err?.message ?? null;
+      mlog(
+        `hls ERROR fatal=${data.fatal} type=${data.type} details=${data.details}${underlyingMessage ? ` message=${underlyingMessage}` : ''}`,
+      );
       if (data.fatal) {
         console.error('hls.js fatal error:', data);
         this._phase = 'error';
+        const message = underlyingMessage
+          ? `Playback error: ${data.details} (${underlyingMessage})`
+          : `Playback error: ${data.details}`;
         this.dispatchEvent(
-          new CustomEvent('error', { detail: { message: `Playback error: ${data.details}` } }),
+          new CustomEvent('error', { detail: { message } }),
         );
       }
     });
@@ -1037,30 +1087,75 @@ export class PlaysVideoEngine extends EventTarget {
     this.hls.attachMedia(this.video);
   }
 
-  private addSubtitleTrack(webvtt: string, trackIndex: number): void {
+  private addSubtitleTrack({
+    webvtt,
+    source,
+    trackIndex,
+    label,
+    language,
+    kind,
+    defaultTrack = false,
+    selectTrack = false,
+  }: {
+    webvtt: string;
+    source: 'embedded' | 'external';
+    trackIndex?: number;
+    label?: string;
+    language?: string;
+    kind?: 'subtitles' | 'captions';
+    defaultTrack?: boolean;
+    selectTrack?: boolean;
+  }): void {
     const blob = new Blob([webvtt], { type: 'text/vtt' });
     const url = URL.createObjectURL(blob);
-    this.subtitleBlobUrls.push(url);
-
-    const info = this._subtitleTracks.find((t) => t.index === trackIndex);
+    const info =
+      trackIndex === undefined ? undefined : this._subtitleTracks.find((t) => t.index === trackIndex);
     const track = document.createElement('track');
-    track.kind = info?.disposition.hearingImpaired ? 'captions' : 'subtitles';
+    track.kind = kind ?? (info?.disposition.hearingImpaired ? 'captions' : 'subtitles');
     track.src = url;
-    track.srclang = iso639_2to1(info?.language ?? 'und');
-    track.label = info?.name ?? languageLabel(info?.language ?? 'und', trackIndex);
-    if (trackIndex === 0) {
-      track.default = true;
-    }
+    track.srclang = normalizeSubtitleLanguageCode(language ?? info?.language ?? 'und');
+    track.label =
+      label ??
+      info?.name ??
+      languageLabel(info?.language ?? 'und', trackIndex ?? this.video.querySelectorAll('track').length);
+    track.default = defaultTrack;
     this.video.appendChild(track);
+    this.attachedSubtitleTracks.push({ element: track, url, source });
+    if (selectTrack) {
+      track.addEventListener('load', () => this.showTextTrack(track), { once: true });
+      queueMicrotask(() => this.showTextTrack(track));
+    }
     mlog(
-      `subtitle track ${trackIndex} attached as <track kind=${track.kind} lang=${track.srclang}>`,
+      `subtitle track ${trackIndex ?? 'external'} attached as <track kind=${track.kind} lang=${track.srclang}>`,
     );
   }
 
-  private removeSubtitleTracks(): void {
-    for (const track of Array.from(this.video.querySelectorAll('track'))) {
-      track.remove();
+  private removeSubtitleTracks(source?: 'embedded' | 'external'): void {
+    const keep: AttachedSubtitleTrack[] = [];
+    for (const attached of this.attachedSubtitleTracks) {
+      if (source && attached.source !== source) {
+        keep.push(attached);
+        continue;
+      }
+      attached.element.remove();
+      URL.revokeObjectURL(attached.url);
     }
+    this.attachedSubtitleTracks = keep;
+  }
+
+  private showTextTrack(track: HTMLTrackElement): void {
+    for (let i = 0; i < this.video.textTracks.length; i++) {
+      this.video.textTracks[i].mode = 'disabled';
+    }
+    track.track.mode = 'showing';
+  }
+
+  private restoreDefaultTextTrack(): void {
+    const preferred =
+      this.attachedSubtitleTracks.find((attached) => attached.element.default) ??
+      this.attachedSubtitleTracks[0];
+    if (!preferred) return;
+    queueMicrotask(() => this.showTextTrack(preferred.element));
   }
 }
 
@@ -1109,6 +1204,11 @@ function iso639_2to1(code: string): string {
     und: '',
   };
   return map[code] ?? code;
+}
+
+function normalizeSubtitleLanguageCode(code: string): string {
+  if (code.length === 2) return code;
+  return iso639_2to1(code);
 }
 
 function languageLabel(langCode: string, trackIndex: number): string {

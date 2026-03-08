@@ -16,6 +16,30 @@
     video { width: 100%; max-width: 1280px; display: none; margin-top: 1rem; background: var(--video-bg); }
     #status { margin-top: 0.5rem; color: var(--muted); }
     input[type="file"] { font-size: 1rem; color: var(--file-color); }
+    .player-controls {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 0.5rem;
+      align-items: center;
+      margin-bottom: 0.5rem;
+    }
+    .player-controls button {
+      background: none;
+      border: 1px solid var(--muted);
+      color: var(--fg);
+      padding: 0.4rem 0.9rem;
+      border-radius: 6px;
+      cursor: pointer;
+      font-size: 0.9rem;
+    }
+    .player-controls button:hover { border-color: var(--fg); }
+    .player-controls button:disabled { opacity: 0.5; cursor: default; }
+    #subtitle-status {
+      margin-bottom: 0.5rem;
+      color: var(--muted);
+      font-size: 0.9rem;
+      min-height: 1.25rem;
+    }
     .header { display: flex; align-items: center; gap: 0.75rem; margin-bottom: 1rem; }
     .theme-toggle { background: none; border: 1px solid var(--muted); color: var(--fg); border-radius: 50%; width: 32px; height: 32px; cursor: pointer; font-size: 14px; display: flex; align-items: center; justify-content: center; opacity: 0.6; flex-shrink: 0; }
     .theme-toggle:hover { opacity: 1; }
@@ -241,8 +265,14 @@
     <span style="color: var(--muted); font-size: 12px;">debug</span>
     <button class="theme-toggle" id="theme-toggle" aria-label="Toggle theme"></button>
   </div>
-  <input type="file" id="file-input">
+  <div class="player-controls">
+    <input type="file" id="file-input">
+    <input type="file" id="subtitle-input" accept=".srt,.vtt" style="display:none">
+    <button id="load-subtitles" disabled>Load subtitles</button>
+    <button id="clear-subtitles" disabled>Clear subtitles</button>
+  </div>
   <p id="status">Select a video file to play.</p>
+  <div id="subtitle-status"></div>
   <video id="video" controls autoplay></video>
   <section class="workers">
     <div class="workers-header">

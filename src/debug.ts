@@ -1,17 +1,29 @@
 import type { SegmentPhase, SegmentState, WasmWorkerState } from './engine.js';
 import { PlaysVideoEngine } from './engine.js';
+import { bindExternalSubtitlePicker } from './external-subtitle-picker.js';
 
 const fileInput = document.getElementById('file-input') as HTMLInputElement;
+const subtitleInput = document.getElementById('subtitle-input') as HTMLInputElement;
 const video = document.getElementById('video') as HTMLVideoElement;
 const status = document.getElementById('status') as HTMLElement;
+const subtitleStatus = document.getElementById('subtitle-status') as HTMLElement;
 const logEl = document.getElementById('log') as HTMLElement;
 const workerSummaryEl = document.getElementById('worker-summary') as HTMLElement;
 const workerListEl = document.getElementById('worker-list') as HTMLElement;
 const segmentSummaryEl = document.getElementById('segment-summary') as HTMLElement;
 const segmentLegendEl = document.getElementById('segment-legend') as HTMLElement;
 const segmentListEl = document.getElementById('segment-list') as HTMLElement;
+const loadSubtitles = document.getElementById('load-subtitles') as HTMLButtonElement;
+const clearSubtitles = document.getElementById('clear-subtitles') as HTMLButtonElement;
 
 const engine = new PlaysVideoEngine(video);
+const subtitlePicker = bindExternalSubtitlePicker({
+  engine,
+  input: subtitleInput,
+  openButton: loadSubtitles,
+  clearButton: clearSubtitles,
+  status: subtitleStatus,
+});
 let workerStates: WasmWorkerState[] = [];
 let segmentStates: SegmentState[] = [];
 
@@ -44,6 +56,8 @@ engine.addEventListener('loading', (e) => {
   const { file, url } = e.detail;
   status.textContent = `Opening ${file?.name ?? url ?? ''}...`;
   video.style.display = 'none';
+  loadSubtitles.disabled = true;
+  subtitlePicker.reset();
   if (file) {
     log(
       'loading',
@@ -59,6 +73,7 @@ engine.addEventListener('ready', (e) => {
   const mode = passthrough ? 'direct playback' : `${totalSegments} segments`;
   status.textContent = `Ready — ${mode}, ${formatTime(durationSec)}`;
   video.style.display = 'block';
+  loadSubtitles.disabled = false;
   log('ready', `ready mode=${mode} duration=${durationSec.toFixed(1)}s`);
   if (subtitleTracks.length > 0) {
     for (const t of subtitleTracks) {
@@ -73,6 +88,8 @@ engine.addEventListener('ready', (e) => {
 
 engine.addEventListener('error', (e) => {
   status.textContent = `Error: ${e.detail.message}`;
+  loadSubtitles.disabled = true;
+  subtitlePicker.reset();
   log('error', e.detail.message);
   renderWorkerStates();
 });

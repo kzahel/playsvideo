@@ -1,12 +1,25 @@
 import { PlaysVideoEngine } from './engine.js';
+import { bindExternalSubtitlePicker } from './external-subtitle-picker.js';
 
 const fileInput = document.getElementById('file-input') as HTMLInputElement;
+const subtitleInput = document.getElementById('subtitle-input') as HTMLInputElement;
 const video = document.getElementById('video') as HTMLVideoElement;
 const status = document.getElementById('status') as HTMLElement;
+const subtitleStatus = document.getElementById('subtitle-status') as HTMLElement;
 const dropTarget = document.getElementById('drop-target') as HTMLElement;
 const openAnother = document.getElementById('open-another') as HTMLButtonElement;
+const loadSubtitles = document.getElementById('load-subtitles') as HTMLButtonElement;
+const clearSubtitles = document.getElementById('clear-subtitles') as HTMLButtonElement;
+const playerActions = document.getElementById('player-actions') as HTMLElement;
 
 const engine = new PlaysVideoEngine(video);
+const subtitlePicker = bindExternalSubtitlePicker({
+  engine,
+  input: subtitleInput,
+  openButton: loadSubtitles,
+  clearButton: clearSubtitles,
+  status: subtitleStatus,
+});
 
 function loadFile(file: File) {
   engine.loadFile(file);
@@ -82,7 +95,8 @@ engine.addEventListener('loading', (e) => {
   status.textContent = `Opening ${e.detail.file?.name ?? e.detail.url ?? ''}...`;
   dropTarget.classList.add('hidden');
   video.style.display = 'none';
-  openAnother.style.display = 'none';
+  playerActions.style.display = 'none';
+  subtitlePicker.reset();
 });
 
 engine.addEventListener('ready', (e) => {
@@ -90,13 +104,14 @@ engine.addEventListener('ready', (e) => {
   status.textContent = `Ready — ${mode}, ${formatTime(e.detail.durationSec)}`;
   dropTarget.classList.add('hidden');
   video.style.display = 'block';
-  openAnother.style.display = 'inline-block';
+  playerActions.style.display = 'flex';
 });
 
 engine.addEventListener('error', (e) => {
   status.textContent = `Error: ${e.detail.message}`;
   dropTarget.classList.remove('hidden');
-  openAnother.style.display = 'none';
+  playerActions.style.display = 'none';
+  subtitlePicker.reset();
 });
 
 function formatTime(sec: number): string {

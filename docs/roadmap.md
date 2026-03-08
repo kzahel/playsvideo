@@ -11,9 +11,9 @@ Full-featured media player built with React, living in `app/` as a separate pnpm
 - **Search/filter/sort** — filter library by name, sort by date/size/watch state
 - **Responsive sidebar** — permanent on desktop, hamburger on mobile
 
-## User-imported subtitles
+## External subtitle follow-up
 
-Load external `.srt` or `.vtt` subtitle files alongside the video. The subtitle parsing pipeline (`parseSubtitleFile`) already exists — this just needs UI to select a file and wire it to the engine.
+External `.srt` and `.vtt` subtitle loading is now wired into the engine and player surfaces. Remaining work here is broader format support, especially external `.ass/.ssa` rendering.
 
 ## WebCodecs audio transcode
 

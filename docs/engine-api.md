@@ -31,6 +31,7 @@ Everything you'd normally do with a `<video>` element works unchanged:
 | Instead of | Use |
 |---|---|
 | `video.src = '...'` | `engine.loadFile(file)` or `engine.loadUrl(url)` |
+| external subtitle `<track>` plumbing | `engine.loadExternalSubtitle(file)` |
 | — | `engine.destroy()` to release resources |
 | — | `engine.addEventListener('loading' \| 'ready' \| 'error', ...)` for engine lifecycle |
 | — | `engine.phase`, `engine.loading`, `engine.subtitleTracks` for engine state |
@@ -62,6 +63,27 @@ Load a video from an HTTP URL. The server must support CORS and HTTP range reque
 
 ```ts
 engine.loadUrl('https://example.com/video.mkv');
+```
+
+### `loadExternalSubtitle(file: File, options?): Promise<void>`
+
+Attach one user-provided external subtitle file to the current video and make it the active text track. Loading a new external subtitle replaces the previous external subtitle, but leaves embedded tracks intact.
+
+Currently supports `.srt` and `.vtt`.
+
+```ts
+const subFile = subtitleInput.files?.[0];
+if (subFile) {
+  await engine.loadExternalSubtitle(subFile);
+}
+```
+
+### `clearExternalSubtitles(): void`
+
+Remove any previously loaded external subtitle tracks.
+
+```ts
+engine.clearExternalSubtitles();
 ```
 
 ### `destroy(): void`
@@ -181,5 +203,6 @@ engine.loadUrl('https://example.com/video.mkv');
 
 - Calling `loadFile` or `loadUrl` while already playing will cleanly tear down the previous session and start a new one.
 - Embedded subtitles (SRT, ASS/SSA) are automatically extracted and attached as `<track>` elements on the video.
+- External subtitle import currently supports `.srt` and `.vtt`. External `.ass/.ssa` files are not yet rendered because the engine's external-file path converts imported subtitles to WebVTT, and the ASS/SSA parser path is still a placeholder.
 - Audio codecs unsupported by the browser (AC-3, DTS, FLAC, etc.) are transcoded to AAC on the fly using a lightweight ffmpeg.wasm build that is lazy-loaded only when needed.
 - URL loading uses HTTP range requests for random access — the entire file is **not** downloaded upfront.

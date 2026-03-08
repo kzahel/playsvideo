@@ -10,6 +10,30 @@
     video { width: 100%; max-width: 1280px; display: none; margin-top: 1rem; background: var(--video-bg); }
     #status { margin-top: 0.5rem; color: var(--muted); }
     input[type="file"] { font-size: 1rem; color: var(--file-color); }
+    .player-controls {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 0.5rem;
+      align-items: center;
+      margin-bottom: 0.5rem;
+    }
+    .player-controls button {
+      background: none;
+      border: 1px solid var(--muted);
+      color: var(--fg);
+      padding: 0.4rem 0.9rem;
+      border-radius: 6px;
+      cursor: pointer;
+      font-size: 0.9rem;
+    }
+    .player-controls button:hover { border-color: var(--fg); }
+    .player-controls button:disabled { opacity: 0.5; cursor: default; }
+    #subtitle-status {
+      margin-top: 0.35rem;
+      color: var(--muted);
+      font-size: 0.9rem;
+      min-height: 1.25rem;
+    }
     .header { display: flex; align-items: center; gap: 0.75rem; margin-bottom: 1rem; }
     .drop-overlay {
       display: none;
@@ -31,8 +55,14 @@
       <text x="164" y="38" font-family="'Inter', sans-serif" font-weight="300" font-size="38" fill="currentColor" letter-spacing="-2">video</text>
     </svg>
   </div>
-  <input type="file" id="file-input" accept="video/*">
+  <div class="player-controls">
+    <input type="file" id="file-input" accept="video/*">
+    <input type="file" id="subtitle-input" accept=".srt,.vtt" style="display:none">
+    <button id="load-subtitles" disabled>Load subtitles</button>
+    <button id="clear-subtitles" disabled>Clear subtitles</button>
+  </div>
   <p id="status">Select or drop a video file to play.</p>
+  <div id="subtitle-status"></div>
   <video id="video" controls autoplay></video>
   <div class="drop-overlay" id="drop-overlay">Drop video file here</div>
   <script type="module" src="./player.ts"></script>

@@ -8,6 +8,9 @@ interface UseEngineResult {
   videoRef: React.RefObject<HTMLVideoElement | null>;
   status: string;
   phase: string;
+  subtitleStatus: string;
+  loadSubtitleFile: (file: File) => Promise<void>;
+  clearExternalSubtitles: () => void;
 }
 
 export function useEngine(entry: LibraryEntry | null): UseEngineResult {
@@ -17,6 +20,7 @@ export function useEngine(entry: LibraryEntry | null): UseEngineResult {
   entryRef.current = entry;
   const [status, setStatus] = useState('');
   const [phase, setPhase] = useState('idle');
+  const [subtitleStatus, setSubtitleStatus] = useState('');
 
   const savePosition = useCallback(async () => {
     const currentEntry = entryRef.current;
@@ -51,6 +55,7 @@ export function useEngine(entry: LibraryEntry | null): UseEngineResult {
     engine.addEventListener('loading', ((e: CustomEvent) => {
       setStatus(`Opening ${e.detail.file?.name ?? ''}...`);
       setPhase('demuxing');
+      setSubtitleStatus('');
     }) as EventListener);
 
     engine.addEventListener('ready', ((e: CustomEvent) => {
@@ -92,5 +97,27 @@ export function useEngine(entry: LibraryEntry | null): UseEngineResult {
     };
   }, [entry?.id]);
 
-  return { videoRef, status, phase };
+  const loadSubtitleFile = useCallback(async (file: File) => {
+    const engine = engineRef.current;
+    if (!engine) {
+      const error = new Error('Player is not ready');
+      setSubtitleStatus(`Subtitle error: ${error.message}`);
+      throw error;
+    }
+    try {
+      await engine.loadExternalSubtitle(file);
+      setSubtitleStatus(`Subtitles: ${file.name}`);
+    } catch (err: unknown) {
+      const message = err instanceof Error ? err.message : String(err);
+      setSubtitleStatus(`Subtitle error: ${message}`);
+      throw err;
+    }
+  }, []);
+
+  const clearExternalSubtitles = useCallback(() => {
+    engineRef.current?.clearExternalSubtitles();
+    setSubtitleStatus('');
+  }, []);
+
+  return { videoRef, status, phase, subtitleStatus, loadSubtitleFile, clearExternalSubtitles };
 }

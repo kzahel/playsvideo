@@ -28,8 +28,11 @@
     .drop-target:hover { border-color: var(--fg); color: var(--fg); }
     .drop-target.dragover { border-color: var(--fg); color: var(--fg); background: rgba(128,128,128,0.08); }
     .drop-target.hidden { display: none; }
-    #open-another { display: none; margin-top: 0.5rem; background: none; border: 1px solid var(--muted); color: var(--fg); padding: 0.4rem 1rem; border-radius: 6px; cursor: pointer; font-size: 0.9rem; }
-    #open-another:hover { border-color: var(--fg); }
+    .player-actions { display: none; gap: 0.5rem; flex-wrap: wrap; margin-top: 0.75rem; }
+    .player-actions button { background: none; border: 1px solid var(--muted); color: var(--fg); padding: 0.4rem 1rem; border-radius: 6px; cursor: pointer; font-size: 0.9rem; }
+    .player-actions button:hover { border-color: var(--fg); }
+    .player-actions button:disabled { opacity: 0.5; cursor: default; }
+    #subtitle-status { margin-top: 0.5rem; color: var(--muted); font-size: 0.9rem; min-height: 1.25rem; }
   </style>
   <script>
     (function() {
@@ -48,10 +51,16 @@
     <button class="theme-toggle" id="theme-toggle" aria-label="Toggle theme"></button>
   </div>
   <input type="file" id="file-input" class="hidden" style="display:none">
+  <input type="file" id="subtitle-input" accept=".srt,.vtt" class="hidden" style="display:none">
   <div class="drop-target" id="drop-target">Drop a video file here, or click to browse</div>
   <p id="status"></p>
   <video id="video" controls autoplay></video>
-  <button id="open-another">Open another file</button>
+  <div class="player-actions" id="player-actions">
+    <button id="open-another">Open another file</button>
+    <button id="load-subtitles">Load subtitles</button>
+    <button id="clear-subtitles" disabled>Clear subtitles</button>
+  </div>
+  <div id="subtitle-status"></div>
   <script type="module" src="/src/pwa-player.ts"></script>
   <script>
     (function() {

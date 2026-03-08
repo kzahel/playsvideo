@@ -1,11 +1,23 @@
 import { PlaysVideoEngine } from '../src/engine.js';
+import { bindExternalSubtitlePicker } from '../src/external-subtitle-picker.js';
 
 const fileInput = document.getElementById('file-input') as HTMLInputElement;
+const subtitleInput = document.getElementById('subtitle-input') as HTMLInputElement;
 const video = document.getElementById('video') as HTMLVideoElement;
 const status = document.getElementById('status') as HTMLElement;
+const subtitleStatus = document.getElementById('subtitle-status') as HTMLElement;
 const dropOverlay = document.getElementById('drop-overlay') as HTMLElement;
+const loadSubtitles = document.getElementById('load-subtitles') as HTMLButtonElement;
+const clearSubtitles = document.getElementById('clear-subtitles') as HTMLButtonElement;
 
 const engine = new PlaysVideoEngine(video);
+const subtitlePicker = bindExternalSubtitlePicker({
+  engine,
+  input: subtitleInput,
+  openButton: loadSubtitles,
+  clearButton: clearSubtitles,
+  status: subtitleStatus,
+});
 
 function loadFile(file: File): void {
   engine.loadFile(file);
@@ -57,16 +69,21 @@ if ('launchQueue' in window) {
 engine.addEventListener('loading', (e) => {
   status.textContent = `Opening ${e.detail.file?.name ?? e.detail.url ?? ''}...`;
   video.style.display = 'none';
+  loadSubtitles.disabled = true;
+  subtitlePicker.reset();
 });
 
 engine.addEventListener('ready', (e) => {
   const mode = e.detail.passthrough ? 'direct playback' : `${e.detail.totalSegments} segments`;
   status.textContent = `Ready — ${mode}, ${formatTime(e.detail.durationSec)}`;
   video.style.display = 'block';
+  loadSubtitles.disabled = false;
 });
 
 engine.addEventListener('error', (e) => {
   status.textContent = `Error: ${e.detail.message}`;
+  loadSubtitles.disabled = true;
+  subtitlePicker.reset();
 });
 
 function formatTime(sec: number): string {

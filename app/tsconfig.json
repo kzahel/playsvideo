@@ -3,11 +3,15 @@
     "target": "ES2022",
     "module": "ESNext",
     "moduleResolution": "bundler",
+    "baseUrl": ".",
     "lib": ["ES2022", "DOM", "DOM.Iterable"],
     "jsx": "react-jsx",
     "strict": true,
     "skipLibCheck": true,
     "esModuleInterop": true,
+    "paths": {
+      "playsvideo": ["../src/index.ts"]
+    },
     "outDir": "dist"
   },
   "include": ["src/**/*.ts", "src/**/*.tsx"]
