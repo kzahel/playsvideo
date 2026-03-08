@@ -4,6 +4,17 @@ All notable changes to playsvideo are documented here.
 
 ## [Unreleased]
 
+## [0.3.0] - 2026-03-08
+
+### Added
+- External subtitle loading API (`loadExternalSubtitle`, `clearExternalSubtitles`)
+- Segment state tracking (`segmentstatechange` event, `segmentStates` getter)
+- Worker state tracking (`workerstatechange` event, `transcodeWorkerStates` getter)
+- `bindExternalSubtitlePicker` UI helper for file-based subtitle loading
+
+### Fixed
+- HLS error events now include underlying error detail
+
 ## [0.2.1] - 2026-03-07
 
 ### Fixed
