@@ -78,8 +78,8 @@ React app with library management at `/app`. Separate workspace with its own `pa
 - Concurrent ffmpeg.wasm calls are serialized (shared MEMFS corruption)
 
 ### mediabunny
-- `kzahel/mediabunny#integration` fork — merges upstream CTS fix (PR #317) with subtitle support (PR #166)
-- Source at `~/code/references/mediabunny`
+- See `docs/mediabunny-integration.md` for current fork state and maintenance plan
+- Source of truth should be one local checkout at `~/code/references/mediabunny`
 - Key: `collectPacketsInRange` needs `{ startFromKeyframe: true }` for video
 - API: `EncodedVideoPacketSource.add(packet, { decoderConfig })`, `Mp4OutputFormat({ fastStart: 'fragmented', onMoov, onMoof, onMdat })`, `NullTarget` with callbacks for streaming
 

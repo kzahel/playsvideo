@@ -28,6 +28,7 @@
     "test": "vitest run",
     "test:unit": "vitest run tests/unit",
     "test:integration": "vitest run tests/integration",
+    "test:integration:hevc-gop": "vitest run tests/integration/hevc-gop-regression.test.ts",
     "test:watch": "vitest",
     "test:e2e": "npx playwright test",
     "typecheck": "tsc --noEmit",
