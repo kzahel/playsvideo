@@ -204,5 +204,5 @@ engine.loadUrl('https://example.com/video.mkv');
 - Calling `loadFile` or `loadUrl` while already playing will cleanly tear down the previous session and start a new one.
 - Embedded subtitles (SRT, ASS/SSA) are automatically extracted and attached as `<track>` elements on the video.
 - External subtitle import currently supports `.srt` and `.vtt`. External `.ass/.ssa` files are not yet rendered because the engine's external-file path converts imported subtitles to WebVTT, and the ASS/SSA parser path is still a placeholder.
-- Audio codecs unsupported by the browser (AC-3, DTS, FLAC, etc.) are transcoded to AAC on the fly using a lightweight ffmpeg.wasm build that is lazy-loaded only when needed.
+- Audio codecs unsupported by the active playback path are transcoded to AAC on the fly using a lightweight ffmpeg.wasm build that is lazy-loaded only when needed. Passthrough/native playback and remuxed HLS/MSE playback are evaluated separately, so a codec may be allowed for direct playback but still be transcoded in the remux pipeline.
 - URL loading uses HTTP range requests for random access — the entire file is **not** downloaded upfront.
