@@ -45,14 +45,14 @@ fi
 
 # Run green gates
 echo "Running green gates..."
-npm run typecheck
-npm run lint
-npm run format:check
-npm run test:unit
+pnpm run typecheck
+pnpm run lint
+pnpm run format:check
+pnpm run test:unit
 
 # Build extension to verify it compiles
 echo "Building extension..."
-npm run build:extension
+pnpm run build:extension
 
 # Update manifest.json version
 CURRENT_VERSION=$(grep -o '"version": "[^"]*"' "$MANIFEST" | grep -o '[0-9][^"]*')
