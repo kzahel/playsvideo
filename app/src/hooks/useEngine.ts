@@ -74,6 +74,10 @@ export function useEngine(entry: LibraryEntry | null): UseEngineResult {
       db.library.update(entry.id, { durationSec: e.detail.durationSec });
     }) as EventListener);
 
+    engine.addEventListener('subtitle-status', ((e: CustomEvent) => {
+      setSubtitleStatus(e.detail.message);
+    }) as EventListener);
+
     engine.addEventListener('error', ((e: CustomEvent) => {
       setStatus(`Error: ${e.detail.message}`);
       setPhase('error');

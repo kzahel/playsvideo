@@ -53,6 +53,10 @@ export interface LoadingDetail {
   url?: string;
 }
 
+export interface SubtitleStatusDetail {
+  message: string;
+}
+
 export interface WasmWorkerState extends TranscodeWorkerSnapshot {
   id: number;
 }
@@ -753,6 +757,13 @@ export class PlaysVideoEngine extends EventTarget {
         this.startPassthrough(blobUrl);
         this.worker!.postMessage({ type: 'passthrough-pipeline' });
 
+        if (this._subtitleTracks.length > 0) {
+          this.dispatchSubtitleStatus(
+            `Extracting ${this._subtitleTracks.length} subtitle track(s)...`,
+          );
+        } else {
+          this.dispatchSubtitleStatus('No embedded subtitles');
+        }
         for (const track of this._subtitleTracks) {
           mlog(
             `requesting subtitle track=${track.index} lang=${track.language} codec=${track.codec}`,
@@ -815,6 +826,13 @@ export class PlaysVideoEngine extends EventTarget {
       }
 
       // Request subtitle extraction for all embedded tracks
+      if (this._subtitleTracks.length > 0) {
+        this.dispatchSubtitleStatus(
+          `Extracting ${this._subtitleTracks.length} subtitle track(s)...`,
+        );
+      } else {
+        this.dispatchSubtitleStatus('No embedded subtitles');
+      }
       for (const track of this._subtitleTracks) {
         mlog(
           `requesting subtitle track=${track.index} lang=${track.language} codec=${track.codec}`,
@@ -836,11 +854,19 @@ export class PlaysVideoEngine extends EventTarget {
       this.startHls();
     } else if (msg.type === 'subtitle') {
       mlog(`subtitle arrived track=${msg.trackIndex} codec=${msg.codec} len=${msg.webvtt?.length}`);
+      const info = this._subtitleTracks.find((t) => t.index === msg.trackIndex);
+      const lang = info?.language ?? '?';
+      const cueMatch = msg.webvtt?.match(/\d\d:\d\d/g);
+      const cueCount = cueMatch ? Math.floor(cueMatch.length / 2) : 0;
+      this.dispatchSubtitleStatus(
+        `Subtitle track ${msg.trackIndex}: ${lang} ${msg.codec} ${cueCount} cues, ${msg.webvtt?.length ?? 0} bytes`,
+      );
       this.addSubtitleTrack({
         webvtt: msg.webvtt,
         source: 'embedded',
         trackIndex: msg.trackIndex,
         defaultTrack: msg.trackIndex === 0,
+        selectTrack: msg.trackIndex === 0,
       });
     } else if (msg.type === 'segment-state') {
       this.handleWorkerSegmentState(msg);
@@ -1361,6 +1387,11 @@ export class PlaysVideoEngine extends EventTarget {
       this.video.textTracks[i].mode = 'disabled';
     }
     track.track.mode = 'showing';
+  }
+
+  private dispatchSubtitleStatus(message: string): void {
+    mlog(`subtitle-status: ${message}`);
+    this.dispatchEvent(new CustomEvent('subtitle-status', { detail: { message } }));
   }
 
   private restoreDefaultTextTrack(): void {
