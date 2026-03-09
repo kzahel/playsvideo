@@ -1528,7 +1528,9 @@ export class PlaysVideoEngine extends EventTarget {
 
     try {
       for (const track of subtitleTracks) {
-        mlog(`extracting subtitle track=${track.index} lang=${track.language} codec=${track.codec}`);
+        mlog(
+          `extracting subtitle track=${track.index} lang=${track.language} codec=${track.codec}`,
+        );
         const data = await extractSubtitleData(demux.input, track.index);
         const webvtt = subtitleDataToWebVTT(data);
         const cueMatch = webvtt.match(/\d\d:\d\d/g);
