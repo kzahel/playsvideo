@@ -4,6 +4,11 @@ All notable changes to playsvideo are documented here.
 
 ## [Unreleased]
 
+## [0.4.2] - 2026-03-09
+
+### Added
+- `loadWithOptions` engine method with `playbackPolicy` support
+
 ## [0.4.1] - 2026-03-09
 
 ### Added
