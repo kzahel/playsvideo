@@ -4,6 +4,11 @@ All notable changes to playsvideo are documented here.
 
 ## [Unreleased]
 
+## [0.4.1] - 2026-03-09
+
+### Added
+- MKV cue-based keyframe indexing for faster seek point detection
+
 ## [0.4.0] - 2026-03-09
 
 ### Added
