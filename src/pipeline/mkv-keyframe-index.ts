@@ -20,7 +20,9 @@ interface InternalReadableSource extends Source {
   _read(start: number, end: number): SourceReadResult | Promise<SourceReadResult | null> | null;
 }
 
-export async function buildMkvKeyframeIndexFromSource(source: Source): Promise<KeyframeIndex | null> {
+export async function buildMkvKeyframeIndexFromSource(
+  source: Source,
+): Promise<KeyframeIndex | null> {
   const size = await source.getSizeOrNull();
   if (size === null) {
     return null;
@@ -33,7 +35,9 @@ export async function buildMkvKeyframeIndexFromSource(source: Source): Promise<K
     const sliceStart = start - result.offset;
     const sliceEnd = end - result.offset;
     if (sliceStart < 0 || sliceEnd > result.bytes.length || sliceStart > sliceEnd) {
-      throw new Error(`MKV cue read returned mismatched range ${result.offset}-${result.offset + result.bytes.length}`);
+      throw new Error(
+        `MKV cue read returned mismatched range ${result.offset}-${result.offset + result.bytes.length}`,
+      );
     }
     return result.bytes.subarray(sliceStart, sliceEnd);
   }, size);
@@ -223,7 +227,8 @@ export async function parseMkvCueIndex(
   }
 
   const cuesDataStart = cuesOffset + cuesEl.dataStart;
-  const cuesDataSize = cuesEl.dataSize === UNKNOWN_SIZE ? fileSize - cuesDataStart : cuesEl.dataSize;
+  const cuesDataSize =
+    cuesEl.dataSize === UNKNOWN_SIZE ? fileSize - cuesDataStart : cuesEl.dataSize;
   const cuesBuf = await read(cuesDataStart, Math.min(cuesDataStart + cuesDataSize, fileSize));
 
   const cuePoints: MkvCuePoint[] = [];
@@ -311,10 +316,7 @@ function readElementHeader(buf: Uint8Array, offset: number): ElementHeader | nul
   };
 }
 
-function readVarIntRaw(
-  buf: Uint8Array,
-  offset: number,
-): { value: number; length: number } | null {
+function readVarIntRaw(buf: Uint8Array, offset: number): { value: number; length: number } | null {
   if (offset >= buf.length) return null;
   const first = buf[offset];
   let mask = 0x80;

@@ -2,7 +2,13 @@ import { execFileSync } from 'node:child_process';
 import { existsSync, readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { beforeAll, describe, expect, it } from 'vitest';
-import { ALL_FORMATS, EncodedPacketSink, Input, StreamSource, type EncodedPacket } from 'mediabunny';
+import {
+  ALL_FORMATS,
+  EncodedPacketSink,
+  Input,
+  StreamSource,
+  type EncodedPacket,
+} from 'mediabunny';
 import { buildMkvKeyframeIndexFromSource } from '../../src/pipeline/mkv-keyframe-index.js';
 
 const FIXTURES_DIR = join(import.meta.dirname, '..', 'fixtures');

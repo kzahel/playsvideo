@@ -33,8 +33,14 @@ function writeElementId(id: number): Uint8Array {
 function writeVarIntSize(size: number): Uint8Array {
   if (size < 0x7f) return new Uint8Array([0x80 | size]);
   if (size < 0x3fff) return new Uint8Array([0x40 | (size >> 8), size & 0xff]);
-  if (size < 0x1fffff) return new Uint8Array([0x20 | (size >> 16), (size >> 8) & 0xff, size & 0xff]);
-  return new Uint8Array([0x10 | (size >> 24), (size >> 16) & 0xff, (size >> 8) & 0xff, size & 0xff]);
+  if (size < 0x1fffff)
+    return new Uint8Array([0x20 | (size >> 16), (size >> 8) & 0xff, size & 0xff]);
+  return new Uint8Array([
+    0x10 | (size >> 24),
+    (size >> 16) & 0xff,
+    (size >> 8) & 0xff,
+    size & 0xff,
+  ]);
 }
 
 function writeUint(value: number, width: number): Uint8Array {

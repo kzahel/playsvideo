@@ -11,7 +11,10 @@ import {
 import { audioNeedsTranscode, createBrowserProber } from './pipeline/codec-probe.js';
 import type { DemuxResult } from './pipeline/demux.js';
 import { demuxBlob, demuxUrl, getKeyframeIndex } from './pipeline/demux.js';
-import { buildMkvKeyframeIndexFromBlob, buildMkvKeyframeIndexFromUrl } from './pipeline/mkv-keyframe-index.js';
+import {
+  buildMkvKeyframeIndexFromBlob,
+  buildMkvKeyframeIndexFromUrl,
+} from './pipeline/mkv-keyframe-index.js';
 import { generateVodPlaylist } from './pipeline/playlist.js';
 import { buildSegmentPlan } from './pipeline/segment-plan.js';
 import { processSegmentWithAbort } from './pipeline/segment-processor.js';
