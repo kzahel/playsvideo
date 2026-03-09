@@ -11,6 +11,7 @@ import {
 import { audioNeedsTranscode, createBrowserProber } from './pipeline/codec-probe.js';
 import type { DemuxResult } from './pipeline/demux.js';
 import { demuxBlob, demuxUrl, getKeyframeIndex } from './pipeline/demux.js';
+import { buildMkvKeyframeIndexFromBlob, buildMkvKeyframeIndexFromUrl } from './pipeline/mkv-keyframe-index.js';
 import { generateVodPlaylist } from './pipeline/playlist.js';
 import { buildSegmentPlan } from './pipeline/segment-plan.js';
 import { processSegmentWithAbort } from './pipeline/segment-processor.js';
@@ -217,6 +218,8 @@ let plan: PlannedSegment[] = [];
 let doTranscode = false;
 let audioDecoderConfig: AudioDecoderConfig | null = null;
 let initSegment: Uint8Array | null = null;
+let currentBlob: Blob | null = null;
+let currentUrl: string | null = null;
 const segmentCache = new Map<number, Uint8Array>();
 const segmentTasks = new Map<number, Promise<Uint8Array>>();
 let targetSegDuration = 4;
@@ -233,10 +236,14 @@ self.onmessage = (event: MessageEvent) => {
   if (msg.type === 'open') {
     wlog('recv open');
     targetSegDuration = msg.targetSegmentDuration ?? 4;
+    currentBlob = msg.file;
+    currentUrl = null;
     queuePipelineSetup(() => handleProbe(() => demuxBlob(msg.file)));
   } else if (msg.type === 'open-url') {
     wlog('recv open-url');
     targetSegDuration = msg.targetSegmentDuration ?? 4;
+    currentBlob = null;
+    currentUrl = msg.url;
     queuePipelineSetup(() => handleProbe(() => demuxUrl(msg.url)));
   } else if (msg.type === 'remux-pipeline') {
     wlog('recv remux-pipeline');
@@ -406,8 +413,18 @@ async function handleRemuxPipeline(prebuiltKeyframeIndex?: KeyframeIndex) {
     wlog(`keyframe-index pre-built keyframes=${index.keyframes.length}`);
   } else {
     const tIndex = performance.now();
-    index = await getKeyframeIndex(demux.videoSink, demux.duration);
-    wlog(`keyframe-index done ${elapsed(tIndex)} keyframes=${index.keyframes.length}`);
+    const mkvIndex = currentBlob
+      ? await buildMkvKeyframeIndexFromBlob(currentBlob)
+      : currentUrl
+        ? await buildMkvKeyframeIndexFromUrl(currentUrl)
+        : null;
+    if (mkvIndex) {
+      index = mkvIndex;
+      wlog(`mkv-cues done ${elapsed(tIndex)} keyframes=${index.keyframes.length}`);
+    } else {
+      index = await getKeyframeIndex(demux.videoSink, demux.duration);
+      wlog(`keyframe-index done ${elapsed(tIndex)} keyframes=${index.keyframes.length}`);
+    }
   }
 
   const tPlan = performance.now();

@@ -20,6 +20,7 @@ import {
 import { createLocalAudioTranscoder, makeAacDecoderConfig } from './pipeline/audio-transcode.js';
 import type { DemuxResult } from './pipeline/demux.js';
 import { demuxSource, getKeyframeIndex } from './pipeline/demux.js';
+import { buildMkvKeyframeIndexFromSource } from './pipeline/mkv-keyframe-index.js';
 import { generateVodPlaylist } from './pipeline/playlist.js';
 import { buildSegmentPlan } from './pipeline/segment-plan.js';
 import { parseSubtitleFile, subtitleDataToWebVTT } from './pipeline/subtitle.js';
@@ -958,8 +959,14 @@ export class PlaysVideoEngine extends EventTarget {
         index = this._keyframeIndex;
         mlog(`source pipeline: pre-built keyframes=${index.keyframes.length}`);
       } else {
-        index = await getKeyframeIndex(demux.videoSink, demux.duration);
-        mlog(`source pipeline: keyframe-index keyframes=${index.keyframes.length}`);
+        const mkvIndex = await buildMkvKeyframeIndexFromSource(source);
+        if (mkvIndex) {
+          index = mkvIndex;
+          mlog(`source pipeline: mkv-cues keyframes=${index.keyframes.length}`);
+        } else {
+          index = await getKeyframeIndex(demux.videoSink, demux.duration);
+          mlog(`source pipeline: keyframe-index keyframes=${index.keyframes.length}`);
+        }
       }
 
       // Build segment plan
