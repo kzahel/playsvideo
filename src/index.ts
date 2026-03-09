@@ -8,9 +8,32 @@ export type {
   ExternalSubtitleOptions,
 } from './engine.js';
 export { WasmFfmpegRunner } from './adapters/wasm-ffmpeg.js';
+export {
+  createBrowserPlaybackCapabilities,
+  evaluatePlaybackOptions,
+  recommendPlaybackOption,
+} from './playback-selection.js';
 export type { FfmpegRunner } from './pipeline/types.js';
 export type { KeyframeEntry, KeyframeIndex, SubtitleTrackInfo } from './pipeline/types.js';
 export type { AbortableSource } from './pipeline/source-signal.js';
+export type {
+  BrowserPlaybackCapabilityOptions,
+  CanPlayTypeResult,
+  DirectPlaybackOption,
+  EvaluatePlaybackOptionsInput,
+  HlsPlaybackOption,
+  PipelinePlaybackProbe,
+  PlaybackCapabilityContext,
+  PlaybackDiagnostic,
+  PlaybackDiagnosticCode,
+  PlaybackEvaluationResult,
+  PlaybackMediaMetadata,
+  PlaybackMode,
+  PlaybackOption,
+  PlaybackOptionEvaluation,
+  PlaybackOptionStatus,
+  PlaybackRecommendation,
+} from './playback-selection.js';
 export { isAbortableSource, checkAbort } from './pipeline/source-signal.js';
 export { demuxSource } from './pipeline/demux.js';
 export { Source } from 'mediabunny';
