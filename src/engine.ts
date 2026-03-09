@@ -9,8 +9,15 @@ import type {
 import Hls from 'hls.js';
 import type { Source } from 'mediabunny';
 import { WasmFfmpegRunner } from './adapters/wasm-ffmpeg.js';
+import {
+  createBrowserPlaybackCapabilities,
+  evaluatePlaybackOptions,
+  type PlaybackDiagnostic,
+  type PlaybackEvaluationResult,
+  type PlaybackMediaMetadata,
+  type PlaybackOptionEvaluation,
+} from './playback-selection.js';
 import { createLocalAudioTranscoder, makeAacDecoderConfig } from './pipeline/audio-transcode.js';
-import { audioNeedsTranscode, createBrowserProber } from './pipeline/codec-probe.js';
 import type { DemuxResult } from './pipeline/demux.js';
 import { demuxSource, getKeyframeIndex } from './pipeline/demux.js';
 import { generateVodPlaylist } from './pipeline/playlist.js';
@@ -598,16 +605,83 @@ export class PlaysVideoEngine extends EventTarget {
     });
   }
 
-  private checkNativePlayback(videoCodec: string, audioCodec: string | null): boolean {
-    const mime = this._pendingFileType;
-    if (!mime) return false;
+  private createPlaybackCapabilities() {
+    const capabilities = createBrowserPlaybackCapabilities(this.video);
+    if (FORCE_REMUX) {
+      return {
+        ...capabilities,
+        canPlayType: () => '',
+      } as const;
+    }
+    return capabilities;
+  }
 
-    const codecs = audioCodec ? `${videoCodec}, ${audioCodec}` : videoCodec;
-    const fullMime = `${mime}; codecs="${codecs}"`;
-    const result = this.video.canPlayType(fullMime);
-    mlog(`canPlayType("${fullMime}") = "${result}"`);
-    if (FORCE_REMUX) return false;
-    return result === 'probably' || result === 'maybe';
+  private evaluateInitialPlayback(media: PlaybackMediaMetadata): PlaybackEvaluationResult {
+    const options = this._blobUrl
+      ? [
+          { mode: 'direct-bytes', mimeType: this._pendingFileType, url: this._blobUrl } as const,
+          { mode: 'hls' } as const,
+        ]
+      : ([{ mode: 'hls' }] as const);
+
+    return evaluatePlaybackOptions({
+      options: [...options],
+      media,
+      capabilities: this.createPlaybackCapabilities(),
+    });
+  }
+
+  private evaluateHlsPlayback(media: PlaybackMediaMetadata): PlaybackOptionEvaluation {
+    return evaluatePlaybackOptions({
+      options: [{ mode: 'hls' }],
+      media,
+      capabilities: this.createPlaybackCapabilities(),
+    }).evaluations[0];
+  }
+
+  private logPlaybackDiagnostics(context: string, evaluation: PlaybackEvaluationResult): void {
+    for (const entry of evaluation.evaluations) {
+      for (const diagnostic of entry.diagnostics) {
+        mlog(`${context}: mode=${entry.option.mode} ${diagnostic.code} ${diagnostic.message}`);
+      }
+    }
+    if (!evaluation.recommended) {
+      mlog(`${context}: no-supported-option`);
+    }
+  }
+
+  private throwPlaybackSelectionError(context: string, diagnostics: PlaybackDiagnostic[]): never {
+    const detail =
+      diagnostics.length > 0
+        ? diagnostics.map((diagnostic) => diagnostic.message).join(' ')
+        : 'No supported playback option.';
+    throw new Error(`${context}: ${detail}`);
+  }
+
+  private makeCodecPathFromSource(
+    media: PlaybackMediaMetadata,
+    mode: CodecPath['mode'],
+    outputAudio: CodecDescriptor = {
+      short: media.sourceAudioCodec,
+      full: media.audioCodec,
+    },
+  ): CodecPath {
+    return {
+      mode,
+      sourceVideo: {
+        short: media.sourceVideoCodec,
+        full: media.videoCodec,
+      },
+      sourceAudio: {
+        short: media.sourceAudioCodec,
+        full: media.audioCodec,
+      },
+      outputVideo: {
+        short: media.sourceVideoCodec,
+        full: media.videoCodec,
+      },
+      outputAudio,
+    };
   }
 
   private startPassthrough(src: string): void {
@@ -648,30 +722,20 @@ export class PlaysVideoEngine extends EventTarget {
 
     if (msg.type === 'probed') {
       // Worker finished demux — decide passthrough vs pipeline
-      const canPlay = this.checkNativePlayback(msg.videoCodec, msg.audioCodec);
-      this._subtitleTracks = msg.subtitleTracks ?? [];
-      this._codecPath = {
-        mode: canPlay ? 'passthrough' : 'pipeline',
-        sourceVideo: {
-          short: msg.sourceVideoCodec ?? null,
-          full: msg.videoCodec ?? null,
-        },
-        sourceAudio: {
-          short: msg.sourceAudioCodec ?? null,
-          full: msg.audioCodec ?? null,
-        },
-        outputVideo: {
-          short: msg.sourceVideoCodec ?? null,
-          full: msg.videoCodec ?? null,
-        },
-        outputAudio: {
-          short: msg.sourceAudioCodec ?? null,
-          full: msg.audioCodec ?? null,
-        },
+      const media: PlaybackMediaMetadata = {
+        sourceVideoCodec: msg.sourceVideoCodec ?? null,
+        sourceAudioCodec: msg.sourceAudioCodec ?? null,
+        videoCodec: msg.videoCodec ?? null,
+        audioCodec: msg.audioCodec ?? null,
       };
+      const evaluation = this.evaluateInitialPlayback(media);
+      this.logPlaybackDiagnostics('playback selection', evaluation);
+      this._subtitleTracks = msg.subtitleTracks ?? [];
+      const usePassthrough = evaluation.recommended?.option.mode === 'direct-bytes' && this._blobUrl;
+      this._codecPath = this.makeCodecPathFromSource(media, usePassthrough ? 'passthrough' : 'pipeline');
 
-      if (canPlay && this._blobUrl) {
-        mlog(`passthrough: canPlayType accepted codecs=${msg.videoCodec}/${msg.audioCodec}`);
+      if (usePassthrough) {
+        mlog(`passthrough: selected direct playback codecs=${msg.videoCodec}/${msg.audioCodec}`);
         this.startPassthrough(this._blobUrl);
         this.worker!.postMessage({ type: 'passthrough-pipeline' });
 
@@ -682,11 +746,18 @@ export class PlaysVideoEngine extends EventTarget {
           this.worker!.postMessage({ type: 'subtitle', trackIndex: track.index });
         }
       } else {
+        const hlsEvaluation = evaluation.evaluations.find((entry) => entry.option.mode === 'hls');
+        if (evaluation.recommended?.option.mode !== 'hls') {
+          this.throwPlaybackSelectionError(
+            'Playback selection failed',
+            hlsEvaluation?.diagnostics ?? [],
+          );
+        }
         if (this._blobUrl) {
           URL.revokeObjectURL(this._blobUrl);
           this._blobUrl = null;
         }
-        mlog(`pipeline: canPlayType rejected, proceeding with remux pipeline`);
+        mlog('pipeline: selected remux/HLS playback');
         this.ensureTranscodeWorkers();
         const remuxMsg: Record<string, unknown> = { type: 'remux-pipeline' };
         if (this._keyframeIndex) remuxMsg.keyframeIndex = this._keyframeIndex;
@@ -860,33 +931,37 @@ export class PlaysVideoEngine extends EventTarget {
         targetSegmentDurationSec: this._sourceTargetSegDuration,
       });
 
-      // Check transcode
-      const codecProber = createBrowserProber();
-      this._sourceDoTranscode =
-        demux.audioCodec !== null &&
-        audioNeedsTranscode(codecProber, demux.audioCodec, demux.audioDecoderConfig?.codec);
+      const media: PlaybackMediaMetadata = {
+        sourceVideoCodec: demux.videoCodec,
+        sourceAudioCodec: demux.audioCodec,
+        videoCodec: demux.videoDecoderConfig.codec,
+        audioCodec: demux.audioDecoderConfig?.codec ?? null,
+      };
+      const hlsEvaluation = this.evaluateHlsPlayback(media);
+      this.logPlaybackDiagnostics('source playback selection', {
+        recommended:
+          hlsEvaluation.status === 'supported'
+            ? {
+                option: hlsEvaluation.option,
+                reason: hlsEvaluation.diagnostics[hlsEvaluation.diagnostics.length - 1] ?? {
+                  code: 'selected-hls',
+                  message: 'Recommended HLS playback.',
+                },
+              }
+            : null,
+        evaluations: [hlsEvaluation],
+      });
+      if (hlsEvaluation.status !== 'supported') {
+        this.throwPlaybackSelectionError('Source playback selection failed', hlsEvaluation.diagnostics);
+      }
+      this._sourceDoTranscode = hlsEvaluation.pipelineAudioRequiresTranscode === true;
       this._sourceAudioDecoderConfig = this._sourceDoTranscode
         ? makeAacDecoderConfig(demux.audioDecoderConfig)
         : demux.audioDecoderConfig;
-      this._codecPath = {
-        mode: 'pipeline',
-        sourceVideo: {
-          short: demux.videoCodec,
-          full: demux.videoDecoderConfig.codec,
-        },
-        sourceAudio: {
-          short: demux.audioCodec,
-          full: demux.audioDecoderConfig?.codec ?? null,
-        },
-        outputVideo: {
-          short: demux.videoCodec,
-          full: demux.videoDecoderConfig.codec,
-        },
-        outputAudio: {
-          short: this._sourceDoTranscode ? 'aac' : demux.audioCodec,
-          full: this._sourceAudioDecoderConfig?.codec ?? null,
-        },
-      };
+      this._codecPath = this.makeCodecPathFromSource(media, 'pipeline', {
+        short: this._sourceDoTranscode ? 'aac' : demux.audioCodec,
+        full: this._sourceAudioDecoderConfig?.codec ?? null,
+      });
 
       // Pre-process segment 0
       const seg0Result = await processSegmentWithAbort(this.makeSourceProcessorConfig(), 0);
@@ -1283,7 +1358,7 @@ export class PlaysVideoEngine extends EventTarget {
 }
 
 /** Set to true to bypass native playback and force the remux pipeline (for testing). */
-const FORCE_REMUX = true;
+const FORCE_REMUX = false;
 
 function mlog(msg: string): void {
   console.log(`[engine] ${msg}`);
