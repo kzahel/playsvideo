@@ -5,6 +5,8 @@ export type {
   ReadyDetail,
   ErrorDetail,
   LoadingDetail,
+  LoadWithOptionsInput,
+  PlaybackDecisionDetail,
   ExternalSubtitleOptions,
 } from './engine.js';
 export { WasmFfmpegRunner } from './adapters/wasm-ffmpeg.js';

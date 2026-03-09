@@ -15,6 +15,8 @@ import {
   type PlaybackDiagnostic,
   type PlaybackEvaluationResult,
   type PlaybackMediaMetadata,
+  type PlaybackMode,
+  type PlaybackOption,
   type PlaybackOptionEvaluation,
 } from './playback-selection.js';
 import { createLocalAudioTranscoder, makeAacDecoderConfig } from './pipeline/audio-transcode.js';
@@ -23,7 +25,11 @@ import { demuxSource, getKeyframeIndex } from './pipeline/demux.js';
 import { buildMkvKeyframeIndexFromSource } from './pipeline/mkv-keyframe-index.js';
 import { generateVodPlaylist } from './pipeline/playlist.js';
 import { buildSegmentPlan } from './pipeline/segment-plan.js';
-import { parseSubtitleFile, subtitleDataToWebVTT } from './pipeline/subtitle.js';
+import {
+  extractSubtitleData,
+  parseSubtitleFile,
+  subtitleDataToWebVTT,
+} from './pipeline/subtitle.js';
 import { processSegmentWithAbort } from './pipeline/segment-processor.js';
 import { isAbortableSource } from './pipeline/source-signal.js';
 import type {
@@ -64,6 +70,11 @@ export interface WasmWorkerState extends TranscodeWorkerSnapshot {
 
 export interface WorkerStateDetail {
   workers: WasmWorkerState[];
+}
+
+export interface PlaybackDecisionDetail {
+  media: PlaybackMediaMetadata;
+  evaluation: PlaybackEvaluationResult;
 }
 
 export type SegmentPhase =
@@ -108,6 +119,14 @@ export interface EngineOptions {
   transcodeWorkers?: number;
 }
 
+export interface LoadWithOptionsInput {
+  source: Source;
+  options: PlaybackOption[];
+  ffmpeg?: FfmpegRunner;
+  targetSegmentDuration?: number;
+  preferenceOrder?: PlaybackMode[];
+}
+
 export interface ExternalSubtitleOptions {
   label?: string;
   language?: string;
@@ -133,6 +152,7 @@ interface EngineEventMap {
   loading: CustomEvent<LoadingDetail>;
   workerstatechange: CustomEvent<WorkerStateDetail>;
   segmentstatechange: CustomEvent<SegmentStateDetail>;
+  playbackdecision: CustomEvent<PlaybackDecisionDetail>;
 }
 
 interface TranscodeWorkerHandle {
@@ -216,6 +236,8 @@ export class PlaysVideoEngine extends EventTarget {
   private _sourceFfmpeg: FfmpegRunner | null = null;
   private _sourceTargetSegDuration = 4;
   private _sourceSegmentAbort: AbortController | null = null;
+  private _sourcePlaybackOptions: PlaybackOption[] | null = null;
+  private _sourcePreferenceOrder: PlaybackMode[] | null = null;
 
   get phase(): EnginePhase {
     return this._phase;
@@ -277,6 +299,8 @@ export class PlaysVideoEngine extends EventTarget {
   loadUrl(url: string, opts?: { keyframeIndex?: KeyframeIndex }): void {
     this.reset({ url });
     this._keyframeIndex = opts?.keyframeIndex ?? null;
+    this._sourcePlaybackOptions = null;
+    this._sourcePreferenceOrder = null;
     this.createWorker();
     this.worker!.postMessage({ type: 'open-url', url });
     mlog(`open url=${url}`);
@@ -331,6 +355,8 @@ export class PlaysVideoEngine extends EventTarget {
   ): void {
     this.reset({});
     this._keyframeIndex = opts?.keyframeIndex ?? null;
+    this._sourcePlaybackOptions = null;
+    this._sourcePreferenceOrder = null;
     this._source = source;
     this._sourcePlan = [];
     this._sourceDoTranscode = false;
@@ -339,6 +365,21 @@ export class PlaysVideoEngine extends EventTarget {
     this._sourceFfmpeg = opts?.ffmpeg ?? null;
     this._sourceTargetSegDuration = opts?.targetSegmentDuration ?? 4;
     this.startSourcePipeline(source);
+  }
+
+  loadWithOptions(input: LoadWithOptionsInput): void {
+    this.reset({});
+    this._keyframeIndex = null;
+    this._source = input.source;
+    this._sourcePlan = [];
+    this._sourceDoTranscode = false;
+    this._sourceAudioDecoderConfig = null;
+    this._sourceInitSegment = null;
+    this._sourceFfmpeg = input.ffmpeg ?? null;
+    this._sourceTargetSegDuration = input.targetSegmentDuration ?? 4;
+    this._sourcePlaybackOptions = input.options.length > 0 ? [...input.options] : [{ mode: 'hls' }];
+    this._sourcePreferenceOrder = input.preferenceOrder ? [...input.preferenceOrder] : null;
+    this.startSourcePipeline(input.source);
   }
 
   private reset(detail: LoadingDetail): void {
@@ -397,6 +438,8 @@ export class PlaysVideoEngine extends EventTarget {
     this._sourceAudioDecoderConfig = null;
     this._sourceInitSegment = null;
     this._sourceFfmpeg = null;
+    this._sourcePlaybackOptions = null;
+    this._sourcePreferenceOrder = null;
     this._segmentStates.clear();
 
     this.dispatchEvent(new CustomEvent('loading', { detail }));
@@ -644,6 +687,15 @@ export class PlaysVideoEngine extends EventTarget {
     }).evaluations[0];
   }
 
+  private evaluateSourcePlayback(media: PlaybackMediaMetadata): PlaybackEvaluationResult {
+    return evaluatePlaybackOptions({
+      options: this._sourcePlaybackOptions ? [...this._sourcePlaybackOptions] : [{ mode: 'hls' }],
+      media,
+      capabilities: this.createPlaybackCapabilities(),
+      preferenceOrder: this._sourcePreferenceOrder ?? undefined,
+    });
+  }
+
   private logPlaybackDiagnostics(context: string, evaluation: PlaybackEvaluationResult): void {
     for (const entry of evaluation.evaluations) {
       for (const diagnostic of entry.diagnostics) {
@@ -653,6 +705,20 @@ export class PlaysVideoEngine extends EventTarget {
     if (!evaluation.recommended) {
       mlog(`${context}: no-supported-option`);
     }
+  }
+
+  private dispatchPlaybackDecision(
+    media: PlaybackMediaMetadata,
+    evaluation: PlaybackEvaluationResult,
+  ): void {
+    this.dispatchEvent(
+      new CustomEvent('playbackdecision', {
+        detail: {
+          media,
+          evaluation,
+        },
+      }),
+    );
   }
 
   private throwPlaybackSelectionError(context: string, diagnostics: PlaybackDiagnostic[]): never {
@@ -716,7 +782,7 @@ export class PlaysVideoEngine extends EventTarget {
           detail: {
             totalSegments: 0,
             durationSec: this._durationSec,
-            subtitleTracks: [],
+            subtitleTracks: this._subtitleTracks,
             passthrough: true,
             codecPath: this.codecPath,
           },
@@ -744,6 +810,7 @@ export class PlaysVideoEngine extends EventTarget {
       };
       const evaluation = this.evaluateInitialPlayback(media);
       this.logPlaybackDiagnostics('playback selection', evaluation);
+      this.dispatchPlaybackDecision(media, evaluation);
       this._subtitleTracks = msg.subtitleTracks ?? [];
       const blobUrl = this._blobUrl;
       const usePassthrough =
@@ -982,24 +1049,43 @@ export class PlaysVideoEngine extends EventTarget {
         videoCodec: demux.videoDecoderConfig.codec,
         audioCodec: demux.audioDecoderConfig?.codec ?? null,
       };
-      const hlsEvaluation = this.evaluateHlsPlayback(media);
-      this.logPlaybackDiagnostics('source playback selection', {
-        recommended:
-          hlsEvaluation.status === 'supported'
-            ? {
-                option: hlsEvaluation.option,
-                reason: hlsEvaluation.diagnostics[hlsEvaluation.diagnostics.length - 1] ?? {
-                  code: 'selected-hls',
-                  message: 'Recommended HLS playback.',
-                },
-              }
-            : null,
-        evaluations: [hlsEvaluation],
-      });
-      if (hlsEvaluation.status !== 'supported') {
+      const evaluation = this.evaluateSourcePlayback(media);
+      this.logPlaybackDiagnostics('source playback selection', evaluation);
+      this.dispatchPlaybackDecision(media, evaluation);
+
+      const selectedOption = evaluation.recommended?.option ?? null;
+      if (!selectedOption) {
         this.throwPlaybackSelectionError(
           'Source playback selection failed',
-          hlsEvaluation.diagnostics,
+          evaluation.evaluations.flatMap((entry) => entry.diagnostics),
+        );
+      }
+
+      if (selectedOption.mode !== 'hls') {
+        if (!selectedOption.url) {
+          this.throwPlaybackSelectionError(
+            'Source playback selection failed',
+            evaluation.evaluations.flatMap((entry) => entry.diagnostics),
+          );
+        }
+        this._subtitleTracks = demux.subtitleTracks;
+        this._codecPath = this.makeCodecPathFromSource(media, 'passthrough');
+        this._sourcePlan = [];
+        this._sourceDoTranscode = false;
+        this._sourceAudioDecoderConfig = null;
+        this._sourceInitSegment = null;
+        mlog(`source pipeline: selected ${selectedOption.mode}`);
+        this.startPassthrough(selectedOption.url);
+        void this.extractEmbeddedSubtitlesFromDemux(demux, { releaseAfterComplete: true });
+        return;
+      }
+
+      const hlsEvaluation =
+        evaluation.evaluations.find((entry) => entry.option.mode === 'hls') ?? null;
+      if (!hlsEvaluation || hlsEvaluation.status !== 'supported') {
+        this.throwPlaybackSelectionError(
+          'Source playback selection failed',
+          evaluation.evaluations.flatMap((entry) => entry.diagnostics),
         );
       }
       this._sourceDoTranscode = hlsEvaluation.pipelineAudioRequiresTranscode === true;
@@ -1054,6 +1140,7 @@ export class PlaysVideoEngine extends EventTarget {
         }),
       );
 
+      void this.extractEmbeddedSubtitlesFromDemux(demux);
       this.startHls();
     } catch (err) {
       this._phase = 'error';
@@ -1399,6 +1486,52 @@ export class PlaysVideoEngine extends EventTarget {
   private dispatchSubtitleStatus(message: string): void {
     mlog(`subtitle-status: ${message}`);
     this.dispatchEvent(new CustomEvent('subtitle-status', { detail: { message } }));
+  }
+
+  private async extractEmbeddedSubtitlesFromDemux(
+    demux: DemuxResult,
+    options: { releaseAfterComplete?: boolean } = {},
+  ): Promise<void> {
+    const subtitleTracks = demux.subtitleTracks;
+    if (subtitleTracks.length === 0) {
+      this.dispatchSubtitleStatus('No embedded subtitles');
+      if (options.releaseAfterComplete && this._sourceDemux === demux) {
+        this._sourceDemux.dispose();
+        this._sourceDemux = null;
+        this._source = null;
+      }
+      return;
+    }
+
+    this.dispatchSubtitleStatus(`Extracting ${subtitleTracks.length} subtitle track(s)...`);
+
+    try {
+      for (const track of subtitleTracks) {
+        mlog(`extracting subtitle track=${track.index} lang=${track.language} codec=${track.codec}`);
+        const data = await extractSubtitleData(demux.input, track.index);
+        const webvtt = subtitleDataToWebVTT(data);
+        const cueMatch = webvtt.match(/\d\d:\d\d/g);
+        const cueCount = cueMatch ? Math.floor(cueMatch.length / 2) : 0;
+        this.dispatchSubtitleStatus(
+          `Subtitle track ${track.index}: ${track.language ?? '?'} ${data.codec} ${cueCount} cues, ${webvtt.length} bytes`,
+        );
+        this.addSubtitleTrack({
+          webvtt,
+          source: 'embedded',
+          trackIndex: track.index,
+          defaultTrack: track.index === 0,
+          selectTrack: track.index === 0,
+        });
+      }
+    } catch (error) {
+      this.dispatchSubtitleStatus(`Subtitle extraction failed: ${String(error)}`);
+    } finally {
+      if (options.releaseAfterComplete && this._sourceDemux === demux) {
+        this._sourceDemux.dispose();
+        this._sourceDemux = null;
+        this._source = null;
+      }
+    }
   }
 
   private restoreDefaultTextTrack(): void {
