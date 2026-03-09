@@ -75,7 +75,10 @@ export interface WorkerStateDetail {
 export interface PlaybackDecisionDetail {
   media: PlaybackMediaMetadata;
   evaluation: PlaybackEvaluationResult;
+  playbackPolicy: PlaybackPolicy;
 }
+
+export type PlaybackPolicy = 'auto' | 'force-hls';
 
 export type SegmentPhase =
   | 'requested'
@@ -125,6 +128,7 @@ export interface LoadWithOptionsInput {
   ffmpeg?: FfmpegRunner;
   targetSegmentDuration?: number;
   preferenceOrder?: PlaybackMode[];
+  playbackPolicy?: PlaybackPolicy;
 }
 
 export interface ExternalSubtitleOptions {
@@ -238,6 +242,7 @@ export class PlaysVideoEngine extends EventTarget {
   private _sourceSegmentAbort: AbortController | null = null;
   private _sourcePlaybackOptions: PlaybackOption[] | null = null;
   private _sourcePreferenceOrder: PlaybackMode[] | null = null;
+  private _sourcePlaybackPolicy: PlaybackPolicy = 'auto';
 
   get phase(): EnginePhase {
     return this._phase;
@@ -301,6 +306,7 @@ export class PlaysVideoEngine extends EventTarget {
     this._keyframeIndex = opts?.keyframeIndex ?? null;
     this._sourcePlaybackOptions = null;
     this._sourcePreferenceOrder = null;
+    this._sourcePlaybackPolicy = 'auto';
     this.createWorker();
     this.worker!.postMessage({ type: 'open-url', url });
     mlog(`open url=${url}`);
@@ -357,6 +363,7 @@ export class PlaysVideoEngine extends EventTarget {
     this._keyframeIndex = opts?.keyframeIndex ?? null;
     this._sourcePlaybackOptions = null;
     this._sourcePreferenceOrder = null;
+    this._sourcePlaybackPolicy = 'auto';
     this._source = source;
     this._sourcePlan = [];
     this._sourceDoTranscode = false;
@@ -379,6 +386,7 @@ export class PlaysVideoEngine extends EventTarget {
     this._sourceTargetSegDuration = input.targetSegmentDuration ?? 4;
     this._sourcePlaybackOptions = input.options.length > 0 ? [...input.options] : [{ mode: 'hls' }];
     this._sourcePreferenceOrder = input.preferenceOrder ? [...input.preferenceOrder] : null;
+    this._sourcePlaybackPolicy = input.playbackPolicy ?? 'auto';
     this.startSourcePipeline(input.source);
   }
 
@@ -440,6 +448,7 @@ export class PlaysVideoEngine extends EventTarget {
     this._sourceFfmpeg = null;
     this._sourcePlaybackOptions = null;
     this._sourcePreferenceOrder = null;
+    this._sourcePlaybackPolicy = 'auto';
     this._segmentStates.clear();
 
     this.dispatchEvent(new CustomEvent('loading', { detail }));
@@ -689,11 +698,22 @@ export class PlaysVideoEngine extends EventTarget {
 
   private evaluateSourcePlayback(media: PlaybackMediaMetadata): PlaybackEvaluationResult {
     return evaluatePlaybackOptions({
-      options: this._sourcePlaybackOptions ? [...this._sourcePlaybackOptions] : [{ mode: 'hls' }],
+      options: this.getSourcePlaybackOptions(),
       media,
       capabilities: this.createPlaybackCapabilities(),
       preferenceOrder: this._sourcePreferenceOrder ?? undefined,
     });
+  }
+
+  private getSourcePlaybackOptions(): PlaybackOption[] {
+    const baseOptions: PlaybackOption[] = this._sourcePlaybackOptions
+      ? [...this._sourcePlaybackOptions]
+      : [{ mode: 'hls' }];
+    if (this._sourcePlaybackPolicy !== 'force-hls') {
+      return baseOptions;
+    }
+    const hlsOption = baseOptions.find((option) => option.mode === 'hls');
+    return hlsOption ? [hlsOption] : [{ mode: 'hls' }];
   }
 
   private logPlaybackDiagnostics(context: string, evaluation: PlaybackEvaluationResult): void {
@@ -716,6 +736,7 @@ export class PlaysVideoEngine extends EventTarget {
         detail: {
           media,
           evaluation,
+          playbackPolicy: this._sourcePlaybackPolicy,
         },
       }),
     );

@@ -6,6 +6,7 @@ export type {
   ErrorDetail,
   LoadingDetail,
   LoadWithOptionsInput,
+  PlaybackPolicy,
   PlaybackDecisionDetail,
   ExternalSubtitleOptions,
 } from './engine.js';
