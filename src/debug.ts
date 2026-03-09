@@ -72,8 +72,13 @@ engine.addEventListener('loading', (e) => {
 });
 
 engine.addEventListener('ready', (e) => {
-  const { totalSegments, durationSec, subtitleTracks, passthrough, codecPath: nextCodecPath } =
-    e.detail;
+  const {
+    totalSegments,
+    durationSec,
+    subtitleTracks,
+    passthrough,
+    codecPath: nextCodecPath,
+  } = e.detail;
   codecPath = nextCodecPath;
   const mode = passthrough ? 'direct playback' : `${totalSegments} segments`;
   status.textContent = `Ready — ${mode}, ${formatTime(durationSec)}`;

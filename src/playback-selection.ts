@@ -129,7 +129,9 @@ export function evaluatePlaybackOptions(
   input: EvaluatePlaybackOptionsInput,
 ): PlaybackEvaluationResult {
   const preferenceOrder = input.preferenceOrder ?? DEFAULT_PREFERENCE_ORDER;
-  const evaluations = input.options.map((option) => evaluateOption(option, input.media, input.capabilities));
+  const evaluations = input.options.map((option) =>
+    evaluateOption(option, input.media, input.capabilities),
+  );
 
   const recommendedIndex = pickRecommendedIndex(evaluations, preferenceOrder);
   let recommended: PlaybackRecommendation | null = null;
@@ -205,7 +207,9 @@ function evaluateDirectOption(
     return makeEvaluation(option, 'unknown', diagnostics);
   }
 
-  const codecList = media.audioCodec ? `${media.videoCodec}, ${media.audioCodec}` : media.videoCodec;
+  const codecList = media.audioCodec
+    ? `${media.videoCodec}, ${media.audioCodec}`
+    : media.videoCodec;
   const fullMime = `${option.mimeType}; codecs="${codecList}"`;
   const result = normalizeCanPlayType(capabilities.canPlayType(fullMime));
 
@@ -316,7 +320,9 @@ function makeEvaluation(
   option: PlaybackOption,
   status: PlaybackOptionStatus,
   diagnostics: PlaybackDiagnostic[],
-  overrides: Partial<Omit<PlaybackOptionEvaluation, 'option' | 'status' | 'selected' | 'diagnostics'>> = {},
+  overrides: Partial<
+    Omit<PlaybackOptionEvaluation, 'option' | 'status' | 'selected' | 'diagnostics'>
+  > = {},
 ): PlaybackOptionEvaluation {
   return {
     option,
