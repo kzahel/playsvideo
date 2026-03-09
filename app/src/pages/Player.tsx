@@ -10,7 +10,7 @@ export function Player() {
   const subtitleInputRef = useRef<HTMLInputElement | null>(null);
 
   const entry = useLiveQuery(() => db.library.get(entryId), [entryId]);
-  const { videoRef, status, phase, subtitleStatus, loadSubtitleFile, clearExternalSubtitles } =
+  const { videoRef, status, phase, needsPermission, retryPermission, subtitleStatus, loadSubtitleFile, clearExternalSubtitles } =
     useEngine(entry ?? null);
 
   if (entry === undefined) {
@@ -48,6 +48,11 @@ export function Player() {
         }}
       />
       <video ref={videoRef} controls autoPlay />
+      {needsPermission && (
+        <button className="btn btn-primary player-permission-btn" onClick={retryPermission}>
+          Tap to grant file access
+        </button>
+      )}
       <div className="player-actions">
         <button
           className="btn btn-secondary"

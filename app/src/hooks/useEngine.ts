@@ -8,6 +8,8 @@ interface UseEngineResult {
   videoRef: React.RefObject<HTMLVideoElement | null>;
   status: string;
   phase: string;
+  needsPermission: boolean;
+  retryPermission: () => void;
   subtitleStatus: string;
   loadSubtitleFile: (file: File) => Promise<void>;
   clearExternalSubtitles: () => void;
@@ -21,6 +23,8 @@ export function useEngine(entry: LibraryEntry | null): UseEngineResult {
   const [status, setStatus] = useState('');
   const [phase, setPhase] = useState('idle');
   const [subtitleStatus, setSubtitleStatus] = useState('');
+  const [needsPermission, setNeedsPermission] = useState(false);
+  const [retryCounter, setRetryCounter] = useState(0);
 
   const savePosition = useCallback(async () => {
     const currentEntry = entryRef.current;
@@ -80,12 +84,18 @@ export function useEngine(entry: LibraryEntry | null): UseEngineResult {
     (async () => {
       try {
         setStatus('Getting file access...');
+        setNeedsPermission(false);
         const file = await getFileFromLibraryEntry(entry);
         engine.loadFile(file);
       } catch (err: unknown) {
         const message = err instanceof Error ? err.message : String(err);
-        setStatus(`Error: ${message}`);
-        setPhase('error');
+        if (message.includes('User activation is required')) {
+          setStatus('File access permission needed');
+          setNeedsPermission(true);
+        } else {
+          setStatus(`Error: ${message}`);
+          setPhase('error');
+        }
       }
     })();
 
@@ -95,7 +105,12 @@ export function useEngine(entry: LibraryEntry | null): UseEngineResult {
       engine.destroy();
       engineRef.current = null;
     };
-  }, [entry?.id]);
+  }, [entry?.id, retryCounter]);
+
+  const retryPermission = useCallback(() => {
+    setNeedsPermission(false);
+    setRetryCounter((c) => c + 1);
+  }, []);
 
   const loadSubtitleFile = useCallback(async (file: File) => {
     const engine = engineRef.current;
@@ -119,5 +134,5 @@ export function useEngine(entry: LibraryEntry | null): UseEngineResult {
     setSubtitleStatus('');
   }, []);
 
-  return { videoRef, status, phase, subtitleStatus, loadSubtitleFile, clearExternalSubtitles };
+  return { videoRef, status, phase, needsPermission, retryPermission, subtitleStatus, loadSubtitleFile, clearExternalSubtitles };
 }

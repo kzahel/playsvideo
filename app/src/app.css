@@ -246,6 +246,13 @@ body {
   background: var(--video-bg);
   border-radius: 4px;
 }
+.player-permission-btn {
+  display: block;
+  width: 100%;
+  margin-top: 0.75rem;
+  padding: 1rem;
+  font-size: 1.1rem;
+}
 .player-actions {
   display: flex;
   flex-wrap: wrap;
