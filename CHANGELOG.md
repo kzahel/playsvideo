@@ -4,6 +4,20 @@ All notable changes to playsvideo are documented here.
 
 ## [Unreleased]
 
+## [0.4.0] - 2026-03-09
+
+### Added
+- Playback selection API (`playbackSelection` getter, `playbackselectionchange` event)
+- Auto-select default subtitle track and show subtitle status in player UI
+- Tap-to-grant button when file permission requires user gesture
+
+### Fixed
+- Safari AC-3 pipeline playback
+- Focus outline visible on fullscreen video
+
+### Changed
+- Disable force remux (passthrough by default)
+
 ## [0.3.0] - 2026-03-08
 
 ### Added
