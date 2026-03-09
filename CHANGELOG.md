@@ -4,6 +4,11 @@ All notable changes to playsvideo are documented here.
 
 ## [Unreleased]
 
+## [0.4.3] - 2026-03-09
+
+### Changed
+- Trim public API surface (reduce re-exported types)
+
 ## [0.4.2] - 2026-03-09
 
 ### Added
