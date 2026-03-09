@@ -246,6 +246,9 @@ body {
   background: var(--video-bg);
   border-radius: 4px;
 }
+.player-page video:fullscreen {
+  outline: none;
+}
 .player-permission-btn {
   display: block;
   width: 100%;
