@@ -605,13 +605,13 @@ export class PlaysVideoEngine extends EventTarget {
     });
   }
 
-  private createPlaybackCapabilities() {
+  private createPlaybackCapabilities(): ReturnType<typeof createBrowserPlaybackCapabilities> {
     const capabilities = createBrowserPlaybackCapabilities(this.video);
     if (FORCE_REMUX) {
       return {
         ...capabilities,
-        canPlayType: () => '',
-      } as const;
+        canPlayType: () => '' as const,
+      };
     }
     return capabilities;
   }
@@ -656,6 +656,15 @@ export class PlaysVideoEngine extends EventTarget {
         ? diagnostics.map((diagnostic) => diagnostic.message).join(' ')
         : 'No supported playback option.';
     throw new Error(`${context}: ${detail}`);
+  }
+
+  private failPlaybackSelection(context: string, diagnostics: PlaybackDiagnostic[]): void {
+    const detail =
+      diagnostics.length > 0
+        ? diagnostics.map((diagnostic) => diagnostic.message).join(' ')
+        : 'No supported playback option.';
+    this._phase = 'error';
+    this.dispatchEvent(new CustomEvent('error', { detail: { message: `${context}: ${detail}` } }));
   }
 
   private makeCodecPathFromSource(
@@ -731,12 +740,17 @@ export class PlaysVideoEngine extends EventTarget {
       const evaluation = this.evaluateInitialPlayback(media);
       this.logPlaybackDiagnostics('playback selection', evaluation);
       this._subtitleTracks = msg.subtitleTracks ?? [];
-      const usePassthrough = evaluation.recommended?.option.mode === 'direct-bytes' && this._blobUrl;
-      this._codecPath = this.makeCodecPathFromSource(media, usePassthrough ? 'passthrough' : 'pipeline');
+      const blobUrl = this._blobUrl;
+      const usePassthrough =
+        evaluation.recommended?.option.mode === 'direct-bytes' && blobUrl !== null;
+      this._codecPath = this.makeCodecPathFromSource(
+        media,
+        usePassthrough ? 'passthrough' : 'pipeline',
+      );
 
-      if (usePassthrough) {
+      if (usePassthrough && blobUrl) {
         mlog(`passthrough: selected direct playback codecs=${msg.videoCodec}/${msg.audioCodec}`);
-        this.startPassthrough(this._blobUrl);
+        this.startPassthrough(blobUrl);
         this.worker!.postMessage({ type: 'passthrough-pipeline' });
 
         for (const track of this._subtitleTracks) {
@@ -748,10 +762,8 @@ export class PlaysVideoEngine extends EventTarget {
       } else {
         const hlsEvaluation = evaluation.evaluations.find((entry) => entry.option.mode === 'hls');
         if (evaluation.recommended?.option.mode !== 'hls') {
-          this.throwPlaybackSelectionError(
-            'Playback selection failed',
-            hlsEvaluation?.diagnostics ?? [],
-          );
+          this.failPlaybackSelection('Playback selection failed', hlsEvaluation?.diagnostics ?? []);
+          return;
         }
         if (this._blobUrl) {
           URL.revokeObjectURL(this._blobUrl);
@@ -952,7 +964,10 @@ export class PlaysVideoEngine extends EventTarget {
         evaluations: [hlsEvaluation],
       });
       if (hlsEvaluation.status !== 'supported') {
-        this.throwPlaybackSelectionError('Source playback selection failed', hlsEvaluation.diagnostics);
+        this.throwPlaybackSelectionError(
+          'Source playback selection failed',
+          hlsEvaluation.diagnostics,
+        );
       }
       this._sourceDoTranscode = hlsEvaluation.pipelineAudioRequiresTranscode === true;
       this._sourceAudioDecoderConfig = this._sourceDoTranscode
