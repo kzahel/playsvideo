@@ -6,7 +6,7 @@
 
 **You probably don't need VLC.** Play any video file in the browser — no install, no upload.
 
-[Try it at playsvideo.com](https://playsvideo.com) &nbsp;|&nbsp; Drop a file. It plays.
+[Try it at playsvideo.com](https://playsvideo.com) &nbsp;|&nbsp; [Chrome Extension](https://chromewebstore.google.com/detail/playsvideo/leanfmncjikipbkbjghejpaenkpanimp) &nbsp;|&nbsp; Drop a file. It plays.
 
 ---
 
