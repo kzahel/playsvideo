@@ -169,6 +169,10 @@ interface AttachedSubtitleTrack {
   source: 'embedded' | 'external';
 }
 
+function normalizeErrorMessage(message: string): string {
+  return message.replace(/^Error:\s*/, '').trim();
+}
+
 function defaultTranscodeWorkerCount(): number {
   const concurrency =
     typeof navigator !== 'undefined' && Number.isFinite(navigator.hardwareConcurrency)
@@ -243,6 +247,8 @@ export class PlaysVideoEngine extends EventTarget {
   private _sourcePlaybackOptions: PlaybackOption[] | null = null;
   private _sourcePreferenceOrder: PlaybackMode[] | null = null;
   private _sourcePlaybackPolicy: PlaybackPolicy = 'auto';
+  private _lastInternalErrorMessage: string | null = null;
+  private _lastInternalErrorAt = 0;
 
   get phase(): EnginePhase {
     return this._phase;
@@ -450,6 +456,8 @@ export class PlaysVideoEngine extends EventTarget {
     this._sourcePreferenceOrder = null;
     this._sourcePlaybackPolicy = 'auto';
     this._segmentStates.clear();
+    this._lastInternalErrorMessage = null;
+    this._lastInternalErrorAt = 0;
 
     this.dispatchEvent(new CustomEvent('loading', { detail }));
     this.dispatchSegmentStateChange();
@@ -459,8 +467,7 @@ export class PlaysVideoEngine extends EventTarget {
     this.worker = new Worker(new URL('./worker.js', import.meta.url), { type: 'module' });
     this.worker.onmessage = (e) => this.handleWorkerMessage(e);
     this.worker.onerror = (e) => {
-      this._phase = 'error';
-      this.dispatchEvent(new CustomEvent('error', { detail: { message: e.message } }));
+      this.failPlayback(e.message || 'Playback worker crashed');
     };
   }
 
@@ -475,11 +482,13 @@ export class PlaysVideoEngine extends EventTarget {
       });
       worker.onmessage = (event) => this.handleTranscodeWorkerMessage(i, event);
       worker.onerror = (event) => {
+        const message = event.message || 'Transcode worker crashed';
         this.updateTranscodeWorkerState(i, {
           phase: 'error',
           jobId: null,
-          lastError: event.message || 'Transcode worker crashed',
+          lastError: message,
         });
+        this.worker?.postMessage({ type: 'transcode-worker-failed', id: i, message });
       };
       const channel = new MessageChannel();
       worker.postMessage({ type: 'connect' }, [channel.port2]);
@@ -534,6 +543,8 @@ export class PlaysVideoEngine extends EventTarget {
     this._phase = 'idle';
     this._passthrough = false;
     this._segmentStates.clear();
+    this._lastInternalErrorMessage = null;
+    this._lastInternalErrorAt = 0;
     this.dispatchSegmentStateChange();
   }
 
@@ -597,6 +608,9 @@ export class PlaysVideoEngine extends EventTarget {
       ...patch,
       id,
     };
+    if (patch.phase === 'error' && patch.lastError) {
+      this.recordInternalError(patch.lastError);
+    }
     this.dispatchWorkerStateChange();
   }
 
@@ -656,10 +670,36 @@ export class PlaysVideoEngine extends EventTarget {
   }
 
   private handleWorkerSegmentState(msg: WorkerSegmentStateMessage): void {
+    if (msg.phase === 'error' && msg.message) {
+      this.recordInternalError(msg.message);
+    }
     this.noteSegmentState(msg.index, msg.phase, {
       sizeBytes: msg.sizeBytes,
       message: msg.message,
     });
+  }
+
+  private recordInternalError(message: string): string {
+    const normalized = normalizeErrorMessage(message);
+    this._lastInternalErrorMessage = normalized;
+    this._lastInternalErrorAt = performance.now();
+    return normalized;
+  }
+
+  private getRecentInternalError(maxAgeMs = 5000): string | null {
+    if (!this._lastInternalErrorMessage) {
+      return null;
+    }
+    if (performance.now() - this._lastInternalErrorAt > maxAgeMs) {
+      return null;
+    }
+    return this._lastInternalErrorMessage;
+  }
+
+  private failPlayback(message: string): void {
+    const normalized = this.recordInternalError(message);
+    this._phase = 'error';
+    this.dispatchEvent(new CustomEvent('error', { detail: { message: normalized } }));
   }
 
   private createPlaybackCapabilities(): ReturnType<typeof createBrowserPlaybackCapabilities> {
@@ -755,8 +795,7 @@ export class PlaysVideoEngine extends EventTarget {
       diagnostics.length > 0
         ? diagnostics.map((diagnostic) => diagnostic.message).join(' ')
         : 'No supported playback option.';
-    this._phase = 'error';
-    this.dispatchEvent(new CustomEvent('error', { detail: { message: `${context}: ${detail}` } }));
+    this.failPlayback(`${context}: ${detail}`);
   }
 
   private makeCodecPathFromSource(
@@ -982,8 +1021,7 @@ export class PlaysVideoEngine extends EventTarget {
       );
     } else if (msg.type === 'error') {
       mlog(`error: ${msg.message} pending=${this.pendingSegments.size}`);
-      this._phase = 'error';
-      this.dispatchEvent(new CustomEvent('error', { detail: { message: msg.message } }));
+      this.failPlayback(msg.message);
 
       // Reject all pending requests
       for (const [index, p] of this.pendingSegments) {
@@ -1164,8 +1202,7 @@ export class PlaysVideoEngine extends EventTarget {
       void this.extractEmbeddedSubtitlesFromDemux(demux);
       this.startHls();
     } catch (err) {
-      this._phase = 'error';
-      this.dispatchEvent(new CustomEvent('error', { detail: { message: String(err) } }));
+      this.failPlayback(String(err));
     }
   }
 
@@ -1224,10 +1261,7 @@ export class PlaysVideoEngine extends EventTarget {
 
   private startHls(): void {
     if (!Hls.isSupported()) {
-      this._phase = 'error';
-      this.dispatchEvent(
-        new CustomEvent('error', { detail: { message: 'hls.js not supported in this browser' } }),
-      );
+      this.failPlayback('hls.js not supported in this browser');
       return;
     }
 
@@ -1424,11 +1458,14 @@ export class PlaysVideoEngine extends EventTarget {
       );
       if (data.fatal) {
         console.error('hls.js fatal error:', data);
-        this._phase = 'error';
-        const message = underlyingMessage
-          ? `Playback error: ${data.details} (${underlyingMessage})`
-          : `Playback error: ${data.details}`;
-        this.dispatchEvent(new CustomEvent('error', { detail: { message } }));
+        const internalMessage = this.getRecentInternalError();
+        const message =
+          internalMessage && data.details === 'fragLoadError'
+            ? internalMessage
+            : underlyingMessage
+              ? `${data.details} (${normalizeErrorMessage(underlyingMessage)})`
+              : data.details;
+        this.failPlayback(message);
       }
     });
 

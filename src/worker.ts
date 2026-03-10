@@ -78,6 +78,11 @@ class TranscodePortPool {
   private workers: TranscodeWorkerEntry[] = [];
   private queue: TranscodeQueueJob[] = [];
   private nextJobId = 0;
+  private readonly fallbackTranscode: AudioTranscodeExecutor;
+
+  constructor(fallbackTranscode: AudioTranscodeExecutor) {
+    this.fallbackTranscode = fallbackTranscode;
+  }
 
   addPort(id: number, port: MessagePort): void {
     const entry: TranscodeWorkerEntry = { id, port, currentJob: null };
@@ -106,6 +111,9 @@ class TranscodePortPool {
     }
     if (signal?.aborted) {
       throw makeAbortError();
+    }
+    if (this.workers.length === 0) {
+      return this.fallbackTranscode(opts, signal);
     }
 
     const startedAt = performance.now();
@@ -170,6 +178,31 @@ class TranscodePortPool {
     }
   }
 
+  handleWorkerFailure(id: number, reason: string): void {
+    const index = this.workers.findIndex((worker) => worker.id === id);
+    if (index === -1) {
+      return;
+    }
+
+    const [worker] = this.workers.splice(index, 1);
+    const activeJob = worker.currentJob;
+    worker.currentJob = null;
+
+    if (activeJob) {
+      void this.recoverJob(activeJob, `Transcode worker ${id} failed: ${reason}`);
+    }
+
+    if (this.workers.length === 0 && this.queue.length > 0) {
+      const queuedJobs = this.queue.splice(0);
+      for (const job of queuedJobs) {
+        void this.recoverJob(job, `Transcode workers unavailable: ${reason}`);
+      }
+      return;
+    }
+
+    this.dispatch();
+  }
+
   private handleWorkerMessage(worker: TranscodeWorkerEntry, msg: TranscodeJobResponse): void {
     const job = worker.currentJob;
     worker.currentJob = null;
@@ -209,12 +242,53 @@ class TranscodePortPool {
 
     this.dispatch();
   }
+
+  private async recoverJob(job: TranscodeQueueJob, reason: string): Promise<void> {
+    if (job.settled) {
+      this.dispatch();
+      return;
+    }
+    if (job.signal?.aborted) {
+      if (job.signal && job.onAbort) {
+        job.signal.removeEventListener('abort', job.onAbort);
+      }
+      job.settled = true;
+      job.reject(makeAbortError());
+      this.dispatch();
+      return;
+    }
+
+    if (this.workers.length > 0) {
+      this.queue.unshift(job);
+      this.dispatch();
+      return;
+    }
+
+    try {
+      if (job.signal && job.onAbort) {
+        job.signal.removeEventListener('abort', job.onAbort);
+      }
+      const result = await this.fallbackTranscode(job.opts, job.signal);
+      if (!job.settled) {
+        job.settled = true;
+        job.resolve(result);
+      }
+    } catch (err) {
+      if (!job.settled) {
+        job.settled = true;
+        const fallbackMessage = err instanceof Error ? err.message : String(err);
+        job.reject(new Error(`${reason}; fallback transcode failed: ${fallbackMessage}`));
+      }
+    } finally {
+      this.dispatch();
+    }
+  }
 }
 
 const ffmpeg = new WasmFfmpegRunner();
 const codecProber = createBrowserProber();
 const localAudioTranscoder = createLocalAudioTranscoder(ffmpeg);
-const transcodePool = new TranscodePortPool();
+const transcodePool = new TranscodePortPool(localAudioTranscoder);
 
 let demux: DemuxResult | null = null;
 let plan: PlannedSegment[] = [];
@@ -260,6 +334,10 @@ self.onmessage = (event: MessageEvent) => {
       wlog(`recv transcode-port id=${portMsg.id}`);
       transcodePool.addPort(portMsg.id, port);
     }
+  } else if (msg.type === 'transcode-worker-failed') {
+    const reason = msg.message || 'Transcode worker crashed';
+    wlog(`recv transcode-worker-failed id=${msg.id} reason=${reason}`);
+    transcodePool.handleWorkerFailure(msg.id, reason);
   } else if (msg.type === 'segment') {
     wlog(`recv segment idx=${msg.index}`);
     void handleSegmentRequest(msg.index);
