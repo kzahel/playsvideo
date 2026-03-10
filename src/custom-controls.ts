@@ -9,52 +9,128 @@ export interface CustomControlsHandle {
 
 const SPEED_OPTIONS = [0.25, 0.5, 0.75, 1, 1.25, 1.5, 1.75, 2];
 
+// --- SVG Icons (24x24 viewBox, white fill) ---
+const svg = (d: string, vb = '0 0 24 24') =>
+  `<svg xmlns="http://www.w3.org/2000/svg" viewBox="${vb}" fill="currentColor">${d}</svg>`;
+
+const ICON = {
+  play: svg('<path d="M8 5v14l11-7z"/>'),
+  pause: svg('<path d="M6 5h4v14H6zm8 0h4v14h-4z"/>'),
+  skipBack: svg(
+    '<path d="M11.99 5V1l-5 5 5 5V7c3.31 0 6 2.69 6 6s-2.69 6-6 6-6-2.69-6-6h-2c0 4.42 3.58 8 8 8s8-3.58 8-8-3.58-8-8-8z"/><text x="12" y="16.5" text-anchor="middle" font-size="7.5" font-weight="700" font-family="sans-serif" fill="currentColor">10</text>',
+  ),
+  skipFwd: svg(
+    '<path d="M12.01 5V1l5 5-5 5V7c-3.31 0-6 2.69-6 6s2.69 6 6 6 6-2.69 6-6h2c0 4.42-3.58 8-8 8s-8-3.58-8-8 3.58-8 8-8z"/><text x="12" y="16.5" text-anchor="middle" font-size="7.5" font-weight="700" font-family="sans-serif" fill="currentColor">10</text>',
+  ),
+  volumeHigh: svg(
+    '<path d="M3 9v6h4l5 5V4L7 9H3zm13.5 3A4.5 4.5 0 0014 8.14v7.72c1.48-.73 2.5-2.25 2.5-3.86zM14 3.23v2.06c2.89.86 5 3.54 5 6.71s-2.11 5.85-5 6.71v2.06c4.01-.91 7-4.49 7-8.77s-2.99-7.86-7-8.77z"/>',
+  ),
+  volumeMuted: svg(
+    '<path d="M16.5 12A4.5 4.5 0 0014 8.14v2.72l2.44 2.44c.03-.1.06-.2.06-.3zm2.5 0c0 .94-.2 1.82-.54 2.64l1.51 1.51A8.8 8.8 0 0021 12c0-4.28-2.99-7.86-7-8.77v2.06c2.89.86 5 3.54 5 6.71zM4.27 3L3 4.27 7.73 9H3v6h4l5 5v-6.73l4.25 4.25c-.67.52-1.42.93-2.25 1.18v2.06a8.99 8.99 0 003.69-1.81L19.73 21 21 19.73l-9-9L4.27 3zM12 4L9.91 6.09 12 8.18V4z"/>',
+  ),
+  fsEnter: svg(
+    '<path d="M7 14H5v5h5v-2H7v-3zm-2-4h2V7h3V5H5v5zm12 7h-3v2h5v-5h-2v3zM14 5v2h3v3h2V5h-5z"/>',
+  ),
+  fsExit: svg(
+    '<path d="M5 16h3v3h2v-5H5v2zm3-8H5v2h5V5H8v3zm6 11h2v-3h3v-2h-5v5zm2-11V5h-2v5h5V8h-3z"/>',
+  ),
+  overflow: svg(
+    '<circle cx="12" cy="5" r="2"/><circle cx="12" cy="12" r="2"/><circle cx="12" cy="19" r="2"/>',
+  ),
+  cc: svg(
+    '<path d="M19 4H5a2 2 0 00-2 2v12a2 2 0 002 2h14a2 2 0 002-2V6a2 2 0 00-2-2zm-8 7H9.5v-.5h-2v3h2V13H11v1a1 1 0 01-1 1H7a1 1 0 01-1-1v-4a1 1 0 011-1h3a1 1 0 011 1v1zm7 0h-1.5v-.5h-2v3h2V13H18v1a1 1 0 01-1 1h-3a1 1 0 01-1-1v-4a1 1 0 011-1h3a1 1 0 011 1v1z"/>',
+  ),
+  speed: svg(
+    '<path d="M20.38 8.57l-1.23 1.85a8 8 0 01-.22 7.58H5.07A8 8 0 0115.58 6.85l1.85-1.23A10 10 0 003.35 19a2 2 0 001.72 1h13.85a2 2 0 001.74-1 10 10 0 00-.27-11.44zM10.59 15.41a2 2 0 002.83 0l5.66-8.49-8.49 5.66a2 2 0 000 2.83z"/>',
+  ),
+  pip: svg(
+    '<path d="M19 11h-8v6h8v-6zm4 8V4.98C23 3.88 22.1 3 21 3H3c-1.1 0-2 .88-2 1.98V19c0 1.1.9 2 2 2h18c1.1 0 2-.9 2-2zm-2 .02H3V4.97h18v14.05z"/>',
+  ),
+};
+
 const CONTROLS_CSS = `
 .pv-video-container { position: relative; }
 .pv-video-container:fullscreen { background: #000; }
 .pv-video-container:fullscreen video { width: 100%; height: 100%; object-fit: contain; }
-.pv-controls {
+
+/* Overlay wrapper */
+.pv-overlay {
   position: absolute;
-  bottom: 0;
-  left: 0;
-  right: 0;
+  inset: 0;
   display: flex;
-  align-items: center;
-  gap: 0.5rem;
-  padding: 0.5rem 0.75rem;
-  background: linear-gradient(transparent, rgba(0,0,0,0.7));
-  color: #fff;
+  flex-direction: column;
+  justify-content: flex-end;
   opacity: 1;
   transition: opacity 0.3s;
   z-index: 10;
-}
-.pv-controls.pv-hidden {
-  opacity: 0;
   pointer-events: none;
 }
-.pv-controls button {
-  background: none;
+.pv-overlay.pv-hidden {
+  opacity: 0;
+}
+.pv-overlay > * { pointer-events: auto; }
+
+/* Center play button */
+.pv-center {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  display: flex;
+  align-items: center;
+  gap: 2rem;
+}
+.pv-center-btn {
+  width: 56px;
+  height: 56px;
+  border-radius: 50%;
+  background: rgba(0,0,0,0.5);
   border: none;
   color: #fff;
   cursor: pointer;
-  font-size: 1.2rem;
-  padding: 0.25rem;
-  line-height: 1;
-  flex-shrink: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0;
 }
-.pv-controls button:hover { opacity: 0.8; }
-.pv-controls-seek {
+.pv-center-btn svg { width: 32px; height: 32px; }
+.pv-center-skip {
+  width: 40px;
+  height: 40px;
+  border-radius: 50%;
+  background: rgba(0,0,0,0.35);
+  border: none;
+  color: #fff;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0;
+}
+.pv-center-skip svg { width: 24px; height: 24px; }
+
+/* Bottom controls */
+.pv-bottom {
+  background: linear-gradient(transparent, rgba(0,0,0,0.7));
+  padding: 0 0.5rem 0.35rem;
+}
+.pv-seek-row {
+  display: flex;
+  align-items: center;
+  padding: 0 0.25rem;
+}
+.pv-seek {
   flex: 1;
-  min-width: 40px;
   -webkit-appearance: none;
   appearance: none;
-  height: 4px;
+  height: 3px;
   background: rgba(255,255,255,0.3);
   border-radius: 2px;
   outline: none;
   cursor: pointer;
+  margin: 0;
 }
-.pv-controls-seek::-webkit-slider-thumb {
+.pv-seek::-webkit-slider-thumb {
   -webkit-appearance: none;
   width: 14px;
   height: 14px;
@@ -62,17 +138,51 @@ const CONTROLS_CSS = `
   border-radius: 50%;
   cursor: pointer;
 }
-.pv-controls-volume {
-  width: 60px;
+.pv-btn-row {
+  display: flex;
+  align-items: center;
+  gap: 0.15rem;
+  padding: 0 0.25rem;
+}
+.pv-btn-row .pv-spacer { flex: 1; }
+
+/* Icon buttons */
+.pv-btn {
+  background: none;
+  border: none;
+  color: #fff;
+  cursor: pointer;
+  padding: 6px;
+  line-height: 0;
+  border-radius: 4px;
+  flex-shrink: 0;
+}
+.pv-btn:hover { background: rgba(255,255,255,0.1); }
+.pv-btn svg { width: 22px; height: 22px; }
+.pv-btn-active { color: var(--accent, #3b82f6); }
+
+/* Time display */
+.pv-time {
+  font-size: 0.8rem;
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+  color: #fff;
+  padding: 0 0.25rem;
+}
+
+/* Volume slider */
+.pv-vol {
+  width: 52px;
   -webkit-appearance: none;
   appearance: none;
-  height: 4px;
+  height: 3px;
   background: rgba(255,255,255,0.3);
   border-radius: 2px;
   outline: none;
   cursor: pointer;
+  margin: 0 2px;
 }
-.pv-controls-volume::-webkit-slider-thumb {
+.pv-vol::-webkit-slider-thumb {
   -webkit-appearance: none;
   width: 10px;
   height: 10px;
@@ -80,37 +190,26 @@ const CONTROLS_CSS = `
   border-radius: 50%;
   cursor: pointer;
 }
-.pv-controls-time {
-  font-size: 0.8rem;
-  font-variant-numeric: tabular-nums;
-  white-space: nowrap;
-}
-.pv-controls-speed {
-  font-size: 0.75rem;
-  font-weight: 600;
-  min-width: 2.2em;
-  text-align: center;
-}
-.pv-cc-active { color: var(--accent, #3b82f6) !important; }
+
+/* Popup menu */
 .pv-popup-anchor { position: relative; }
 .pv-popup {
   position: absolute;
   bottom: 100%;
-  right: 50%;
-  transform: translateX(50%);
-  background: rgba(0,0,0,0.9);
-  border-radius: 6px;
-  padding: 0.25rem 0;
-  min-width: 140px;
-  margin-bottom: 0.75rem;
-  box-shadow: 0 2px 8px rgba(0,0,0,0.5);
+  right: 0;
+  background: rgba(20,20,20,0.95);
+  border-radius: 8px;
+  padding: 0.35rem 0;
+  min-width: 160px;
+  margin-bottom: 0.5rem;
+  box-shadow: 0 4px 12px rgba(0,0,0,0.6);
   z-index: 20;
 }
 .pv-popup-item {
   display: flex;
   align-items: center;
-  gap: 0.5rem;
-  padding: 0.5rem 0.75rem;
+  gap: 0.75rem;
+  padding: 0.6rem 1rem;
   color: #fff;
   cursor: pointer;
   font-size: 0.85rem;
@@ -120,8 +219,11 @@ const CONTROLS_CSS = `
   width: 100%;
   text-align: left;
 }
-.pv-popup-item:hover { background: rgba(255,255,255,0.15); }
+.pv-popup-item:hover { background: rgba(255,255,255,0.1); }
 .pv-popup-item.pv-active { color: var(--accent, #3b82f6); }
+.pv-popup-item svg { width: 20px; height: 20px; flex-shrink: 0; }
+.pv-popup-label { flex: 1; }
+.pv-popup-value { color: rgba(255,255,255,0.5); font-size: 0.8rem; }
 `;
 
 let styleInjected = false;
@@ -141,11 +243,11 @@ function formatTime(sec: number): string {
   return `${m}:${String(s).padStart(2, '0')}`;
 }
 
-function makeButton(label: string, text: string, className?: string): HTMLButtonElement {
+function iconBtn(label: string, iconHtml: string, className = 'pv-btn'): HTMLButtonElement {
   const btn = document.createElement('button');
-  btn.textContent = text;
+  btn.className = className;
+  btn.innerHTML = iconHtml;
   btn.setAttribute('aria-label', label);
-  if (className) btn.className = className;
   return btn;
 }
 
@@ -153,76 +255,72 @@ export function createCustomControls(options: CustomControlsOptions): CustomCont
   const { video, container } = options;
   injectStyles();
 
-  const controls = document.createElement('div');
-  controls.className = 'pv-controls';
+  // --- Build DOM ---
+  const overlay = document.createElement('div');
+  overlay.className = 'pv-overlay';
 
-  // Buttons
-  const playBtn = makeButton('Play/Pause', '\u25B6');
-  const skipBackBtn = makeButton('Skip back 10s', '\u23EA');
-  const skipFwdBtn = makeButton('Skip forward 10s', '\u23E9');
+  // Center play/skip buttons
+  const center = document.createElement('div');
+  center.className = 'pv-center';
+  const skipBackBtn = iconBtn('Skip back 10s', ICON.skipBack, 'pv-center-skip');
+  const playBtn = iconBtn('Play/Pause', ICON.play, 'pv-center-btn');
+  const skipFwdBtn = iconBtn('Skip forward 10s', ICON.skipFwd, 'pv-center-skip');
+  center.append(skipBackBtn, playBtn, skipFwdBtn);
 
+  // Bottom bar
+  const bottom = document.createElement('div');
+  bottom.className = 'pv-bottom';
+
+  // Seek row
+  const seekRow = document.createElement('div');
+  seekRow.className = 'pv-seek-row';
   const seekBar = document.createElement('input');
   seekBar.type = 'range';
-  seekBar.className = 'pv-controls-seek';
+  seekBar.className = 'pv-seek';
   seekBar.min = '0';
   seekBar.max = '0';
   seekBar.step = '0.1';
   seekBar.value = '0';
+  seekRow.appendChild(seekBar);
+
+  // Button row
+  const btnRow = document.createElement('div');
+  btnRow.className = 'pv-btn-row';
 
   const timeDisplay = document.createElement('span');
-  timeDisplay.className = 'pv-controls-time';
+  timeDisplay.className = 'pv-time';
   timeDisplay.textContent = '0:00 / 0:00';
 
-  // CC button + popup anchor
-  const ccAnchor = document.createElement('span');
-  ccAnchor.className = 'pv-popup-anchor';
-  const ccBtn = makeButton('Subtitles', 'CC');
-  ccBtn.style.fontSize = '0.85rem';
-  ccBtn.style.fontWeight = '700';
-  ccAnchor.appendChild(ccBtn);
+  const spacer = document.createElement('span');
+  spacer.className = 'pv-spacer';
 
-  // Speed button + popup anchor
-  const speedAnchor = document.createElement('span');
-  speedAnchor.className = 'pv-popup-anchor';
-  const speedBtn = makeButton('Playback speed', '1x', 'pv-controls-speed');
-  speedAnchor.appendChild(speedBtn);
-
-  // PiP button
-  const pipBtn = makeButton('Picture in Picture', '\u{1F5BC}');
-  const pipSupported = document.pictureInPictureEnabled;
-  if (!pipSupported) pipBtn.style.display = 'none';
-
-  const volumeBtn = makeButton('Mute/Unmute', '\uD83D\uDD0A');
-
+  const volumeBtn = iconBtn('Mute/Unmute', ICON.volumeHigh);
   const volumeBar = document.createElement('input');
   volumeBar.type = 'range';
-  volumeBar.className = 'pv-controls-volume';
+  volumeBar.className = 'pv-vol';
   volumeBar.min = '0';
   volumeBar.max = '1';
   volumeBar.step = '0.01';
   volumeBar.value = String(video.volume);
 
-  const fsBtn = makeButton('Fullscreen', '\u26F6');
+  const fsBtn = iconBtn('Fullscreen', ICON.fsEnter);
 
-  controls.append(
-    playBtn,
-    skipBackBtn,
-    skipFwdBtn,
-    seekBar,
-    timeDisplay,
-    ccAnchor,
-    speedAnchor,
-    pipBtn,
-    volumeBtn,
-    volumeBar,
-    fsBtn,
-  );
-  container.appendChild(controls);
+  // Overflow menu anchor + button
+  const overflowAnchor = document.createElement('span');
+  overflowAnchor.className = 'pv-popup-anchor';
+  const overflowBtn = iconBtn('More options', ICON.overflow);
+  overflowAnchor.appendChild(overflowBtn);
 
-  // State
+  btnRow.append(timeDisplay, spacer, volumeBtn, volumeBar, fsBtn, overflowAnchor);
+  bottom.append(seekRow, btnRow);
+  overlay.append(center, bottom);
+  container.appendChild(overlay);
+
+  // --- State ---
   let seeking = false;
   let hideTimer: ReturnType<typeof setTimeout> | undefined;
   let activePopup: HTMLElement | null = null;
+  const pipSupported = document.pictureInPictureEnabled;
 
   // --- Popup helpers ---
   function closePopup() {
@@ -245,10 +343,31 @@ export function createCustomControls(options: CustomControlsOptions): CustomCont
     activePopup = popup;
   }
 
-  function popupItem(label: string, active: boolean, onClick: () => void): HTMLButtonElement {
+  function popupItem(
+    label: string,
+    active: boolean,
+    onClick: () => void,
+    iconHtml?: string,
+    value?: string,
+  ): HTMLButtonElement {
     const item = document.createElement('button');
     item.className = `pv-popup-item${active ? ' pv-active' : ''}`;
-    item.textContent = `${active ? '\u2713 ' : '  '}${label}`;
+    if (iconHtml) {
+      const iconSpan = document.createElement('span');
+      iconSpan.innerHTML = iconHtml;
+      iconSpan.style.lineHeight = '0';
+      item.appendChild(iconSpan);
+    }
+    const labelSpan = document.createElement('span');
+    labelSpan.className = 'pv-popup-label';
+    labelSpan.textContent = label;
+    item.appendChild(labelSpan);
+    if (value) {
+      const valSpan = document.createElement('span');
+      valSpan.className = 'pv-popup-value';
+      valSpan.textContent = value;
+      item.appendChild(valSpan);
+    }
     item.addEventListener('click', (e) => {
       e.stopPropagation();
       onClick();
@@ -259,16 +378,16 @@ export function createCustomControls(options: CustomControlsOptions): CustomCont
 
   // --- Auto-hide ---
   function resetHideTimer() {
-    controls.classList.remove('pv-hidden');
+    overlay.classList.remove('pv-hidden');
     clearTimeout(hideTimer);
     hideTimer = setTimeout(() => {
-      if (!video.paused && !activePopup) controls.classList.add('pv-hidden');
+      if (!video.paused && !activePopup) overlay.classList.add('pv-hidden');
     }, 3000);
   }
 
   // --- Update functions ---
   function updatePlayBtn() {
-    playBtn.textContent = video.paused ? '\u25B6' : '\u23F8';
+    playBtn.innerHTML = video.paused ? ICON.play : ICON.pause;
   }
 
   function updateTime() {
@@ -284,36 +403,11 @@ export function createCustomControls(options: CustomControlsOptions): CustomCont
 
   function updateVolume() {
     volumeBar.value = String(video.muted ? 0 : video.volume);
-    volumeBtn.textContent = video.muted || video.volume === 0 ? '\uD83D\uDD07' : '\uD83D\uDD0A';
+    volumeBtn.innerHTML = video.muted || video.volume === 0 ? ICON.volumeMuted : ICON.volumeHigh;
   }
 
   function updateFullscreenBtn() {
-    fsBtn.textContent = document.fullscreenElement ? '\u2716' : '\u26F6';
-  }
-
-  function updateSpeedBtn() {
-    const rate = video.playbackRate;
-    speedBtn.textContent = rate === 1 ? '1x' : `${rate}x`;
-  }
-
-  function updateCcBtn() {
-    let hasShowing = false;
-    let hasTracks = false;
-    for (let i = 0; i < video.textTracks.length; i++) {
-      hasTracks = true;
-      if (video.textTracks[i].mode === 'showing') hasShowing = true;
-    }
-    ccBtn.style.display = hasTracks ? '' : 'none';
-    if (hasShowing) {
-      ccBtn.classList.add('pv-cc-active');
-    } else {
-      ccBtn.classList.remove('pv-cc-active');
-    }
-  }
-
-  function updatePipBtn() {
-    if (!pipSupported) return;
-    pipBtn.textContent = document.pictureInPictureElement === video ? '\u2716' : '\u{1F5BC}';
+    fsBtn.innerHTML = document.fullscreenElement ? ICON.fsExit : ICON.fsEnter;
   }
 
   // --- Video event listeners ---
@@ -323,13 +417,12 @@ export function createCustomControls(options: CustomControlsOptions): CustomCont
   };
   const onPause = () => {
     updatePlayBtn();
-    controls.classList.remove('pv-hidden');
+    overlay.classList.remove('pv-hidden');
     clearTimeout(hideTimer);
   };
   const onTimeUpdate = () => updateTime();
   const onDurationChange = () => updateDuration();
   const onVolumeChange = () => updateVolume();
-  const onRateChange = () => updateSpeedBtn();
 
   video.addEventListener('play', onPlay);
   video.addEventListener('pause', onPause);
@@ -337,24 +430,23 @@ export function createCustomControls(options: CustomControlsOptions): CustomCont
   video.addEventListener('durationchange', onDurationChange);
   video.addEventListener('loadedmetadata', onDurationChange);
   video.addEventListener('volumechange', onVolumeChange);
-  video.addEventListener('ratechange', onRateChange);
 
-  // Text track changes
-  const onTrackChange = () => updateCcBtn();
+  // Text track changes (for overflow menu state)
+  const onTrackChange = () => {}; // no visible CC button to update; menu is rebuilt each open
   video.textTracks.addEventListener('addtrack', onTrackChange);
   video.textTracks.addEventListener('removetrack', onTrackChange);
-  video.textTracks.addEventListener('change', onTrackChange);
 
   // PiP events
-  const onEnterPip = () => updatePipBtn();
-  const onLeavePip = () => updatePipBtn();
+  const onEnterPip = () => {};
+  const onLeavePip = () => {};
   video.addEventListener('enterpictureinpicture', onEnterPip);
   video.addEventListener('leavepictureinpicture', onLeavePip);
 
   // --- Button handlers ---
 
   // Play/pause
-  const onPlayClick = () => {
+  const onPlayClick = (e: MouseEvent) => {
+    e.stopPropagation();
     if (video.paused) video.play();
     else video.pause();
   };
@@ -374,10 +466,12 @@ export function createCustomControls(options: CustomControlsOptions): CustomCont
   container.addEventListener('click', onVideoClick);
 
   // Skip
-  const onSkipBack = () => {
+  const onSkipBack = (e: MouseEvent) => {
+    e.stopPropagation();
     video.currentTime = Math.max(0, video.currentTime - 10);
   };
-  const onSkipFwd = () => {
+  const onSkipFwd = (e: MouseEvent) => {
+    e.stopPropagation();
     video.currentTime = Math.min(video.duration || 0, video.currentTime + 10);
   };
   skipBackBtn.addEventListener('click', onSkipBack);
@@ -407,68 +501,6 @@ export function createCustomControls(options: CustomControlsOptions): CustomCont
   volumeBtn.addEventListener('click', onVolumeBtnClick);
   volumeBar.addEventListener('input', onVolumeInput);
 
-  // CC popup
-  const onCcClick = (e: MouseEvent) => {
-    e.stopPropagation();
-    resetHideTimer();
-    togglePopup(ccAnchor, () => {
-      const items: HTMLButtonElement[] = [];
-      // "Off" option
-      let anyShowing = false;
-      for (let i = 0; i < video.textTracks.length; i++) {
-        if (video.textTracks[i].mode === 'showing') anyShowing = true;
-      }
-      items.push(
-        popupItem('Off', !anyShowing, () => {
-          for (let i = 0; i < video.textTracks.length; i++) {
-            video.textTracks[i].mode = 'disabled';
-          }
-          updateCcBtn();
-        }),
-      );
-      // Track options
-      for (let i = 0; i < video.textTracks.length; i++) {
-        const track = video.textTracks[i];
-        const label = track.label || track.language || `Track ${i + 1}`;
-        items.push(
-          popupItem(label, track.mode === 'showing', () => {
-            for (let j = 0; j < video.textTracks.length; j++) {
-              video.textTracks[j].mode = 'disabled';
-            }
-            track.mode = 'showing';
-            updateCcBtn();
-          }),
-        );
-      }
-      return items;
-    });
-  };
-  ccBtn.addEventListener('click', onCcClick);
-
-  // Speed popup
-  const onSpeedClick = (e: MouseEvent) => {
-    e.stopPropagation();
-    resetHideTimer();
-    togglePopup(speedAnchor, () =>
-      SPEED_OPTIONS.map((rate) =>
-        popupItem(`${rate}x`, video.playbackRate === rate, () => {
-          video.playbackRate = rate;
-        }),
-      ),
-    );
-  };
-  speedBtn.addEventListener('click', onSpeedClick);
-
-  // PiP
-  const onPipClick = async () => {
-    if (document.pictureInPictureElement === video) {
-      await document.exitPictureInPicture();
-    } else {
-      await video.requestPictureInPicture();
-    }
-  };
-  pipBtn.addEventListener('click', onPipClick);
-
   // Fullscreen
   const onFsClick = () => {
     if (document.fullscreenElement) {
@@ -482,6 +514,106 @@ export function createCustomControls(options: CustomControlsOptions): CustomCont
   const onFullscreenChange = () => updateFullscreenBtn();
   document.addEventListener('fullscreenchange', onFullscreenChange);
 
+  // Overflow menu
+  const onOverflowClick = (e: MouseEvent) => {
+    e.stopPropagation();
+    resetHideTimer();
+    togglePopup(overflowAnchor, () => {
+      const items: HTMLButtonElement[] = [];
+
+      // Captions — only show if tracks exist
+      const trackCount = video.textTracks.length;
+      if (trackCount > 0) {
+        let activeLang = 'Off';
+        for (let i = 0; i < trackCount; i++) {
+          if (video.textTracks[i].mode === 'showing') {
+            activeLang =
+              video.textTracks[i].label || video.textTracks[i].language || `Track ${i + 1}`;
+          }
+        }
+        items.push(
+          popupItem(
+            'Captions',
+            false,
+            () => {
+              // Open sub-menu for captions
+              togglePopup(overflowAnchor, () => {
+                const subItems: HTMLButtonElement[] = [];
+                let anyShowing = false;
+                for (let i = 0; i < video.textTracks.length; i++) {
+                  if (video.textTracks[i].mode === 'showing') anyShowing = true;
+                }
+                subItems.push(
+                  popupItem('Off', !anyShowing, () => {
+                    for (let i = 0; i < video.textTracks.length; i++) {
+                      video.textTracks[i].mode = 'disabled';
+                    }
+                  }),
+                );
+                for (let i = 0; i < video.textTracks.length; i++) {
+                  const track = video.textTracks[i];
+                  const label = track.label || track.language || `Track ${i + 1}`;
+                  subItems.push(
+                    popupItem(label, track.mode === 'showing', () => {
+                      for (let j = 0; j < video.textTracks.length; j++) {
+                        video.textTracks[j].mode = 'disabled';
+                      }
+                      track.mode = 'showing';
+                    }),
+                  );
+                }
+                return subItems;
+              });
+            },
+            ICON.cc,
+            activeLang,
+          ),
+        );
+      }
+
+      // Playback speed
+      const rate = video.playbackRate;
+      items.push(
+        popupItem(
+          'Playback speed',
+          false,
+          () => {
+            togglePopup(overflowAnchor, () =>
+              SPEED_OPTIONS.map((r) =>
+                popupItem(`${r}x`, video.playbackRate === r, () => {
+                  video.playbackRate = r;
+                }),
+              ),
+            );
+          },
+          ICON.speed,
+          `${rate === 1 ? 'Normal' : `${rate}x`}`,
+        ),
+      );
+
+      // PiP
+      if (pipSupported) {
+        items.push(
+          popupItem(
+            'Picture in picture',
+            false,
+            async () => {
+              if (document.pictureInPictureElement === video) {
+                await document.exitPictureInPicture();
+              } else {
+                await video.requestPictureInPicture();
+              }
+            },
+            ICON.pip,
+          ),
+        );
+      }
+
+      return items;
+    });
+  };
+  overflowBtn.addEventListener('click', onOverflowClick);
+
   // Auto-hide on mouse/touch activity
   const onActivity = () => resetHideTimer();
   container.addEventListener('mousemove', onActivity);
@@ -491,9 +623,6 @@ export function createCustomControls(options: CustomControlsOptions): CustomCont
   updatePlayBtn();
   updateDuration();
   updateVolume();
-  updateSpeedBtn();
-  updateCcBtn();
-  updatePipBtn();
   resetHideTimer();
 
   return {
@@ -506,12 +635,10 @@ export function createCustomControls(options: CustomControlsOptions): CustomCont
       video.removeEventListener('durationchange', onDurationChange);
       video.removeEventListener('loadedmetadata', onDurationChange);
       video.removeEventListener('volumechange', onVolumeChange);
-      video.removeEventListener('ratechange', onRateChange);
       video.removeEventListener('enterpictureinpicture', onEnterPip);
       video.removeEventListener('leavepictureinpicture', onLeavePip);
       video.textTracks.removeEventListener('addtrack', onTrackChange);
       video.textTracks.removeEventListener('removetrack', onTrackChange);
-      video.textTracks.removeEventListener('change', onTrackChange);
       playBtn.removeEventListener('click', onPlayClick);
       container.removeEventListener('click', onVideoClick);
       skipBackBtn.removeEventListener('click', onSkipBack);
@@ -520,14 +647,12 @@ export function createCustomControls(options: CustomControlsOptions): CustomCont
       seekBar.removeEventListener('change', onSeekChange);
       volumeBtn.removeEventListener('click', onVolumeBtnClick);
       volumeBar.removeEventListener('input', onVolumeInput);
-      ccBtn.removeEventListener('click', onCcClick);
-      speedBtn.removeEventListener('click', onSpeedClick);
-      pipBtn.removeEventListener('click', onPipClick);
       fsBtn.removeEventListener('click', onFsClick);
+      overflowBtn.removeEventListener('click', onOverflowClick);
       document.removeEventListener('fullscreenchange', onFullscreenChange);
       container.removeEventListener('mousemove', onActivity);
       container.removeEventListener('touchstart', onActivity);
-      controls.remove();
+      overlay.remove();
     },
   };
 }
