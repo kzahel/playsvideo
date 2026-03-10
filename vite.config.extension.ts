@@ -1,6 +1,7 @@
 import { copyFileSync, mkdirSync, renameSync, rmSync } from 'node:fs';
 import { resolve } from 'node:path';
 import { defineConfig } from 'vite';
+import react from '@vitejs/plugin-react';
 
 const outDir = resolve(__dirname, 'dist-extension');
 
@@ -8,28 +9,19 @@ export default defineConfig({
   clearScreen: false,
   logLevel: 'error',
   publicDir: false,
-  build: {
-    outDir,
-    emptyOutDir: true,
-    rollupOptions: {
-      input: {
-        player: resolve(__dirname, 'extension/player.html'),
-        background: resolve(__dirname, 'extension/background.ts'),
-      },
-      output: {
-        entryFileNames: '[name].js',
-        chunkFileNames: 'assets/[name]-[hash].js',
-        assetFileNames: 'assets/[name]-[hash][extname]',
-      },
+  resolve: {
+    alias: {
+      playsvideo: resolve(__dirname, 'src/index.ts'),
     },
   },
   plugins: [
+    react(),
     {
       name: 'extension-assets',
       writeBundle() {
         // Vite nests HTML under extension/ — flatten it
-        const nested = resolve(outDir, 'extension/player.html');
-        const flat = resolve(outDir, 'player.html');
+        const nested = resolve(outDir, 'extension/index.html');
+        const flat = resolve(outDir, 'index.html');
         try {
           renameSync(nested, flat);
           rmSync(resolve(outDir, 'extension'), { recursive: true });
@@ -55,4 +47,19 @@ export default defineConfig({
       },
     },
   ],
+  build: {
+    outDir,
+    emptyOutDir: true,
+    rollupOptions: {
+      input: {
+        index: resolve(__dirname, 'extension/index.html'),
+        background: resolve(__dirname, 'extension/background.ts'),
+      },
+      output: {
+        entryFileNames: '[name].js',
+        chunkFileNames: 'assets/[name]-[hash].js',
+        assetFileNames: 'assets/[name]-[hash][extname]',
+      },
+    },
+  },
 });

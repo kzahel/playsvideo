@@ -5,6 +5,10 @@ import { db } from '../db';
 import { getFile, setFolder } from '../scan.js';
 import { folderProvider } from '../folder-provider.js';
 
+export type EngineSource =
+  | { kind: 'entry'; entry: LibraryEntry }
+  | { kind: 'file'; file: File };
+
 const MAX_DIAGNOSTIC_EVENTS = 60;
 
 interface DiagnosticEvent {
@@ -73,7 +77,15 @@ async function writeClipboard(text: string): Promise<void> {
   document.body.removeChild(textarea);
 }
 
-export function useEngine(entry: LibraryEntry | null): UseEngineResult {
+export function useEngine(source: EngineSource | null): UseEngineResult {
+  const entry = source?.kind === 'entry' ? source.entry : null;
+  const file = source?.kind === 'file' ? source.file : null;
+  const sourceKey = source
+    ? source.kind === 'entry'
+      ? `entry-${source.entry.id}`
+      : `file-${source.file.name}-${source.file.size}-${source.file.lastModified}`
+    : null;
+
   const videoRef = useRef<HTMLVideoElement | null>(null);
   const engineRef = useRef<PlaysVideoEngine | null>(null);
   const entryRef = useRef(entry);
@@ -164,7 +176,7 @@ export function useEngine(entry: LibraryEntry | null): UseEngineResult {
   }, [phase, status, subtitleStatus]);
 
   useEffect(() => {
-    if (!entry || !videoRef.current) return;
+    if (!source || !videoRef.current) return;
 
     const video = videoRef.current;
     const engine = new PlaysVideoEngine(video);
@@ -176,7 +188,8 @@ export function useEngine(entry: LibraryEntry | null): UseEngineResult {
     readyDetailRef.current = null;
     setDiagnosticsStatus('');
 
-    pushDiagnosticEvent(diagnosticsRef, 'session:start', `${entry.name} (${entry.path})`);
+    const label = entry ? `${entry.name} (${entry.path})` : file!.name;
+    pushDiagnosticEvent(diagnosticsRef, 'session:start', label);
 
     engine.addEventListener('loading', ((e: CustomEvent) => {
       setStatus(`Opening ${e.detail.file?.name ?? ''}...`);
@@ -200,16 +213,17 @@ export function useEngine(entry: LibraryEntry | null): UseEngineResult {
         `${mode}; duration=${Number(e.detail.durationSec).toFixed(3)}`,
       );
 
-      if (entry.playbackPositionSec > 0 && entry.watchState === 'in-progress') {
-        video.currentTime = entry.playbackPositionSec;
-        pushDiagnosticEvent(
-          diagnosticsRef,
-          'video:resume-position',
-          `currentTime=${entry.playbackPositionSec.toFixed(3)}`,
-        );
+      if (entry) {
+        if (entry.playbackPositionSec > 0 && entry.watchState === 'in-progress') {
+          video.currentTime = entry.playbackPositionSec;
+          pushDiagnosticEvent(
+            diagnosticsRef,
+            'video:resume-position',
+            `currentTime=${entry.playbackPositionSec.toFixed(3)}`,
+          );
+        }
+        db.library.update(entry.id, { durationSec: e.detail.durationSec });
       }
-
-      db.library.update(entry.id, { durationSec: e.detail.durationSec });
     }) as EventListener);
 
     engine.addEventListener('subtitle-status', ((e: CustomEvent) => {
@@ -291,20 +305,29 @@ export function useEngine(entry: LibraryEntry | null): UseEngineResult {
     video.addEventListener('ended', onEnded);
     video.addEventListener('error', onVideoError);
 
-    const interval = setInterval(savePosition, 5000);
+    const interval = entry ? setInterval(savePosition, 5000) : null;
 
     (async () => {
-      try {
-        setStatus('Getting file access...');
-        setNeedsPermission(false);
-        pushDiagnosticEvent(diagnosticsRef, 'file-access:start');
-        const file = await getFile(entry);
+      if (file) {
         pushDiagnosticEvent(
           diagnosticsRef,
           'file-access:ready',
           `${file.name}; size=${file.size}; type=${file.type || 'unknown'}`,
         );
         engine.loadFile(file);
+        return;
+      }
+      try {
+        setStatus('Getting file access...');
+        setNeedsPermission(false);
+        pushDiagnosticEvent(diagnosticsRef, 'file-access:start');
+        const resolved = await getFile(entry!);
+        pushDiagnosticEvent(
+          diagnosticsRef,
+          'file-access:ready',
+          `${resolved.name}; size=${resolved.size}; type=${resolved.type || 'unknown'}`,
+        );
+        engine.loadFile(resolved);
       } catch (err: unknown) {
         const message = err instanceof Error ? err.message : String(err);
         if (
@@ -327,8 +350,8 @@ export function useEngine(entry: LibraryEntry | null): UseEngineResult {
     })();
 
     return () => {
-      savePosition();
-      clearInterval(interval);
+      if (entry) savePosition();
+      if (interval) clearInterval(interval);
       video.removeEventListener('playing', onPlaying);
       video.removeEventListener('waiting', onWaiting);
       video.removeEventListener('stalled', onStalled);
@@ -340,7 +363,7 @@ export function useEngine(entry: LibraryEntry | null): UseEngineResult {
       engine.destroy();
       engineRef.current = null;
     };
-  }, [entry?.id, retryCounter]);
+  }, [sourceKey, retryCounter]);
 
   const retryPermission = useCallback(async () => {
     if (!folderProvider.requiresPermissionGrant) {

@@ -1,79 +1,105 @@
-import { useRef, useState } from 'react';
-import { useParams, Link } from 'react-router-dom';
-import { useLiveQuery } from 'dexie-react-hooks';
-import { db } from '../db';
+import { useRef, useState, useEffect } from 'react';
+import { Link } from 'react-router-dom';
 import { useEngine } from '../hooks/useEngine';
-import { folderProvider } from '../folder-provider.js';
 import { useSetting } from '../hooks/useSetting';
 import { useCustomControls } from '../hooks/useCustomControls';
 
-export function Player() {
-  const { id } = useParams<{ id: string }>();
-  const entryId = Number(id);
+export function FilePlayer() {
+  const [file, setFile] = useState<File | null>(null);
   const subtitleInputRef = useRef<HTMLInputElement | null>(null);
+  const fileInputRef = useRef<HTMLInputElement | null>(null);
   const [containerEl, setContainerEl] = useState<HTMLDivElement | null>(null);
   const [controlsType, setControlsType] = useSetting<'stock' | 'custom'>('pv-controls-type', 'stock');
 
-  const entry = useLiveQuery(() => db.library.get(entryId), [entryId]);
+  // File Handling API (launchQueue)
+  useEffect(() => {
+    if (!('launchQueue' in window)) return;
+    (window as any).launchQueue.setConsumer(async (launchParams: any) => {
+      if (!launchParams.files?.length) return;
+      const handle = launchParams.files[0];
+      const launched = await handle.getFile();
+      setFile(launched);
+    });
+  }, []);
+
+  // Drag-and-drop
+  useEffect(() => {
+    let dragCounter = 0;
+    const onDragEnter = (e: DragEvent) => {
+      e.preventDefault();
+      dragCounter++;
+    };
+    const onDragLeave = () => {
+      dragCounter--;
+    };
+    const onDragOver = (e: DragEvent) => e.preventDefault();
+    const onDrop = (e: DragEvent) => {
+      e.preventDefault();
+      dragCounter = 0;
+      const dropped = e.dataTransfer?.files[0];
+      if (dropped) setFile(dropped);
+    };
+    document.addEventListener('dragenter', onDragEnter);
+    document.addEventListener('dragleave', onDragLeave);
+    document.addEventListener('dragover', onDragOver);
+    document.addEventListener('drop', onDrop);
+    return () => {
+      document.removeEventListener('dragenter', onDragEnter);
+      document.removeEventListener('dragleave', onDragLeave);
+      document.removeEventListener('dragover', onDragOver);
+      document.removeEventListener('drop', onDrop);
+    };
+  }, []);
+
   const {
     videoRef,
     status,
     phase,
-    needsPermission,
-    retryPermission,
     subtitleStatus,
     loadSubtitleFile,
     clearExternalSubtitles,
     copyDiagnostics,
     diagnosticsStatus,
-  } =
-    useEngine(entry ? { kind: 'entry', entry } : null);
+  } = useEngine(file ? { kind: 'file', file } : null);
   useCustomControls(videoRef, containerEl, controlsType === 'custom');
-
-  if (entry === undefined) {
-    return <div className="player-page">Loading...</div>;
-  }
-
-  if (!entry) {
-    return (
-      <div className="player-page">
-        <Link to="/" className="player-back">
-          &larr; Back to Library
-        </Link>
-        <p>Video not found.</p>
-      </div>
-    );
-  }
 
   return (
     <div className="player-page">
       <Link to="/" className="player-back">
         &larr; Back to Library
       </Link>
+      {!file && (
+        <div className="empty-state">
+          <p>Drop a video file here, or select one below.</p>
+          <input
+            ref={fileInputRef}
+            type="file"
+            accept="video/*"
+            style={{ marginTop: '1rem' }}
+            onChange={(e) => {
+              const picked = e.target.files?.[0];
+              if (picked) setFile(picked);
+            }}
+          />
+        </div>
+      )}
       <input
         ref={subtitleInputRef}
         type="file"
         accept=".srt,.vtt"
         className="player-subtitle-input"
         onChange={async (e) => {
-          const file = e.target.files?.[0];
+          const sub = e.target.files?.[0];
           e.target.value = '';
-          if (!file) return;
+          if (!sub) return;
           try {
-            await loadSubtitleFile(file);
+            await loadSubtitleFile(sub);
           } catch {}
         }}
       />
       <div className="pv-video-container" ref={setContainerEl}>
         <video ref={videoRef} controls={controlsType === 'stock'} autoPlay />
       </div>
-      {needsPermission && (
-        <button className="btn btn-primary player-permission-btn" onClick={retryPermission}>
-          {folderProvider.requiresPermissionGrant
-            ? 'Tap to grant file access'
-            : 'Select folder to play'}
-        </button>
-      )}
       <div className="player-actions">
         <button
           className="btn btn-secondary"

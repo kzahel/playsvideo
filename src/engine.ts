@@ -40,7 +40,10 @@ import type {
   SubtitleTrackInfo,
 } from './pipeline/types.js';
 import type { TranscodeWorkerSnapshot, TranscodeWorkerStateMessage } from './transcode-protocol.js';
-import type { WorkerSegmentStateMessage, WorkerSubtitleProgressMessage } from './worker-protocol.js';
+import type {
+  WorkerSegmentStateMessage,
+  WorkerSubtitleProgressMessage,
+} from './worker-protocol.js';
 
 export type EnginePhase = 'idle' | 'demuxing' | 'ready' | 'error';
 

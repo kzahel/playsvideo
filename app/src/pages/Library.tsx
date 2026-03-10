@@ -2,11 +2,12 @@ import { useLiveQuery } from 'dexie-react-hooks';
 import { db } from '../db.js';
 import { LibraryEntryCard } from '../components/LibraryEntry.js';
 import { FolderPicker } from '../components/FolderPicker.js';
-import { rescanFolder } from '../scan.js';
+import { rescanFolder, rescanAllFolders, removeFolder } from '../scan.js';
+import { isExtension } from '../context.js';
 
 export function Library() {
   const entries = useLiveQuery(() => db.library.orderBy('name').toArray());
-  const directory = useLiveQuery(() => db.directories.toCollection().first());
+  const directories = useLiveQuery(() => db.directories.toArray());
 
   const handleRescan = async () => {
     try {
@@ -16,32 +17,75 @@ export function Library() {
     }
   };
 
-  if (entries === undefined || directory === undefined) {
+  const handleRescanAll = async () => {
+    try {
+      await rescanAllFolders();
+    } catch (err) {
+      console.error('Failed to rescan:', err);
+    }
+  };
+
+  const handleRemoveFolder = async (directoryId: number) => {
+    try {
+      await removeFolder(directoryId);
+    } catch (err) {
+      console.error('Failed to remove folder:', err);
+    }
+  };
+
+  if (entries === undefined || directories === undefined) {
     return <div className="empty-state">Loading...</div>;
   }
+
+  const hasDirectories = directories.length > 0;
+  const multiFolder = isExtension();
 
   return (
     <div>
       <div className="library-header">
         <FolderPicker />
-        {directory && (
+        {hasDirectories && !multiFolder && (
           <button type="button" className="btn btn-secondary" onClick={handleRescan}>
             Rescan
           </button>
         )}
+        {hasDirectories && multiFolder && (
+          <button type="button" className="btn btn-secondary" onClick={handleRescanAll}>
+            Rescan All
+          </button>
+        )}
       </div>
 
-      {!directory && (
+      {multiFolder && hasDirectories && (
+        <div className="directory-chips">
+          {directories.map((dir) => (
+            <span key={dir.id} className="directory-chip">
+              {dir.name}
+              <button
+                type="button"
+                className="directory-chip-remove"
+                onClick={() => handleRemoveFolder(dir.id)}
+                aria-label={`Remove ${dir.name}`}
+              >
+                &times;
+              </button>
+            </span>
+          ))}
+        </div>
+      )}
+
+      {!hasDirectories && (
         <div className="empty-state">
           <p>No folder selected.</p>
           <p style={{ marginTop: '0.5rem' }}>
-            Click "Select Folder" to scan a directory for video files.
+            Click "{multiFolder ? 'Add Folder' : 'Select Folder'}" to scan a directory for video
+            files.
           </p>
         </div>
       )}
 
-      {directory && entries.length === 0 && (
-        <div className="empty-state">No video files found in {directory.name}.</div>
+      {hasDirectories && entries.length === 0 && (
+        <div className="empty-state">No video files found.</div>
       )}
 
       {entries.length > 0 && (

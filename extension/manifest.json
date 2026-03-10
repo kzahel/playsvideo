@@ -14,7 +14,7 @@
   },
   "file_handlers": [
     {
-      "action": "/player.html",
+      "action": "/index.html",
       "name": "Video",
       "accept": {
         "video/mp4": [".mp4", ".m4v"],

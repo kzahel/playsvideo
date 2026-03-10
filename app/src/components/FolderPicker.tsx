@@ -1,4 +1,5 @@
 import { setFolder } from '../scan.js';
+import { isExtension } from '../context.js';
 
 export function FolderPicker() {
   const handlePick = async () => {
@@ -12,7 +13,7 @@ export function FolderPicker() {
 
   return (
     <button type="button" className="btn btn-primary" onClick={handlePick}>
-      Select Folder
+      {isExtension() ? 'Add Folder' : 'Select Folder'}
     </button>
   );
 }

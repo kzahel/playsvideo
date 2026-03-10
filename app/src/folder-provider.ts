@@ -1,4 +1,5 @@
 import { db, type LibraryEntry } from './db.js';
+import { isExtension } from './context.js';
 
 const VIDEO_EXTENSIONS = new Set([
   '.mp4',
@@ -29,6 +30,7 @@ export interface ScannedFile {
 }
 
 export interface FolderResult {
+  directoryId: number;
   name: string;
   files: ScannedFile[];
 }
@@ -37,7 +39,7 @@ export interface FolderProvider {
   readonly requiresPermissionGrant: boolean;
   pickFolder(): Promise<FolderResult>;
   getFile(entry: LibraryEntry): Promise<File>;
-  rescan(): Promise<FolderResult>;
+  rescan(directoryId?: number): Promise<FolderResult>;
 }
 
 // --- File System Access API provider (Chromium) ---
@@ -87,20 +89,21 @@ class FsAccessProvider implements FolderProvider {
 
   async pickFolder(): Promise<FolderResult> {
     const handle = await window.showDirectoryPicker({ mode: 'read' });
-    // Store the handle in the single directory slot
-    await db.directories.clear();
-    await db.directories.add({
+    if (!isExtension()) {
+      await db.directories.clear();
+    }
+    const directoryId = await db.directories.add({
       handle,
       name: handle.name,
       addedAt: Date.now(),
       lastScannedAt: Date.now(),
     } as Parameters<typeof db.directories.add>[0]);
     const files = await collectFiles(handle);
-    return { name: handle.name, files };
+    return { directoryId: directoryId as number, name: handle.name, files };
   }
 
   async getFile(entry: LibraryEntry): Promise<File> {
-    const dir = await db.directories.toCollection().first();
+    const dir = await db.directories.get(entry.directoryId);
     if (!dir?.handle) throw new Error('No directory available');
     await ensurePermission(dir.handle);
     const parts = entry.path.split('/');
@@ -112,12 +115,14 @@ class FsAccessProvider implements FolderProvider {
     return fileHandle.getFile();
   }
 
-  async rescan(): Promise<FolderResult> {
-    const dir = await db.directories.toCollection().first();
+  async rescan(directoryId?: number): Promise<FolderResult> {
+    const dir = directoryId
+      ? await db.directories.get(directoryId)
+      : await db.directories.toCollection().first();
     if (!dir?.handle) throw new Error('No directory to rescan');
     await ensurePermission(dir.handle);
     const files = await collectFiles(dir.handle);
-    return { name: dir.name, files };
+    return { directoryId: dir.id, name: dir.name, files };
   }
 }
 
@@ -157,7 +162,7 @@ class WebkitDirectoryProvider implements FolderProvider {
 
   async pickFolder(): Promise<FolderResult> {
     const rawFiles = await triggerWebkitDirectoryPicker();
-    return this.processFiles(rawFiles);
+    return await this.processFiles(rawFiles);
   }
 
   async getFile(entry: LibraryEntry): Promise<File> {
@@ -171,10 +176,10 @@ class WebkitDirectoryProvider implements FolderProvider {
 
   async rescan(): Promise<FolderResult> {
     const rawFiles = await triggerWebkitDirectoryPicker();
-    return this.processFiles(rawFiles);
+    return await this.processFiles(rawFiles);
   }
 
-  private processFiles(rawFiles: File[]): FolderResult {
+  private async processFiles(rawFiles: File[]): Promise<FolderResult> {
     this.fileMap.clear();
     const files: ScannedFile[] = [];
     let folderName = '';
@@ -201,15 +206,14 @@ class WebkitDirectoryProvider implements FolderProvider {
     }
 
     // Store directory entry (no handle)
-    db.directories.clear().then(() =>
-      db.directories.add({
-        name: folderName,
-        addedAt: Date.now(),
-        lastScannedAt: Date.now(),
-      } as Parameters<typeof db.directories.add>[0]),
-    );
+    await db.directories.clear();
+    const directoryId = await db.directories.add({
+      name: folderName,
+      addedAt: Date.now(),
+      lastScannedAt: Date.now(),
+    } as Parameters<typeof db.directories.add>[0]);
 
-    return { name: folderName || 'Unknown', files };
+    return { directoryId: directoryId as number, name: folderName || 'Unknown', files };
   }
 }
 
