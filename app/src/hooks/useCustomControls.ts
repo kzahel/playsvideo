@@ -4,15 +4,15 @@ import { createCustomControls } from '../../../src/custom-controls.js';
 
 export function useCustomControls(
   videoRef: RefObject<HTMLVideoElement | null>,
-  containerRef: RefObject<HTMLElement | null>,
+  container: HTMLElement | null,
   enabled: boolean,
 ) {
   useEffect(() => {
-    if (!enabled || !videoRef.current || !containerRef.current) return;
+    if (!enabled || !videoRef.current || !container) return;
     const handle = createCustomControls({
       video: videoRef.current,
-      container: containerRef.current,
+      container,
     });
     return () => handle.destroy();
-  }, [enabled, videoRef, containerRef]);
+  }, [enabled, videoRef, container]);
 }

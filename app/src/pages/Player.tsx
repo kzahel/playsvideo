@@ -1,4 +1,4 @@
-import { useRef } from 'react';
+import { useRef, useState } from 'react';
 import { useParams, Link } from 'react-router-dom';
 import { useLiveQuery } from 'dexie-react-hooks';
 import { db } from '../db';
@@ -11,7 +11,7 @@ export function Player() {
   const { id } = useParams<{ id: string }>();
   const entryId = Number(id);
   const subtitleInputRef = useRef<HTMLInputElement | null>(null);
-  const containerRef = useRef<HTMLDivElement | null>(null);
+  const [containerEl, setContainerEl] = useState<HTMLDivElement | null>(null);
   const [controlsType, setControlsType] = useSetting<'stock' | 'custom'>('pv-controls-type', 'stock');
 
   const entry = useLiveQuery(() => db.library.get(entryId), [entryId]);
@@ -28,7 +28,7 @@ export function Player() {
     diagnosticsStatus,
   } =
     useEngine(entry ?? null);
-  useCustomControls(videoRef, containerRef, controlsType === 'custom');
+  useCustomControls(videoRef, containerEl, controlsType === 'custom');
 
   if (entry === undefined) {
     return <div className="player-page">Loading...</div>;
@@ -64,7 +64,7 @@ export function Player() {
           } catch {}
         }}
       />
-      <div className="pv-video-container" ref={containerRef}>
+      <div className="pv-video-container" ref={setContainerEl}>
         <video ref={videoRef} controls={controlsType === 'stock'} autoPlay />
       </div>
       {needsPermission && (
