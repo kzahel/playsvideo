@@ -64,6 +64,7 @@ engine.addEventListener('loading', (e) => {
   video.style.display = 'none';
   loadSubtitles.disabled = true;
   subtitlePicker.reset();
+  destroyCustomControls();
   if (file) {
     log(
       'loading',
@@ -98,12 +99,15 @@ engine.addEventListener('ready', (e) => {
   }
   renderWorkerStates();
   renderCodecPath();
+  videoReady = true;
+  applyControlsType();
 });
 
 engine.addEventListener('error', (e) => {
   status.textContent = `Error: ${e.detail.message}`;
   loadSubtitles.disabled = true;
   subtitlePicker.reset();
+  destroyCustomControls();
   log('error', e.detail.message);
   renderWorkerStates();
 });
@@ -437,20 +441,27 @@ function formatTime(sec: number): string {
 // Controls toggle
 let controlsType = localStorage.getItem('pv-controls-type') === 'custom' ? 'custom' : 'stock';
 let customControlsHandle: CustomControlsHandle | null = null;
+let videoReady = false;
 
 function applyControlsType() {
+  toggleControlsBtn.textContent = controlsType === 'custom' ? 'Stock controls' : 'Custom controls';
+  if (!videoReady) return;
   if (controlsType === 'custom') {
     video.removeAttribute('controls');
     if (!customControlsHandle) {
       customControlsHandle = createCustomControls({ video, container: videoContainer });
     }
-    toggleControlsBtn.textContent = 'Stock controls';
   } else {
     video.setAttribute('controls', '');
     customControlsHandle?.destroy();
     customControlsHandle = null;
-    toggleControlsBtn.textContent = 'Custom controls';
   }
+}
+
+function destroyCustomControls() {
+  customControlsHandle?.destroy();
+  customControlsHandle = null;
+  videoReady = false;
 }
 
 toggleControlsBtn.addEventListener('click', () => {
