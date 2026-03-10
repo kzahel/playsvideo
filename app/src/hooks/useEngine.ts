@@ -2,7 +2,8 @@ import { useRef, useState, useEffect, useCallback, type MutableRefObject } from 
 import { PlaysVideoEngine } from 'playsvideo';
 import type { LibraryEntry } from '../db';
 import { db } from '../db';
-import { getFileFromLibraryEntry } from '../scan';
+import { getFile, setFolder } from '../scan.js';
+import { folderProvider } from '../folder-provider.js';
 
 const MAX_DIAGNOSTIC_EVENTS = 60;
 
@@ -297,7 +298,7 @@ export function useEngine(entry: LibraryEntry | null): UseEngineResult {
         setStatus('Getting file access...');
         setNeedsPermission(false);
         pushDiagnosticEvent(diagnosticsRef, 'file-access:start');
-        const file = await getFileFromLibraryEntry(entry);
+        const file = await getFile(entry);
         pushDiagnosticEvent(
           diagnosticsRef,
           'file-access:ready',
@@ -306,8 +307,15 @@ export function useEngine(entry: LibraryEntry | null): UseEngineResult {
         engine.loadFile(file);
       } catch (err: unknown) {
         const message = err instanceof Error ? err.message : String(err);
-        if (message.includes('User activation is required')) {
-          setStatus('File access permission needed');
+        if (
+          message.includes('User activation is required') ||
+          message.includes('not available')
+        ) {
+          setStatus(
+            folderProvider.requiresPermissionGrant
+              ? 'File access permission needed'
+              : 'Please select the folder to play this file',
+          );
           setNeedsPermission(true);
           pushDiagnosticEvent(diagnosticsRef, 'file-access:permission-required', message);
         } else {
@@ -334,7 +342,16 @@ export function useEngine(entry: LibraryEntry | null): UseEngineResult {
     };
   }, [entry?.id, retryCounter]);
 
-  const retryPermission = useCallback(() => {
+  const retryPermission = useCallback(async () => {
+    if (!folderProvider.requiresPermissionGrant) {
+      try {
+        await setFolder();
+      } catch (err: unknown) {
+        if (err instanceof DOMException && err.name === 'AbortError') return;
+        console.error('Failed to select folder:', err);
+        return;
+      }
+    }
     setNeedsPermission(false);
     setRetryCounter((c) => c + 1);
   }, []);

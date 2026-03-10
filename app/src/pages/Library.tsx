@@ -1,25 +1,22 @@
 import { useLiveQuery } from 'dexie-react-hooks';
-import { db } from '../db';
-import { LibraryEntryCard } from '../components/LibraryEntry';
-import { FolderPicker } from '../components/FolderPicker';
-import { scanDirectory } from '../scan';
+import { db } from '../db.js';
+import { LibraryEntryCard } from '../components/LibraryEntry.js';
+import { FolderPicker } from '../components/FolderPicker.js';
+import { rescanFolder } from '../scan.js';
 
 export function Library() {
   const entries = useLiveQuery(() => db.library.orderBy('name').toArray());
-  const directories = useLiveQuery(() => db.directories.toArray());
+  const directory = useLiveQuery(() => db.directories.toCollection().first());
 
   const handleRescan = async () => {
-    const dirs = await db.directories.toArray();
-    for (const dir of dirs) {
-      try {
-        await scanDirectory(dir.id);
-      } catch (err) {
-        console.error(`Failed to rescan ${dir.name}:`, err);
-      }
+    try {
+      await rescanFolder();
+    } catch (err) {
+      console.error('Failed to rescan:', err);
     }
   };
 
-  if (entries === undefined || directories === undefined) {
+  if (entries === undefined || directory === undefined) {
     return <div className="empty-state">Loading...</div>;
   }
 
@@ -27,24 +24,24 @@ export function Library() {
     <div>
       <div className="library-header">
         <FolderPicker />
-        {directories.length > 0 && (
+        {directory && (
           <button type="button" className="btn btn-secondary" onClick={handleRescan}>
             Rescan
           </button>
         )}
       </div>
 
-      {directories.length === 0 && (
+      {!directory && (
         <div className="empty-state">
-          <p>No folders added yet.</p>
+          <p>No folder selected.</p>
           <p style={{ marginTop: '0.5rem' }}>
-            Click "Add Folder" to scan a directory for video files.
+            Click "Select Folder" to scan a directory for video files.
           </p>
         </div>
       )}
 
-      {directories.length > 0 && entries.length === 0 && (
-        <div className="empty-state">No video files found in added folders.</div>
+      {directory && entries.length === 0 && (
+        <div className="empty-state">No video files found in {directory.name}.</div>
       )}
 
       {entries.length > 0 && (

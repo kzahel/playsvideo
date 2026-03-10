@@ -3,6 +3,7 @@ import { useParams, Link } from 'react-router-dom';
 import { useLiveQuery } from 'dexie-react-hooks';
 import { db } from '../db';
 import { useEngine } from '../hooks/useEngine';
+import { folderProvider } from '../folder-provider.js';
 import { useSetting } from '../hooks/useSetting';
 import { useCustomControls } from '../hooks/useCustomControls';
 
@@ -68,7 +69,9 @@ export function Player() {
       </div>
       {needsPermission && (
         <button className="btn btn-primary player-permission-btn" onClick={retryPermission}>
-          Tap to grant file access
+          {folderProvider.requiresPermissionGrant
+            ? 'Tap to grant file access'
+            : 'Select folder to play'}
         </button>
       )}
       <div className="player-actions">

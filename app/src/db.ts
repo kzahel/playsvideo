@@ -17,7 +17,7 @@ export interface LibraryEntry {
 
 export interface DirectoryEntry {
   id: number;
-  handle: FileSystemDirectoryHandle;
+  handle?: FileSystemDirectoryHandle;
   name: string;
   addedAt: number;
   lastScannedAt: number;
