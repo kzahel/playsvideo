@@ -9,3 +9,7 @@ createRoot(document.getElementById('root')!).render(
     <RouterProvider router={router} />
   </StrictMode>,
 );
+
+if ('serviceWorker' in navigator) {
+  navigator.serviceWorker.register('/app/sw.js');
+}
