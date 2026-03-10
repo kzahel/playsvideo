@@ -29,6 +29,7 @@ import {
   extractSubtitleData,
   parseSubtitleFile,
   subtitleDataToWebVTT,
+  type SubtitleExtractionProgress,
 } from './pipeline/subtitle.js';
 import { processSegmentWithAbort } from './pipeline/segment-processor.js';
 import { isAbortableSource } from './pipeline/source-signal.js';
@@ -39,7 +40,7 @@ import type {
   SubtitleTrackInfo,
 } from './pipeline/types.js';
 import type { TranscodeWorkerSnapshot, TranscodeWorkerStateMessage } from './transcode-protocol.js';
-import type { WorkerSegmentStateMessage } from './worker-protocol.js';
+import type { WorkerSegmentStateMessage, WorkerSubtitleProgressMessage } from './worker-protocol.js';
 
 export type EnginePhase = 'idle' | 'demuxing' | 'ready' | 'error';
 
@@ -154,6 +155,7 @@ interface EngineEventMap {
   ready: CustomEvent<ReadyDetail>;
   error: CustomEvent<ErrorDetail>;
   loading: CustomEvent<LoadingDetail>;
+  'subtitle-status': CustomEvent<SubtitleStatusDetail>;
   workerstatechange: CustomEvent<WorkerStateDetail>;
   segmentstatechange: CustomEvent<SegmentStateDetail>;
   playbackdecision: CustomEvent<PlaybackDecisionDetail>;
@@ -209,6 +211,7 @@ export class PlaysVideoEngine extends EventTarget {
   } | null = null;
 
   private segmentRequestTimes = new Map<number, number>();
+  private subtitleRequestTimes = new Map<number, number>();
 
   // Subtitle state
   private attachedSubtitleTracks: AttachedSubtitleTrack[] = [];
@@ -419,6 +422,7 @@ export class PlaysVideoEngine extends EventTarget {
     this.initData = null;
     this.pendingSegments.clear();
     this.segmentRequestTimes.clear();
+    this.subtitleRequestTimes.clear();
     this.removeSubtitleTracks();
 
     this._phase = 'demuxing';
@@ -540,6 +544,7 @@ export class PlaysVideoEngine extends EventTarget {
     this.removeSubtitleTracks();
     this.pendingSegments.clear();
     this.segmentRequestTimes.clear();
+    this.subtitleRequestTimes.clear();
     this._phase = 'idle';
     this._passthrough = false;
     this._segmentStates.clear();
@@ -893,10 +898,7 @@ export class PlaysVideoEngine extends EventTarget {
           this.dispatchSubtitleStatus('No embedded subtitles');
         }
         for (const track of this._subtitleTracks) {
-          mlog(
-            `requesting subtitle track=${track.index} lang=${track.language} codec=${track.codec}`,
-          );
-          this.worker!.postMessage({ type: 'subtitle', trackIndex: track.index });
+          this.requestEmbeddedSubtitleTrack(track);
         }
       } else {
         const hlsEvaluation = evaluation.evaluations.find((entry) => entry.option.mode === 'hls');
@@ -962,10 +964,7 @@ export class PlaysVideoEngine extends EventTarget {
         this.dispatchSubtitleStatus('No embedded subtitles');
       }
       for (const track of this._subtitleTracks) {
-        mlog(
-          `requesting subtitle track=${track.index} lang=${track.language} codec=${track.codec}`,
-        );
-        this.worker!.postMessage({ type: 'subtitle', trackIndex: track.index });
+        this.requestEmbeddedSubtitleTrack(track);
       }
 
       this.dispatchEvent(
@@ -982,6 +981,7 @@ export class PlaysVideoEngine extends EventTarget {
       this.startHls();
     } else if (msg.type === 'subtitle') {
       mlog(`subtitle arrived track=${msg.trackIndex} codec=${msg.codec} len=${msg.webvtt?.length}`);
+      this.subtitleRequestTimes.delete(msg.trackIndex);
       const info = this._subtitleTracks.find((t) => t.index === msg.trackIndex);
       const lang = info?.language ?? '?';
       const cueMatch = msg.webvtt?.match(/\d\d:\d\d/g);
@@ -996,6 +996,8 @@ export class PlaysVideoEngine extends EventTarget {
         defaultTrack: msg.trackIndex === 0,
         selectTrack: msg.trackIndex === 0,
       });
+    } else if (msg.type === 'subtitle-progress') {
+      this.handleWorkerSubtitleProgress(msg);
     } else if (msg.type === 'segment-state') {
       this.handleWorkerSegmentState(msg);
     } else if (msg.type === 'segment') {
@@ -1029,6 +1031,7 @@ export class PlaysVideoEngine extends EventTarget {
         p.reject(new Error(msg.message));
       }
       this.pendingSegments.clear();
+      this.subtitleRequestTimes.clear();
       if (this.pendingInit) {
         this.pendingInit.reject(new Error(msg.message));
         this.pendingInit = null;
@@ -1546,6 +1549,49 @@ export class PlaysVideoEngine extends EventTarget {
     this.dispatchEvent(new CustomEvent('subtitle-status', { detail: { message } }));
   }
 
+  private requestEmbeddedSubtitleTrack(track: SubtitleTrackInfo): void {
+    const requestedAtMs = Date.now();
+    this.subtitleRequestTimes.set(track.index, requestedAtMs);
+    mlog(`requesting subtitle track=${track.index} lang=${track.language} codec=${track.codec}`);
+    this.dispatchSubtitleStatus(
+      `Subtitle track ${track.index}: ${track.language ?? '?'} ${track.codec} queued`,
+    );
+    this.worker!.postMessage({ type: 'subtitle', trackIndex: track.index, requestedAtMs });
+  }
+
+  private handleWorkerSubtitleProgress(msg: WorkerSubtitleProgressMessage): void {
+    const info = this._subtitleTracks.find((track) => track.index === msg.trackIndex);
+    this.dispatchSubtitleStatus(this.formatSubtitleProgress(info, msg));
+  }
+
+  private formatSubtitleProgress(
+    info: SubtitleTrackInfo | undefined,
+    progress: Pick<
+      SubtitleExtractionProgress,
+      'trackIndex' | 'codec' | 'phase' | 'cuesRead' | 'elapsedMs'
+    > & {
+      queueDelayMs?: number;
+    },
+  ): string {
+    const lang = info?.language ?? '?';
+    const prefix = `Subtitle track ${progress.trackIndex}: ${lang} ${progress.codec}`;
+    const queueDelay =
+      typeof progress.queueDelayMs === 'number' && progress.queueDelayMs >= 50
+        ? ` after waiting ${formatElapsed(progress.queueDelayMs)}`
+        : '';
+
+    if (progress.phase === 'starting') {
+      return `${prefix} started${queueDelay}`;
+    }
+    if (progress.phase === 'reading-cues') {
+      return `${prefix} reading cues (${progress.cuesRead} read, ${formatElapsed(progress.elapsedMs)})${queueDelay}`;
+    }
+    if (progress.phase === 'exporting-text') {
+      return `${prefix} exporting text (${progress.cuesRead} cues, ${formatElapsed(progress.elapsedMs)})`;
+    }
+    return `${prefix} processing (${progress.cuesRead} cues, ${formatElapsed(progress.elapsedMs)})`;
+  }
+
   private async extractEmbeddedSubtitlesFromDemux(
     demux: DemuxResult,
     options: { releaseAfterComplete?: boolean } = {},
@@ -1568,7 +1614,17 @@ export class PlaysVideoEngine extends EventTarget {
         mlog(
           `extracting subtitle track=${track.index} lang=${track.language} codec=${track.codec}`,
         );
-        const data = await extractSubtitleData(demux.input, track.index);
+        this.dispatchSubtitleStatus(
+          `Subtitle track ${track.index}: ${track.language ?? '?'} ${track.codec} queued`,
+        );
+        const data = await extractSubtitleData(demux.input, track.index, {
+          onProgress: (progress) => {
+            if (progress.phase === 'done') {
+              return;
+            }
+            this.dispatchSubtitleStatus(this.formatSubtitleProgress(track, progress));
+          },
+        });
         const webvtt = subtitleDataToWebVTT(data);
         const cueMatch = webvtt.match(/\d\d:\d\d/g);
         const cueCount = cueMatch ? Math.floor(cueMatch.length / 2) : 0;
@@ -1608,6 +1664,13 @@ const FORCE_REMUX = false;
 
 function mlog(msg: string): void {
   console.log(`[engine] ${msg}`);
+}
+
+function formatElapsed(ms: number): string {
+  if (ms >= 1000) {
+    return `${(ms / 1000).toFixed(1)}s`;
+  }
+  return `${Math.round(ms)}ms`;
 }
 
 function makeStats(): LoaderStats {

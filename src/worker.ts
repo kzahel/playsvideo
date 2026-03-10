@@ -18,14 +18,22 @@ import {
 import { generateVodPlaylist } from './pipeline/playlist.js';
 import { buildSegmentPlan } from './pipeline/segment-plan.js';
 import { processSegmentWithAbort } from './pipeline/segment-processor.js';
-import { extractSubtitleData, subtitleDataToWebVTT } from './pipeline/subtitle.js';
+import {
+  extractSubtitleData,
+  subtitleDataToWebVTT,
+  type SubtitleExtractionProgress,
+} from './pipeline/subtitle.js';
 import type { KeyframeIndex, PlannedSegment } from './pipeline/types.js';
 import type {
   TranscodeJobRequest,
   TranscodeJobResponse,
   TranscodePortMessage,
 } from './transcode-protocol.js';
-import type { WorkerSegmentPhase, WorkerSegmentStateMessage } from './worker-protocol.js';
+import type {
+  WorkerSegmentPhase,
+  WorkerSegmentStateMessage,
+  WorkerSubtitleProgressMessage,
+} from './worker-protocol.js';
 
 function wlog(msg: string) {
   console.log(`[worker] ${msg}`);
@@ -350,7 +358,8 @@ self.onmessage = (event: MessageEvent) => {
     }
   } else if (msg.type === 'subtitle') {
     wlog(`recv subtitle trackIndex=${msg.trackIndex}`);
-    handleSubtitle(msg.trackIndex).catch((err) =>
+    const queueDelayMs = typeof msg.requestedAtMs === 'number' ? Date.now() - msg.requestedAtMs : 0;
+    handleSubtitle(msg.trackIndex, Math.max(0, queueDelayMs)).catch((err) =>
       self.postMessage({ type: 'error', message: String(err) }),
     );
   }
@@ -629,14 +638,40 @@ async function handleSegment(index: number, signal: AbortSignal) {
   }
 }
 
-async function handleSubtitle(trackIndex: number) {
+function emitSubtitleProgress(
+  trackIndex: number,
+  progress: SubtitleExtractionProgress,
+  queueDelayMs = 0,
+): void {
+  if (progress.phase === 'done') {
+    return;
+  }
+  const message: WorkerSubtitleProgressMessage = {
+    type: 'subtitle-progress',
+    trackIndex,
+    phase: progress.phase,
+    codec: progress.codec,
+    cuesRead: progress.cuesRead,
+    elapsedMs: progress.elapsedMs,
+    queueDelayMs,
+  };
+  self.postMessage(message);
+}
+
+async function handleSubtitle(trackIndex: number, queueDelayMs = 0) {
   if (!demux) {
     self.postMessage({ type: 'error', message: 'No file open' });
     return;
   }
 
   const t0 = performance.now();
-  const data = await extractSubtitleData(demux.input, trackIndex);
+  let hasSentStart = false;
+  const data = await extractSubtitleData(demux.input, trackIndex, {
+    onProgress(progress) {
+      emitSubtitleProgress(trackIndex, progress, hasSentStart ? 0 : queueDelayMs);
+      hasSentStart = true;
+    },
+  });
   const webvtt = subtitleDataToWebVTT(data);
   wlog(`subtitle track=${trackIndex} cues=${data.cues.length} codec=${data.codec} ${elapsed(t0)}`);
 

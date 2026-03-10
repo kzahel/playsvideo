@@ -1,5 +1,9 @@
 import { describe, expect, it } from 'vitest';
-import { parseSubtitleFile, subtitleDataToWebVTT } from '../../src/pipeline/subtitle.js';
+import {
+  extractSubtitleData,
+  parseSubtitleFile,
+  subtitleDataToWebVTT,
+} from '../../src/pipeline/subtitle.js';
 
 describe('parseSubtitleFile', () => {
   it('parses SRT and converts it to WebVTT', () => {
@@ -57,5 +61,77 @@ Dialogue: 0,0:00:01.00,0:00:02.00,Default,,0,0,0,,Hello`;
     expect(data.codec).toBe('ass');
     expect(data.cues).toEqual([]);
     expect(data.header).toContain('[Events]');
+  });
+});
+
+describe('extractSubtitleData progress', () => {
+  it('reports start, cue reads, and completion while extracting text subtitles', async () => {
+    const events: Array<{ phase: string; cuesRead: number }> = [];
+    const input = {
+      async getSubtitleTracks() {
+        return [
+          {
+            codec: 'srt',
+            async *getCues() {
+              for (let i = 0; i < 251; i++) {
+                yield {
+                  timestamp: i,
+                  duration: 1,
+                  text: `cue-${i}`,
+                };
+              }
+            },
+          },
+        ];
+      },
+    };
+
+    const data = await extractSubtitleData(input as any, 0, {
+      onProgress(progress) {
+        events.push({ phase: progress.phase, cuesRead: progress.cuesRead });
+      },
+    });
+
+    expect(data.cues).toHaveLength(251);
+    expect(events[0]).toEqual({ phase: 'starting', cuesRead: 0 });
+    expect(events).toContainEqual({ phase: 'reading-cues', cuesRead: 1 });
+    expect(events).toContainEqual({ phase: 'reading-cues', cuesRead: 251 });
+    expect(events.at(-1)).toEqual({ phase: 'done', cuesRead: 251 });
+  });
+
+  it('reports the export step for ass subtitles', async () => {
+    const phases: string[] = [];
+    const input = {
+      async getSubtitleTracks() {
+        return [
+          {
+            codec: 'ass',
+            async *getCues() {
+              yield {
+                timestamp: 0,
+                duration: 2,
+                text: 'Hello',
+              };
+            },
+            async exportToText() {
+              return `[Script Info]
+Title: Example
+
+[Events]
+Dialogue: 0,0:00:01.00,0:00:02.00,Default,,0,0,0,,Hello`;
+            },
+          },
+        ];
+      },
+    };
+
+    const data = await extractSubtitleData(input as any, 0, {
+      onProgress(progress) {
+        phases.push(progress.phase);
+      },
+    });
+
+    expect(data.header).toContain('[Events]');
+    expect(phases).toEqual(['starting', 'reading-cues', 'exporting-text', 'done']);
   });
 });

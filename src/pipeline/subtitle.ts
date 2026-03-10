@@ -2,6 +2,20 @@ import type { Input, SubtitleCue } from 'mediabunny';
 import { formatCuesToWebVTT } from 'mediabunny';
 import type { SubtitleCueEntry, SubtitleData, SubtitleTrackInfo } from './types.js';
 
+export type SubtitleExtractionPhase = 'starting' | 'reading-cues' | 'exporting-text' | 'done';
+
+export interface SubtitleExtractionProgress {
+  trackIndex: number;
+  codec: string;
+  phase: SubtitleExtractionPhase;
+  cuesRead: number;
+  elapsedMs: number;
+}
+
+export interface ExtractSubtitleDataOptions {
+  onProgress?: (progress: SubtitleExtractionProgress) => void;
+}
+
 /** Discover subtitle tracks from a demuxed input. Cheap — reads only metadata, no cue extraction. */
 export async function getSubtitleTrackInfos(input: Input): Promise<SubtitleTrackInfo[]> {
   const tracks = await input.getSubtitleTracks();
@@ -22,7 +36,11 @@ export async function getSubtitleTrackInfos(input: Input): Promise<SubtitleTrack
 }
 
 /** Extract all cues from a subtitle track and return cleaned SubtitleData. */
-export async function extractSubtitleData(input: Input, trackIndex: number): Promise<SubtitleData> {
+export async function extractSubtitleData(
+  input: Input,
+  trackIndex: number,
+  options: ExtractSubtitleDataOptions = {},
+): Promise<SubtitleData> {
   const tracks = await input.getSubtitleTracks();
   const track = tracks[trackIndex];
   if (!track) {
@@ -31,9 +49,34 @@ export async function extractSubtitleData(input: Input, trackIndex: number): Pro
 
   const codec = track.codec ?? 'unknown';
   const rawCues: SubtitleCue[] = [];
+  const startedAt = performance.now();
+  let lastReportedAt = startedAt;
+  let lastReportedCues = 0;
+
+  const reportProgress = (phase: SubtitleExtractionPhase, cuesRead = rawCues.length): void => {
+    options.onProgress?.({
+      trackIndex,
+      codec,
+      phase,
+      cuesRead,
+      elapsedMs: performance.now() - startedAt,
+    });
+  };
+
+  reportProgress('starting', 0);
 
   for await (const cue of track.getCues()) {
     rawCues.push(cue);
+    const now = performance.now();
+    if (
+      rawCues.length === 1 ||
+      rawCues.length - lastReportedCues >= 250 ||
+      now - lastReportedAt >= 500
+    ) {
+      reportProgress('reading-cues');
+      lastReportedAt = now;
+      lastReportedCues = rawCues.length;
+    }
   }
 
   const cues = cleanCues(rawCues, codec);
@@ -41,9 +84,12 @@ export async function extractSubtitleData(input: Input, trackIndex: number): Pro
   // For ASS/SSA, try to get the header from exportToText
   let header: string | undefined;
   if (codec === 'ass' || codec === 'ssa') {
+    reportProgress('exporting-text');
     const exported = await track.exportToText();
     header = extractAssHeader(exported);
   }
+
+  reportProgress('done', cues.length);
 
   return { cues, codec, header };
 }
