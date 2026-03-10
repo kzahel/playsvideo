@@ -474,22 +474,21 @@ export function createCustomControls(options: CustomControlsOptions): CustomCont
   };
   playBtn.addEventListener('click', onPlayClick);
 
-  // Tap target: on touch, tap toggles controls visibility.
-  // On desktop (mouse), click on video toggles play/pause.
+  // Tap target: first tap always shows controls if hidden.
+  // When visible: touch hides controls, desktop click = play/pause.
   const onTapTargetClick = (e: MouseEvent) => {
     e.stopPropagation();
     if (activePopup) {
       closePopup();
       return;
     }
-    if (isTouch) {
-      // Toggle controls visibility
-      if (overlay.classList.contains('pv-hidden')) {
-        resetHideTimer();
-      } else {
-        overlay.classList.add('pv-hidden');
-        clearTimeout(hideTimer);
-      }
+    if (overlay.classList.contains('pv-hidden')) {
+      // Always show controls first
+      resetHideTimer();
+    } else if (isTouch) {
+      // Touch: hide controls
+      overlay.classList.add('pv-hidden');
+      clearTimeout(hideTimer);
     } else {
       // Desktop: click on video = play/pause
       if (video.paused) video.play();
