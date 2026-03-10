@@ -54,11 +54,14 @@
   <input type="file" id="subtitle-input" accept=".srt,.vtt" class="hidden" style="display:none">
   <div class="drop-target" id="drop-target">Drop a video file here, or click to browse</div>
   <p id="status"></p>
-  <video id="video" controls autoplay></video>
+  <div class="pv-video-container" id="video-container">
+    <video id="video" controls autoplay></video>
+  </div>
   <div class="player-actions" id="player-actions">
     <button id="open-another">Open another file</button>
     <button id="load-subtitles">Load subtitles</button>
     <button id="clear-subtitles" disabled>Clear subtitles</button>
+    <button id="toggle-controls">Custom controls</button>
   </div>
   <div id="subtitle-status"></div>
   <script type="module" src="/src/pwa-player.ts"></script>

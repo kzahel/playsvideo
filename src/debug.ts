@@ -1,10 +1,12 @@
 import type { CodecPath, SegmentPhase, SegmentState, WasmWorkerState } from './engine.js';
 import { PlaysVideoEngine } from './engine.js';
+import { createCustomControls, type CustomControlsHandle } from './custom-controls.js';
 import { bindExternalSubtitlePicker } from './external-subtitle-picker.js';
 
 const fileInput = document.getElementById('file-input') as HTMLInputElement;
 const subtitleInput = document.getElementById('subtitle-input') as HTMLInputElement;
 const video = document.getElementById('video') as HTMLVideoElement;
+const videoContainer = document.getElementById('video-container') as HTMLElement;
 const status = document.getElementById('status') as HTMLElement;
 const subtitleStatus = document.getElementById('subtitle-status') as HTMLElement;
 const logEl = document.getElementById('log') as HTMLElement;
@@ -17,6 +19,7 @@ const segmentLegendEl = document.getElementById('segment-legend') as HTMLElement
 const segmentListEl = document.getElementById('segment-list') as HTMLElement;
 const loadSubtitles = document.getElementById('load-subtitles') as HTMLButtonElement;
 const clearSubtitles = document.getElementById('clear-subtitles') as HTMLButtonElement;
+const toggleControlsBtn = document.getElementById('toggle-controls') as HTMLButtonElement;
 
 const engine = new PlaysVideoEngine(video);
 const subtitlePicker = bindExternalSubtitlePicker({
@@ -430,6 +433,33 @@ function formatTime(sec: number): string {
   if (h > 0) return `${h}:${String(m).padStart(2, '0')}:${String(s).padStart(2, '0')}`;
   return `${m}:${String(s).padStart(2, '0')}`;
 }
+
+// Controls toggle
+let controlsType = localStorage.getItem('pv-controls-type') === 'custom' ? 'custom' : 'stock';
+let customControlsHandle: CustomControlsHandle | null = null;
+
+function applyControlsType() {
+  if (controlsType === 'custom') {
+    video.removeAttribute('controls');
+    if (!customControlsHandle) {
+      customControlsHandle = createCustomControls({ video, container: videoContainer });
+    }
+    toggleControlsBtn.textContent = 'Stock controls';
+  } else {
+    video.setAttribute('controls', '');
+    customControlsHandle?.destroy();
+    customControlsHandle = null;
+    toggleControlsBtn.textContent = 'Custom controls';
+  }
+}
+
+toggleControlsBtn.addEventListener('click', () => {
+  controlsType = controlsType === 'stock' ? 'custom' : 'stock';
+  localStorage.setItem('pv-controls-type', controlsType);
+  applyControlsType();
+});
+
+applyControlsType();
 
 renderSegmentLegend();
 renderWorkerStates();

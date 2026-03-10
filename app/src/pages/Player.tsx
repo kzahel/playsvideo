@@ -3,15 +3,20 @@ import { useParams, Link } from 'react-router-dom';
 import { useLiveQuery } from 'dexie-react-hooks';
 import { db } from '../db';
 import { useEngine } from '../hooks/useEngine';
+import { useSetting } from '../hooks/useSetting';
+import { useCustomControls } from '../hooks/useCustomControls';
 
 export function Player() {
   const { id } = useParams<{ id: string }>();
   const entryId = Number(id);
   const subtitleInputRef = useRef<HTMLInputElement | null>(null);
+  const containerRef = useRef<HTMLDivElement | null>(null);
+  const [controlsType, setControlsType] = useSetting<'stock' | 'custom'>('pv-controls-type', 'stock');
 
   const entry = useLiveQuery(() => db.library.get(entryId), [entryId]);
   const { videoRef, status, phase, needsPermission, retryPermission, subtitleStatus, loadSubtitleFile, clearExternalSubtitles } =
     useEngine(entry ?? null);
+  useCustomControls(videoRef, containerRef, controlsType === 'custom');
 
   if (entry === undefined) {
     return <div className="player-page">Loading...</div>;
@@ -47,13 +52,21 @@ export function Player() {
           } catch {}
         }}
       />
-      <video ref={videoRef} controls autoPlay />
+      <div className="pv-video-container" ref={containerRef}>
+        <video ref={videoRef} controls={controlsType === 'stock'} autoPlay />
+      </div>
       {needsPermission && (
         <button className="btn btn-primary player-permission-btn" onClick={retryPermission}>
           Tap to grant file access
         </button>
       )}
       <div className="player-actions">
+        <button
+          className="btn btn-secondary"
+          onClick={() => setControlsType(controlsType === 'stock' ? 'custom' : 'stock')}
+        >
+          {controlsType === 'stock' ? 'Custom controls' : 'Stock controls'}
+        </button>
         <button
           className="btn btn-secondary"
           onClick={() => subtitleInputRef.current?.click()}

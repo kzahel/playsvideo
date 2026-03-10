@@ -1,15 +1,18 @@
 import { PlaysVideoEngine } from './engine.js';
+import { createCustomControls, type CustomControlsHandle } from './custom-controls.js';
 import { bindExternalSubtitlePicker } from './external-subtitle-picker.js';
 
 const fileInput = document.getElementById('file-input') as HTMLInputElement;
 const subtitleInput = document.getElementById('subtitle-input') as HTMLInputElement;
 const video = document.getElementById('video') as HTMLVideoElement;
+const videoContainer = document.getElementById('video-container') as HTMLElement;
 const status = document.getElementById('status') as HTMLElement;
 const subtitleStatus = document.getElementById('subtitle-status') as HTMLElement;
 const dropTarget = document.getElementById('drop-target') as HTMLElement;
 const openAnother = document.getElementById('open-another') as HTMLButtonElement;
 const loadSubtitles = document.getElementById('load-subtitles') as HTMLButtonElement;
 const clearSubtitles = document.getElementById('clear-subtitles') as HTMLButtonElement;
+const toggleControlsBtn = document.getElementById('toggle-controls') as HTMLButtonElement;
 const playerActions = document.getElementById('player-actions') as HTMLElement;
 
 const engine = new PlaysVideoEngine(video);
@@ -113,6 +116,33 @@ engine.addEventListener('error', (e) => {
   playerActions.style.display = 'none';
   subtitlePicker.reset();
 });
+
+// Controls toggle
+let controlsType = localStorage.getItem('pv-controls-type') === 'custom' ? 'custom' : 'stock';
+let customControlsHandle: CustomControlsHandle | null = null;
+
+function applyControlsType() {
+  if (controlsType === 'custom') {
+    video.removeAttribute('controls');
+    if (!customControlsHandle) {
+      customControlsHandle = createCustomControls({ video, container: videoContainer });
+    }
+    toggleControlsBtn.textContent = 'Stock controls';
+  } else {
+    video.setAttribute('controls', '');
+    customControlsHandle?.destroy();
+    customControlsHandle = null;
+    toggleControlsBtn.textContent = 'Custom controls';
+  }
+}
+
+toggleControlsBtn.addEventListener('click', () => {
+  controlsType = controlsType === 'stock' ? 'custom' : 'stock';
+  localStorage.setItem('pv-controls-type', controlsType);
+  applyControlsType();
+});
+
+applyControlsType();
 
 function formatTime(sec: number): string {
   const h = Math.floor(sec / 3600);

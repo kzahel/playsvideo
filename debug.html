@@ -270,10 +270,13 @@
     <input type="file" id="subtitle-input" accept=".srt,.vtt" style="display:none">
     <button id="load-subtitles" disabled>Load subtitles</button>
     <button id="clear-subtitles" disabled>Clear subtitles</button>
+    <button id="toggle-controls">Custom controls</button>
   </div>
   <p id="status">Select a video file to play.</p>
   <div id="subtitle-status"></div>
-  <video id="video" controls autoplay></video>
+  <div class="pv-video-container" id="video-container">
+    <video id="video" controls autoplay></video>
+  </div>
   <section class="workers">
     <div class="workers-header">
       <div class="workers-title">Codec path</div>
