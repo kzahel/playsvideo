@@ -71,6 +71,7 @@ const CONTROLS_CSS = `
   opacity: 0;
 }
 .pv-overlay > * { pointer-events: auto; }
+.pv-overlay.pv-hidden > *:not(.pv-tap-target) { pointer-events: none; }
 
 /* Tap target covers entire video for touch show/hide */
 .pv-tap-target {
@@ -345,17 +346,21 @@ export function createCustomControls(options: CustomControlsOptions): CustomCont
     }
   }
 
-  function togglePopup(anchor: HTMLElement, buildItems: () => HTMLElement[]) {
-    if (activePopup?.parentElement === anchor) {
-      closePopup();
-      return;
-    }
+  function openPopup(anchor: HTMLElement, buildItems: () => HTMLElement[]) {
     closePopup();
     const popup = document.createElement('div');
     popup.className = 'pv-popup';
     for (const item of buildItems()) popup.appendChild(item);
     anchor.appendChild(popup);
     activePopup = popup;
+  }
+
+  function togglePopup(anchor: HTMLElement, buildItems: () => HTMLElement[]) {
+    if (activePopup?.parentElement === anchor) {
+      closePopup();
+      return;
+    }
+    openPopup(anchor, buildItems);
   }
 
   // autoClose=false for items that open sub-menus
@@ -564,7 +569,7 @@ export function createCustomControls(options: CustomControlsOptions): CustomCont
             'Captions',
             false,
             () => {
-              togglePopup(overflowAnchor, () => {
+              openPopup(overflowAnchor, () => {
                 const subItems: HTMLButtonElement[] = [];
                 let anyShowing = false;
                 for (let i = 0; i < video.textTracks.length; i++) {
@@ -606,7 +611,7 @@ export function createCustomControls(options: CustomControlsOptions): CustomCont
           'Playback speed',
           false,
           () => {
-            togglePopup(overflowAnchor, () =>
+            openPopup(overflowAnchor, () =>
               SPEED_OPTIONS.map((r) =>
                 popupItem(`${r}x`, video.playbackRate === r, () => {
                   video.playbackRate = r;
