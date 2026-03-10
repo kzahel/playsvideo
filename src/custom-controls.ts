@@ -48,6 +48,8 @@ const ICON = {
   ),
 };
 
+const isTouch = matchMedia('(pointer: coarse)').matches;
+
 const CONTROLS_CSS = `
 .pv-video-container { position: relative; }
 .pv-video-container:fullscreen { background: #000; }
@@ -70,6 +72,12 @@ const CONTROLS_CSS = `
 }
 .pv-overlay > * { pointer-events: auto; }
 
+/* Tap target covers entire video for touch show/hide */
+.pv-tap-target {
+  position: absolute;
+  inset: 0;
+}
+
 /* Center play button */
 .pv-center {
   position: absolute;
@@ -81,8 +89,8 @@ const CONTROLS_CSS = `
   gap: 2rem;
 }
 .pv-center-btn {
-  width: 56px;
-  height: 56px;
+  width: 68px;
+  height: 68px;
   border-radius: 50%;
   background: rgba(0,0,0,0.5);
   border: none;
@@ -93,10 +101,10 @@ const CONTROLS_CSS = `
   justify-content: center;
   padding: 0;
 }
-.pv-center-btn svg { width: 32px; height: 32px; }
+.pv-center-btn svg { width: 40px; height: 40px; }
 .pv-center-skip {
-  width: 40px;
-  height: 40px;
+  width: 44px;
+  height: 44px;
   border-radius: 50%;
   background: rgba(0,0,0,0.35);
   border: none;
@@ -107,7 +115,7 @@ const CONTROLS_CSS = `
   justify-content: center;
   padding: 0;
 }
-.pv-center-skip svg { width: 24px; height: 24px; }
+.pv-center-skip svg { width: 26px; height: 26px; }
 
 /* Bottom controls */
 .pv-bottom {
@@ -170,7 +178,7 @@ const CONTROLS_CSS = `
   padding: 0 0.25rem;
 }
 
-/* Volume slider */
+/* Volume slider — hidden on touch devices */
 .pv-vol {
   width: 52px;
   -webkit-appearance: none;
@@ -189,6 +197,9 @@ const CONTROLS_CSS = `
   background: #fff;
   border-radius: 50%;
   cursor: pointer;
+}
+@media (pointer: coarse) {
+  .pv-vol { display: none; }
 }
 
 /* Popup menu */
@@ -259,6 +270,10 @@ export function createCustomControls(options: CustomControlsOptions): CustomCont
   const overlay = document.createElement('div');
   overlay.className = 'pv-overlay';
 
+  // Tap target — covers the video area for touch show/hide
+  const tapTarget = document.createElement('div');
+  tapTarget.className = 'pv-tap-target';
+
   // Center play/skip buttons
   const center = document.createElement('div');
   center.className = 'pv-center';
@@ -313,7 +328,7 @@ export function createCustomControls(options: CustomControlsOptions): CustomCont
 
   btnRow.append(timeDisplay, spacer, volumeBtn, volumeBar, fsBtn, overflowAnchor);
   bottom.append(seekRow, btnRow);
-  overlay.append(center, bottom);
+  overlay.append(tapTarget, center, bottom);
   container.appendChild(overlay);
 
   // --- State ---
@@ -343,12 +358,14 @@ export function createCustomControls(options: CustomControlsOptions): CustomCont
     activePopup = popup;
   }
 
+  // autoClose=false for items that open sub-menus
   function popupItem(
     label: string,
     active: boolean,
     onClick: () => void,
     iconHtml?: string,
     value?: string,
+    autoClose = true,
   ): HTMLButtonElement {
     const item = document.createElement('button');
     item.className = `pv-popup-item${active ? ' pv-active' : ''}`;
@@ -371,7 +388,7 @@ export function createCustomControls(options: CustomControlsOptions): CustomCont
     item.addEventListener('click', (e) => {
       e.stopPropagation();
       onClick();
-      closePopup();
+      if (autoClose) closePopup();
     });
     return item;
   }
@@ -432,7 +449,7 @@ export function createCustomControls(options: CustomControlsOptions): CustomCont
   video.addEventListener('volumechange', onVolumeChange);
 
   // Text track changes (for overflow menu state)
-  const onTrackChange = () => {}; // no visible CC button to update; menu is rebuilt each open
+  const onTrackChange = () => {}; // menu is rebuilt each open
   video.textTracks.addEventListener('addtrack', onTrackChange);
   video.textTracks.addEventListener('removetrack', onTrackChange);
 
@@ -444,7 +461,7 @@ export function createCustomControls(options: CustomControlsOptions): CustomCont
 
   // --- Button handlers ---
 
-  // Play/pause
+  // Play/pause — only via the center button
   const onPlayClick = (e: MouseEvent) => {
     e.stopPropagation();
     if (video.paused) video.play();
@@ -452,18 +469,29 @@ export function createCustomControls(options: CustomControlsOptions): CustomCont
   };
   playBtn.addEventListener('click', onPlayClick);
 
-  // Click on video toggles play/pause
-  const onVideoClick = (e: MouseEvent) => {
+  // Tap target: on touch, tap toggles controls visibility.
+  // On desktop (mouse), click on video toggles play/pause.
+  const onTapTargetClick = (e: MouseEvent) => {
+    e.stopPropagation();
     if (activePopup) {
       closePopup();
       return;
     }
-    if (e.target === video) {
+    if (isTouch) {
+      // Toggle controls visibility
+      if (overlay.classList.contains('pv-hidden')) {
+        resetHideTimer();
+      } else {
+        overlay.classList.add('pv-hidden');
+        clearTimeout(hideTimer);
+      }
+    } else {
+      // Desktop: click on video = play/pause
       if (video.paused) video.play();
       else video.pause();
     }
   };
-  container.addEventListener('click', onVideoClick);
+  tapTarget.addEventListener('click', onTapTargetClick);
 
   // Skip
   const onSkipBack = (e: MouseEvent) => {
@@ -536,7 +564,6 @@ export function createCustomControls(options: CustomControlsOptions): CustomCont
             'Captions',
             false,
             () => {
-              // Open sub-menu for captions
               togglePopup(overflowAnchor, () => {
                 const subItems: HTMLButtonElement[] = [];
                 let anyShowing = false;
@@ -567,6 +594,7 @@ export function createCustomControls(options: CustomControlsOptions): CustomCont
             },
             ICON.cc,
             activeLang,
+            false, // don't auto-close — opens sub-menu
           ),
         );
       }
@@ -588,6 +616,7 @@ export function createCustomControls(options: CustomControlsOptions): CustomCont
           },
           ICON.speed,
           `${rate === 1 ? 'Normal' : `${rate}x`}`,
+          false, // don't auto-close — opens sub-menu
         ),
       );
 
@@ -614,10 +643,9 @@ export function createCustomControls(options: CustomControlsOptions): CustomCont
   };
   overflowBtn.addEventListener('click', onOverflowClick);
 
-  // Auto-hide on mouse/touch activity
-  const onActivity = () => resetHideTimer();
-  container.addEventListener('mousemove', onActivity);
-  container.addEventListener('touchstart', onActivity);
+  // Auto-hide on mouse movement (desktop only)
+  const onMouseMove = () => resetHideTimer();
+  container.addEventListener('mousemove', onMouseMove);
 
   // Init state
   updatePlayBtn();
@@ -640,7 +668,7 @@ export function createCustomControls(options: CustomControlsOptions): CustomCont
       video.textTracks.removeEventListener('addtrack', onTrackChange);
       video.textTracks.removeEventListener('removetrack', onTrackChange);
       playBtn.removeEventListener('click', onPlayClick);
-      container.removeEventListener('click', onVideoClick);
+      tapTarget.removeEventListener('click', onTapTargetClick);
       skipBackBtn.removeEventListener('click', onSkipBack);
       skipFwdBtn.removeEventListener('click', onSkipFwd);
       seekBar.removeEventListener('input', onSeekInput);
@@ -650,8 +678,7 @@ export function createCustomControls(options: CustomControlsOptions): CustomCont
       fsBtn.removeEventListener('click', onFsClick);
       overflowBtn.removeEventListener('click', onOverflowClick);
       document.removeEventListener('fullscreenchange', onFullscreenChange);
-      container.removeEventListener('mousemove', onActivity);
-      container.removeEventListener('touchstart', onActivity);
+      container.removeEventListener('mousemove', onMouseMove);
       overlay.remove();
     },
   };
