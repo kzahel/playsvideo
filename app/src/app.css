@@ -291,6 +291,12 @@ body {
   font-size: 0.9rem;
   min-height: 1.25rem;
 }
+.player-diagnostics-status {
+  color: var(--muted);
+  margin-top: 0.35rem;
+  font-size: 0.85rem;
+  line-height: 1.4;
+}
 
 .player-back {
   display: inline-flex;

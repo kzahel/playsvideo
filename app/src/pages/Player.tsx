@@ -14,7 +14,18 @@ export function Player() {
   const [controlsType, setControlsType] = useSetting<'stock' | 'custom'>('pv-controls-type', 'stock');
 
   const entry = useLiveQuery(() => db.library.get(entryId), [entryId]);
-  const { videoRef, status, phase, needsPermission, retryPermission, subtitleStatus, loadSubtitleFile, clearExternalSubtitles } =
+  const {
+    videoRef,
+    status,
+    phase,
+    needsPermission,
+    retryPermission,
+    subtitleStatus,
+    loadSubtitleFile,
+    clearExternalSubtitles,
+    copyDiagnostics,
+    diagnosticsStatus,
+  } =
     useEngine(entry ?? null);
   useCustomControls(videoRef, containerRef, controlsType === 'custom');
 
@@ -81,10 +92,16 @@ export function Player() {
         >
           Clear subtitles
         </button>
+        <button className="btn btn-secondary" onClick={() => void copyDiagnostics()}>
+          Copy diagnostics
+        </button>
       </div>
       <div className="player-status">{status}</div>
       <div className="player-subtitle-status">
         {subtitleStatus || (phase === 'ready' ? 'External subtitles: none' : '')}
+      </div>
+      <div className="player-diagnostics-status">
+        {diagnosticsStatus || 'Copy diagnostics after a playback issue to share what happened.'}
       </div>
     </div>
   );
