@@ -7,7 +7,7 @@ import type {
   PlaylistLoaderContext,
 } from 'hls.js';
 import Hls from 'hls.js/light';
-import type { Source } from 'mediabunny';
+import type { Source } from './source.js';
 import { WasmFfmpegRunner } from './adapters/wasm-ffmpeg.js';
 import {
   createBrowserPlaybackCapabilities,
@@ -21,8 +21,6 @@ import {
 } from './playback-selection.js';
 import { createLocalAudioTranscoder, makeAacDecoderConfig } from './pipeline/audio-transcode.js';
 import type { DemuxResult } from './pipeline/demux.js';
-import { demuxSource, getKeyframeIndex } from './pipeline/demux.js';
-import { buildMkvKeyframeIndexFromSource } from './pipeline/mkv-keyframe-index.js';
 import { generateVodPlaylist } from './pipeline/playlist.js';
 import { buildSegmentPlan } from './pipeline/segment-plan.js';
 import {
@@ -1081,6 +1079,9 @@ export class PlaysVideoEngine extends EventTarget {
 
   private async startSourcePipeline(source: Source): Promise<void> {
     try {
+      const { demuxSource, getKeyframeIndex } = await import('./pipeline/demux.js');
+      const { buildMkvKeyframeIndexFromSource } = await import('./pipeline/mkv-keyframe-index.js');
+
       mlog('source pipeline: demuxing');
       this._sourceDemux = await demuxSource(source);
       const demux = this._sourceDemux;

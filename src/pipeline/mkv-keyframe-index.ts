@@ -1,4 +1,4 @@
-import type { Source } from 'mediabunny';
+import type { Source } from '../source.js';
 import type { KeyframeIndex } from './types.js';
 
 export interface MkvCuePoint {

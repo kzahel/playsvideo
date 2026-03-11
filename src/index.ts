@@ -28,6 +28,6 @@ export type {
   PlaybackRecommendation,
 } from './playback-selection.js';
 export { isAbortableSource, checkAbort } from './pipeline/source-signal.js';
-export { Source } from 'mediabunny';
+export { Source } from './source.js';
 export { createCustomControls } from './custom-controls.js';
 export type { CustomControlsOptions, CustomControlsHandle } from './custom-controls.js';

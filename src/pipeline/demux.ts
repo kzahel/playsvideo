@@ -7,9 +7,10 @@ import {
   Input,
   type InputAudioTrack,
   type InputVideoTrack,
-  type Source,
+  Source as MBSource,
   UrlSource,
 } from 'mediabunny';
+import type { Source } from '../source.js';
 import { getSubtitleTrackInfos } from './subtitle.js';
 import type { KeyframeEntry, KeyframeIndex, SubtitleTrackInfo } from './types.js';
 
@@ -40,8 +41,23 @@ export async function demuxUrl(url: string): Promise<DemuxResult> {
   return demuxInput(new Input({ formats: ALL_FORMATS, source: new UrlSource(url) }));
 }
 
+class SourceAdapter extends MBSource {
+  constructor(private _inner: Source) {
+    super();
+  }
+  _retrieveSize() {
+    return this._inner._retrieveSize();
+  }
+  _read(start: number, end: number) {
+    return this._inner._read(start, end);
+  }
+  _dispose() {
+    this._inner._dispose();
+  }
+}
+
 export async function demuxSource(source: Source): Promise<DemuxResult> {
-  return demuxInput(new Input({ formats: ALL_FORMATS, source }));
+  return demuxInput(new Input({ formats: ALL_FORMATS, source: new SourceAdapter(source) }));
 }
 
 async function demuxInput(input: Input): Promise<DemuxResult> {

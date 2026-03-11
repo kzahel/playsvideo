@@ -4,6 +4,12 @@ All notable changes to playsvideo are documented here.
 
 ## [Unreleased]
 
+## [0.4.6] - 2026-03-11
+
+### Changed
+- Decouple `Source` type from mediabunny to eliminate main-thread bundle duplication. Consumers extending `Source` no longer pull mediabunny into the main chunk.
+- Dynamic-import source pipeline code so mediabunny is only loaded when `loadSource` is used
+
 ## [0.4.5] - 2026-03-11
 
 ### Added
