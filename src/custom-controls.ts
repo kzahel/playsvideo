@@ -1,3 +1,11 @@
+declare global {
+  interface DocumentPictureInPicture {
+    requestWindow(options?: { width?: number; height?: number }): Promise<Window>;
+  }
+  // eslint-disable-next-line no-var
+  var documentPictureInPicture: DocumentPictureInPicture | undefined;
+}
+
 export interface CustomControlsOptions {
   video: HTMLVideoElement;
   container: HTMLElement;
@@ -52,8 +60,9 @@ const isTouch = matchMedia('(pointer: coarse)').matches;
 
 const CONTROLS_CSS = `
 .pv-video-container { position: relative; }
-.pv-video-container:fullscreen { background: #000; }
-.pv-video-container:fullscreen video { width: 100%; height: 100%; object-fit: contain; }
+.pv-video-container:fullscreen, .pv-video-container.pv-pip { background: #000; }
+.pv-video-container:fullscreen video, .pv-video-container.pv-pip video { width: 100%; height: 100%; object-fit: contain; }
+.pv-video-container.pv-pip { width: 100vw; height: 100vh; }
 
 /* Overlay wrapper */
 .pv-overlay {
@@ -336,7 +345,54 @@ export function createCustomControls(options: CustomControlsOptions): CustomCont
   let seeking = false;
   let hideTimer: ReturnType<typeof setTimeout> | undefined;
   let activePopup: HTMLElement | null = null;
-  const pipSupported = document.pictureInPictureEnabled;
+  const docPipSupported = typeof documentPictureInPicture !== 'undefined';
+  const pipSupported = docPipSupported || document.pictureInPictureEnabled;
+
+  // Document PiP state
+  let pipWindow: Window | null = null;
+  let originalParent: ParentNode | null = null;
+  let originalNextSibling: ChildNode | null = null;
+
+  function exitDocumentPip() {
+    if (!pipWindow) return;
+    container.classList.remove('pv-pip');
+    if (originalParent) {
+      if (originalNextSibling) {
+        originalParent.insertBefore(container, originalNextSibling);
+      } else {
+        originalParent.appendChild(container);
+      }
+    }
+    pipWindow.close();
+    pipWindow = null;
+    originalParent = null;
+    originalNextSibling = null;
+  }
+
+  async function enterDocumentPip() {
+    originalParent = container.parentNode;
+    originalNextSibling = container.nextSibling;
+
+    const w = video.videoWidth || 640;
+    const h = video.videoHeight || 360;
+    const scale = Math.min(640 / w, 360 / h, 1);
+    pipWindow = await documentPictureInPicture!.requestWindow({
+      width: Math.round(w * scale),
+      height: Math.round(h * scale),
+    });
+
+    // Inject styles into the PiP window
+    const style = pipWindow.document.createElement('style');
+    style.textContent = CONTROLS_CSS;
+    pipWindow.document.head.appendChild(style);
+
+    // Move the entire container into the PiP window
+    container.classList.add('pv-pip');
+    pipWindow.document.body.appendChild(container);
+
+    // When PiP window is closed (user clicks X or programmatic), restore
+    pipWindow.addEventListener('pagehide', () => exitDocumentPip());
+  }
 
   // --- Popup helpers ---
   function closePopup() {
@@ -458,7 +514,7 @@ export function createCustomControls(options: CustomControlsOptions): CustomCont
   video.textTracks.addEventListener('addtrack', onTrackChange);
   video.textTracks.addEventListener('removetrack', onTrackChange);
 
-  // PiP events
+  // Legacy PiP events (for fallback path)
   const onEnterPip = () => {};
   const onLeavePip = () => {};
   video.addEventListener('enterpictureinpicture', onEnterPip);
@@ -626,12 +682,17 @@ export function createCustomControls(options: CustomControlsOptions): CustomCont
 
       // PiP
       if (pipSupported) {
+        const inPip = pipWindow ? true : document.pictureInPictureElement === video;
         items.push(
           popupItem(
             'Picture in picture',
-            false,
+            inPip,
             async () => {
-              if (document.pictureInPictureElement === video) {
+              if (pipWindow) {
+                exitDocumentPip();
+              } else if (docPipSupported) {
+                await enterDocumentPip();
+              } else if (document.pictureInPictureElement === video) {
                 await document.exitPictureInPicture();
               } else {
                 await video.requestPictureInPicture();
@@ -659,6 +720,7 @@ export function createCustomControls(options: CustomControlsOptions): CustomCont
 
   return {
     destroy() {
+      exitDocumentPip();
       clearTimeout(hideTimer);
       closePopup();
       video.removeEventListener('play', onPlay);
