@@ -310,13 +310,15 @@ body {
 }
 .player-page .pv-video-container {
   position: relative;
-  width: 100%;
+  max-width: 100%;
+  margin: 0 auto;
   background: var(--video-bg);
   border-radius: 4px;
   overflow: hidden;
 }
 .player-page video {
-  width: 100%;
+  max-width: 100%;
+  max-height: 80vh;
   display: block;
 }
 .player-page video:fullscreen,
