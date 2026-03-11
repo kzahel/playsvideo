@@ -6,7 +6,7 @@ import type {
   LoaderStats,
   PlaylistLoaderContext,
 } from 'hls.js';
-import Hls from 'hls.js';
+import Hls from 'hls.js/light';
 import type { Source } from 'mediabunny';
 import { WasmFfmpegRunner } from './adapters/wasm-ffmpeg.js';
 import {

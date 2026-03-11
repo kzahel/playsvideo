@@ -1,4 +1,4 @@
-import Hls from 'hls.js';
+import Hls from 'hls.js/light';
 import { createBrowserProber } from './pipeline/codec-probe.js';
 
 export type PlaybackMode = 'hls' | 'direct-url' | 'direct-bytes';
