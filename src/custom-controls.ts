@@ -750,6 +750,16 @@ export function createCustomControls(options: CustomControlsOptions): CustomCont
   };
   overflowBtn.addEventListener('click', onOverflowClick);
 
+  // Close popup on outside click
+  const onDocMouseDown = (e: MouseEvent) => {
+    if (!activePopup) return;
+    const target = e.target as Node;
+    if (!activePopup.contains(target) && !overflowBtn.contains(target)) {
+      closePopup();
+    }
+  };
+  document.addEventListener('mousedown', onDocMouseDown);
+
   // Auto-hide on mouse movement (desktop only)
   const onMouseMove = () => resetHideTimer();
   container.addEventListener('mousemove', onMouseMove);
@@ -787,6 +797,7 @@ export function createCustomControls(options: CustomControlsOptions): CustomCont
       fsBtn.removeEventListener('click', onFsClick);
       overflowBtn.removeEventListener('click', onOverflowClick);
       document.removeEventListener('fullscreenchange', onFullscreenChange);
+      document.removeEventListener('mousedown', onDocMouseDown);
       container.removeEventListener('mousemove', onMouseMove);
       overlay.remove();
     },
