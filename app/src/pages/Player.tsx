@@ -50,6 +50,7 @@ export function Player() {
       <Link to="/" className="player-back">
         &larr; Back to Library
       </Link>
+      <h2 className="player-filename">{entry.name}</h2>
       <input
         ref={subtitleInputRef}
         type="file"

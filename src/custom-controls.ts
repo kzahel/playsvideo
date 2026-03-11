@@ -137,8 +137,25 @@ const CONTROLS_CSS = `
   align-items: center;
   padding: 0 0.25rem;
 }
-.pv-seek {
+.pv-seek-wrap {
+  position: relative;
   flex: 1;
+  display: flex;
+  align-items: center;
+}
+.pv-buffered {
+  position: absolute;
+  left: 0;
+  height: 3px;
+  width: 0;
+  background: rgba(255,255,255,0.5);
+  border-radius: 2px;
+  pointer-events: none;
+}
+.pv-seek {
+  width: 100%;
+  position: relative;
+  z-index: 1;
   -webkit-appearance: none;
   appearance: none;
   height: 3px;
@@ -299,6 +316,10 @@ export function createCustomControls(options: CustomControlsOptions): CustomCont
   // Seek row
   const seekRow = document.createElement('div');
   seekRow.className = 'pv-seek-row';
+  const seekWrap = document.createElement('div');
+  seekWrap.className = 'pv-seek-wrap';
+  const bufferedBar = document.createElement('div');
+  bufferedBar.className = 'pv-buffered';
   const seekBar = document.createElement('input');
   seekBar.type = 'range';
   seekBar.className = 'pv-seek';
@@ -306,7 +327,8 @@ export function createCustomControls(options: CustomControlsOptions): CustomCont
   seekBar.max = '0';
   seekBar.step = '0.1';
   seekBar.value = '0';
-  seekRow.appendChild(seekBar);
+  seekWrap.append(bufferedBar, seekBar);
+  seekRow.appendChild(seekWrap);
 
   // Button row
   const btnRow = document.createElement('div');
@@ -472,6 +494,7 @@ export function createCustomControls(options: CustomControlsOptions): CustomCont
     if (seeking) return;
     seekBar.value = String(video.currentTime);
     timeDisplay.textContent = `${formatTime(video.currentTime)} / ${formatTime(video.duration || 0)}`;
+    updateBuffered();
   }
 
   function updateDuration() {
@@ -482,6 +505,21 @@ export function createCustomControls(options: CustomControlsOptions): CustomCont
   function updateVolume() {
     volumeBar.value = String(video.muted ? 0 : video.volume);
     volumeBtn.innerHTML = video.muted || video.volume === 0 ? ICON.volumeMuted : ICON.volumeHigh;
+  }
+
+  function updateBuffered() {
+    const duration = video.duration;
+    if (!duration) {
+      bufferedBar.style.width = '0';
+      return;
+    }
+    let bufferedEnd = 0;
+    for (let i = 0; i < video.buffered.length; i++) {
+      if (video.buffered.start(i) <= video.currentTime) {
+        bufferedEnd = Math.max(bufferedEnd, video.buffered.end(i));
+      }
+    }
+    bufferedBar.style.width = `${(bufferedEnd / duration) * 100}%`;
   }
 
   function updateFullscreenBtn() {
@@ -508,6 +546,9 @@ export function createCustomControls(options: CustomControlsOptions): CustomCont
   video.addEventListener('durationchange', onDurationChange);
   video.addEventListener('loadedmetadata', onDurationChange);
   video.addEventListener('volumechange', onVolumeChange);
+
+  const onProgress = () => updateBuffered();
+  video.addEventListener('progress', onProgress);
 
   // Text track changes (for overflow menu state)
   const onTrackChange = () => {}; // menu is rebuilt each open
@@ -729,6 +770,7 @@ export function createCustomControls(options: CustomControlsOptions): CustomCont
       video.removeEventListener('durationchange', onDurationChange);
       video.removeEventListener('loadedmetadata', onDurationChange);
       video.removeEventListener('volumechange', onVolumeChange);
+      video.removeEventListener('progress', onProgress);
       video.removeEventListener('enterpictureinpicture', onEnterPip);
       video.removeEventListener('leavepictureinpicture', onLeavePip);
       video.textTracks.removeEventListener('addtrack', onTrackChange);
