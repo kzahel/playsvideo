@@ -4,6 +4,11 @@ All notable changes to playsvideo are documented here.
 
 ## [Unreleased]
 
+## [0.4.5] - 2026-03-11
+
+### Added
+- Export `createCustomControls`, `CustomControlsOptions`, and `CustomControlsHandle` from package API for custom video controls overlay
+
 ## [0.4.4] - 2026-03-11
 
 ### Added
