@@ -18,7 +18,6 @@ function formatTime(sec: number): string {
 
 const BADGE_LABEL: Record<string, string> = {
   unwatched: 'New',
-  'in-progress': 'In Progress',
   watched: 'Watched',
 };
 
@@ -27,10 +26,11 @@ interface Props {
 }
 
 export function LibraryEntryCard({ entry }: Props) {
-  const progress =
-    entry.watchState === 'in-progress' && entry.durationSec > 0
-      ? ` (${formatTime(entry.playbackPositionSec)} / ${formatTime(entry.durationSec)})`
-      : '';
+  const isInProgress =
+    entry.watchState === 'in-progress' && entry.durationSec > 0;
+  const progressPct = isInProgress
+    ? (entry.playbackPositionSec / entry.durationSec) * 100
+    : 0;
 
   return (
     <Link to={`/play/${entry.id}`} className="library-entry">
@@ -39,10 +39,20 @@ export function LibraryEntryCard({ entry }: Props) {
         {formatSize(entry.size)}
         {entry.durationSec > 0 ? ` \u00b7 ${formatTime(entry.durationSec)}` : ''}
       </div>
-      <span className={`watch-badge ${entry.watchState}`}>
-        {BADGE_LABEL[entry.watchState]}
-        {progress}
-      </span>
+      {isInProgress ? (
+        <div className="progress-row">
+          <div className="progress-bar">
+            <div className="progress-fill" style={{ width: `${progressPct}%` }} />
+          </div>
+          <span className="progress-time">
+            {formatTime(entry.playbackPositionSec)} / {formatTime(entry.durationSec)}
+          </span>
+        </div>
+      ) : (
+        <span className={`watch-badge ${entry.watchState}`}>
+          {BADGE_LABEL[entry.watchState]}
+        </span>
+      )}
     </Link>
   );
 }

@@ -79,8 +79,14 @@ body {
   width: auto;
 }
 
-.theme-toggle {
+.header-actions {
   margin-left: auto;
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+.github-link,
+.theme-toggle {
   background: none;
   border: 1px solid var(--muted);
   color: var(--fg);
@@ -93,7 +99,9 @@ body {
   align-items: center;
   justify-content: center;
   opacity: 0.6;
+  text-decoration: none;
 }
+.github-link:hover,
 .theme-toggle:hover {
   opacity: 1;
 }
@@ -155,6 +163,15 @@ body {
   justify-content: center;
   flex-wrap: wrap;
   padding: 1rem;
+}
+
+.stale-banner {
+  text-align: center;
+  padding: 0.4rem 1rem;
+  font-size: 0.8rem;
+  color: var(--muted);
+  background: rgba(245, 158, 11, 0.1);
+  border-bottom: 1px solid rgba(245, 158, 11, 0.25);
 }
 
 .directory-chips {
@@ -257,9 +274,28 @@ body {
   background: var(--accent);
   color: #fff;
 }
-.watch-badge.in-progress {
+.progress-row {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  margin-top: 0.5rem;
+}
+.progress-bar {
+  flex: 1;
+  height: 4px;
+  background: rgba(128, 128, 128, 0.25);
+  border-radius: 2px;
+  overflow: hidden;
+}
+.progress-fill {
+  height: 100%;
   background: #f59e0b;
-  color: #111;
+  border-radius: 2px;
+}
+.progress-time {
+  font-size: 0.7rem;
+  color: var(--muted);
+  white-space: nowrap;
 }
 .watch-badge.watched {
   background: rgba(128, 128, 128, 0.2);

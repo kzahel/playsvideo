@@ -37,6 +37,7 @@ export interface FolderResult {
 
 export interface FolderProvider {
   readonly requiresPermissionGrant: boolean;
+  hasLiveAccess(): boolean;
   pickFolder(): Promise<FolderResult>;
   getFile(entry: LibraryEntry): Promise<File>;
   rescan(directoryId?: number): Promise<FolderResult>;
@@ -86,6 +87,10 @@ async function collectFiles(handle: FileSystemDirectoryHandle): Promise<ScannedF
 
 class FsAccessProvider implements FolderProvider {
   readonly requiresPermissionGrant = true;
+
+  hasLiveAccess(): boolean {
+    return true; // handles persist in IDB across refreshes
+  }
 
   async pickFolder(): Promise<FolderResult> {
     const handle = await window.showDirectoryPicker({ mode: 'read' });
@@ -159,6 +164,10 @@ function triggerWebkitDirectoryPicker(): Promise<File[]> {
 class WebkitDirectoryProvider implements FolderProvider {
   readonly requiresPermissionGrant = false;
   private fileMap = new Map<string, File>();
+
+  hasLiveAccess(): boolean {
+    return this.fileMap.size > 0;
+  }
 
   async pickFolder(): Promise<FolderResult> {
     const rawFiles = await triggerWebkitDirectoryPicker();

@@ -3,6 +3,7 @@ import { db } from '../db.js';
 import { LibraryEntryCard } from '../components/LibraryEntry.js';
 import { FolderPicker } from '../components/FolderPicker.js';
 import { rescanFolder, rescanAllFolders, removeFolder } from '../scan.js';
+import { folderProvider } from '../folder-provider.js';
 import { isExtension } from '../context.js';
 
 export function Library() {
@@ -39,6 +40,7 @@ export function Library() {
 
   const hasDirectories = directories.length > 0;
   const multiFolder = isExtension();
+  const stale = hasDirectories && entries.length > 0 && !folderProvider.hasLiveAccess();
 
   return (
     <div>
@@ -55,6 +57,12 @@ export function Library() {
           </button>
         )}
       </div>
+
+      {stale && (
+        <div className="stale-banner">
+          Select folder again to enable playback. Files shown from last scan.
+        </div>
+      )}
 
       {multiFolder && hasDirectories && (
         <div className="directory-chips">
