@@ -54,7 +54,7 @@ export function App() {
         </Link>
         <div className="header-actions">
           <a
-            href="https://github.com/nickreserved/playsvideo"
+            href="https://github.com/kzahel/playsvideo"
             className="github-link"
             aria-label="GitHub"
             title="GitHub"
