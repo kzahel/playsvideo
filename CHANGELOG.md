@@ -4,6 +4,15 @@ All notable changes to playsvideo are documented here.
 
 ## [Unreleased]
 
+## [0.4.4] - 2026-03-11
+
+### Added
+- Subtitle extraction progress reporting (`subtitle-status` events with phase, cue count, and elapsed time)
+- Transcode worker crash recovery (falls back to in-worker transcoding when dedicated workers fail)
+
+### Fixed
+- Improved error messages: hls.js `fragLoadError` now surfaces the underlying worker/segment error instead of a generic message
+
 ## [0.4.3] - 2026-03-09
 
 ### Changed
