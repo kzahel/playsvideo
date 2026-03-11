@@ -129,6 +129,7 @@ const CONTROLS_CSS = `
 
 /* Bottom controls */
 .pv-bottom {
+  position: relative;
   background: linear-gradient(transparent, rgba(0,0,0,0.7));
   padding: 0 0.5rem 0.35rem;
 }
