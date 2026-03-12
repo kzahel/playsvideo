@@ -3,6 +3,7 @@ import { Link } from 'react-router-dom';
 import { useEngine } from '../hooks/useEngine';
 import { useSetting } from '../hooks/useSetting';
 import { useCustomControls } from '../hooks/useCustomControls';
+import { useFullscreen } from '../hooks/useFullscreen';
 
 export function FilePlayer() {
   const [file, setFile] = useState<File | null>(null);
@@ -62,6 +63,7 @@ export function FilePlayer() {
     diagnosticsStatus,
   } = useEngine(file ? { kind: 'file', file } : null);
   useCustomControls(videoRef, containerEl, controlsType === 'custom');
+  useFullscreen(videoRef, containerEl);
 
   return (
     <div className="player-page">

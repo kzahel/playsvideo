@@ -754,6 +754,11 @@ body {
 .player-page video:fullscreen,
 .pv-video-container:fullscreen video {
   outline: none;
+  max-width: none;
+  max-height: none;
+  width: 100%;
+  height: 100%;
+  object-fit: contain;
 }
 .pv-video-container:fullscreen {
   background: #000;

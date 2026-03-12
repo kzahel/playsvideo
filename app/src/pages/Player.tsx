@@ -6,6 +6,7 @@ import { useEngine } from '../hooks/useEngine';
 import { folderProvider } from '../folder-provider.js';
 import { useSetting } from '../hooks/useSetting';
 import { useCustomControls } from '../hooks/useCustomControls';
+import { useFullscreen } from '../hooks/useFullscreen';
 
 export function Player() {
   const { id } = useParams<{ id: string }>();
@@ -29,6 +30,7 @@ export function Player() {
   } =
     useEngine(entry ? { kind: 'entry', entry } : null);
   useCustomControls(videoRef, containerEl, controlsType === 'custom');
+  useFullscreen(videoRef, containerEl);
 
   if (entry === undefined) {
     return <div className="player-page">Loading...</div>;
