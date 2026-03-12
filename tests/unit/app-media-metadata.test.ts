@@ -3,28 +3,28 @@ import { parseMediaMetadata } from '../../app/src/media-metadata.js';
 
 describe('parseMediaMetadata', () => {
   it('parses named SxxEyy episodes', () => {
-    expect(parseMediaMetadata('Yellowstone s01e07.mkv')).toMatchObject({
+    expect(parseMediaMetadata('Sample Show s01e07.mkv')).toMatchObject({
       detectedMediaType: 'tv',
-      parsedTitle: 'Yellowstone',
+      parsedTitle: 'Sample Show',
       seasonNumber: 1,
       episodeNumber: 7,
-      seriesMetadataKey: 'tv:yellowstone:',
+      seriesMetadataKey: 'tv:sample-show:',
     });
   });
 
   it('ignores release tags after the episode code', () => {
-    expect(parseMediaMetadata('Yellowstone.S01E07.1080p.WEB-DL.x265.mkv')).toMatchObject({
+    expect(parseMediaMetadata('Sample.Show.S01E07.1080p.WEB-DL.x265.mkv')).toMatchObject({
       detectedMediaType: 'tv',
-      parsedTitle: 'Yellowstone',
+      parsedTitle: 'Sample Show',
       seasonNumber: 1,
       episodeNumber: 7,
     });
   });
 
   it('falls back to the parent folder for bare episode filenames', () => {
-    expect(parseMediaMetadata('Yellowstone/Season 01/S01E07.mkv')).toMatchObject({
+    expect(parseMediaMetadata('Sample Show/Season 01/S01E07.mkv')).toMatchObject({
       detectedMediaType: 'tv',
-      parsedTitle: 'Yellowstone',
+      parsedTitle: 'Sample Show',
       seasonNumber: 1,
       episodeNumber: 7,
     });

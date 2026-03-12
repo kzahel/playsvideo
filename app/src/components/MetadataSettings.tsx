@@ -93,7 +93,7 @@ export function MetadataSettings({ hasEntries, requestsEnabled }: MetadataSettin
       </div>
       <div className="metadata-settings-body">
         <p className="metadata-settings-copy">
-          Parses TV episode names like "Yellowstone S01E07" and can enrich them with TMDB series
+          Parses TV episode names like "Sample Show S01E07" and can enrich them with TMDB series
           artwork and metadata. Browser-entered tokens are stored locally, and deployed builds can
           ship worker-only TMDB credentials.
         </p>

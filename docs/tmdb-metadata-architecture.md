@@ -295,7 +295,7 @@ The system should avoid repeated per-file search requests.
 
 For TV:
 
-- parse `Yellowstone s01e07`
+- parse `Sample Show s01e07`
 - normalize to one series query
 - search series once
 - cache the chosen series ID
