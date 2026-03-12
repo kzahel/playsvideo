@@ -299,6 +299,258 @@ body {
   padding: 1rem;
 }
 
+.media-browser-page,
+.detail-page {
+  padding: 1rem;
+}
+
+.media-section + .media-section {
+  margin-top: 2rem;
+}
+
+.media-section-header {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 1rem;
+  margin: 0 auto 1rem;
+  width: min(1200px, 100%);
+}
+
+.media-section-header h1 {
+  font-size: 1.5rem;
+}
+
+.media-section-header span {
+  color: var(--muted);
+}
+
+.media-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(250px, 1fr));
+  gap: 1rem;
+}
+
+.media-card {
+  display: flex;
+  flex-direction: column;
+  color: var(--fg);
+  text-decoration: none;
+  border: 1px solid rgba(128, 128, 128, 0.15);
+  border-radius: 12px;
+  overflow: hidden;
+  background: rgba(128, 128, 128, 0.05);
+  min-height: 100%;
+}
+
+.media-card:hover {
+  border-color: var(--accent);
+}
+
+.media-card-art {
+  aspect-ratio: 16 / 9;
+  background: rgba(128, 128, 128, 0.08);
+}
+
+.media-card-poster .media-card-art {
+  aspect-ratio: 2 / 3;
+}
+
+.media-card-art img,
+.media-card-fallback {
+  width: 100%;
+  height: 100%;
+}
+
+.media-card-art img {
+  display: block;
+  object-fit: cover;
+}
+
+.media-card-fallback,
+.detail-poster-fallback {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background:
+    radial-gradient(circle at top left, rgba(59, 130, 246, 0.35), transparent 55%),
+    linear-gradient(135deg, rgba(128, 128, 128, 0.18), rgba(128, 128, 128, 0.05));
+  font-size: 2rem;
+  font-weight: 700;
+}
+
+.media-card-body {
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  padding: 0.9rem 1rem 1rem;
+}
+
+.media-card-title {
+  font-weight: 600;
+  font-size: 1.05rem;
+}
+
+.media-card-meta {
+  margin-top: 0.4rem;
+  color: var(--muted);
+  font-size: 0.85rem;
+}
+
+.media-card-overview {
+  margin-top: 0.65rem;
+  color: var(--muted);
+  font-size: 0.88rem;
+  line-height: 1.45;
+  display: -webkit-box;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 4;
+  overflow: hidden;
+}
+
+.detail-page {
+  max-width: 1100px;
+  margin: 0 auto;
+}
+
+.detail-hero {
+  display: grid;
+  grid-template-columns: minmax(0, 240px) minmax(0, 1fr);
+  gap: 1.25rem;
+  align-items: start;
+  margin-bottom: 2rem;
+}
+
+.detail-poster {
+  width: 100%;
+  aspect-ratio: 2 / 3;
+  object-fit: cover;
+  border-radius: 12px;
+  background: rgba(128, 128, 128, 0.08);
+}
+
+.detail-copy h1 {
+  font-size: 2rem;
+}
+
+.detail-meta {
+  margin-top: 0.4rem;
+  color: var(--muted);
+}
+
+.detail-overview {
+  margin-top: 1rem;
+  max-width: 70ch;
+  line-height: 1.6;
+  color: var(--muted);
+}
+
+.season-section + .season-section {
+  margin-top: 1.5rem;
+}
+
+.season-section h2 {
+  margin-bottom: 0.75rem;
+}
+
+.episode-list {
+  display: grid;
+  gap: 0.6rem;
+}
+
+.episode-row {
+  display: grid;
+  grid-template-columns: 120px minmax(0, 1fr);
+  gap: 1rem;
+  align-items: center;
+  padding: 0.85rem 1rem;
+  border-radius: 10px;
+  border: 1px solid rgba(128, 128, 128, 0.15);
+  background: rgba(128, 128, 128, 0.04);
+  color: var(--fg);
+  text-decoration: none;
+}
+
+.episode-row:hover {
+  border-color: var(--accent);
+}
+
+.episode-code {
+  color: var(--accent);
+  font-weight: 600;
+  font-size: 0.85rem;
+}
+
+.episode-name {
+  min-width: 0;
+  word-break: break-word;
+}
+
+.episode-body {
+  display: grid;
+  gap: 0.45rem;
+  min-width: 0;
+}
+
+.episode-watch-badge {
+  display: inline-flex;
+  width: fit-content;
+  border-radius: 999px;
+  padding: 0.2rem 0.55rem;
+  font-size: 0.74rem;
+  font-weight: 600;
+}
+
+.episode-watch-badge.unwatched {
+  background: var(--accent);
+  color: #fff;
+}
+
+.episode-watch-badge.watched {
+  background: rgba(34, 197, 94, 0.12);
+  color: #22c55e;
+}
+
+.episode-progress-block {
+  display: grid;
+  gap: 0.3rem;
+}
+
+.episode-progress-bar {
+  display: block;
+  width: 100%;
+  height: 6px;
+  border-radius: 999px;
+  overflow: hidden;
+  background: rgba(128, 128, 128, 0.25);
+}
+
+.episode-progress-fill {
+  display: block;
+  height: 100%;
+  background: #f59e0b;
+}
+
+.episode-progress-time {
+  color: var(--muted);
+  font-size: 0.75rem;
+}
+
+@media (max-width: 720px) {
+  .detail-hero {
+    grid-template-columns: 1fr;
+  }
+
+  .detail-poster {
+    max-width: 240px;
+  }
+
+  .episode-row {
+    grid-template-columns: 1fr;
+    gap: 0.4rem;
+  }
+}
+
 .library-entry {
   display: grid;
   background: rgba(128, 128, 128, 0.05);

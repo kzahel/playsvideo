@@ -14,6 +14,12 @@ export function Sidebar({ open, onClose }: SidebarProps) {
           <NavLink to="/" end onClick={onClose}>
             Library
           </NavLink>
+          <NavLink to="/shows" onClick={onClose}>
+            Shows
+          </NavLink>
+          <NavLink to="/movies" onClick={onClose}>
+            Movies
+          </NavLink>
         </nav>
       </aside>
     </>
