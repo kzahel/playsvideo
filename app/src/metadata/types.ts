@@ -5,9 +5,12 @@ export interface RefreshLibraryMetadataOptions {
   force?: boolean;
 }
 
+export type MetadataRequestTier = 'essential' | 'nice-to-have';
+
 export interface RefreshSeriesSeasonsOptions {
   seriesKey: string;
   force?: boolean;
+  seasonNumbers?: number[];
 }
 
 export function buildSeasonMetadataCacheKey(seriesKey: string, seasonNumber: number): string {

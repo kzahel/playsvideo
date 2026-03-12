@@ -2,6 +2,8 @@ import { useEffect, useState } from 'react';
 import { Link, useParams } from 'react-router-dom';
 import { useLiveQuery } from 'dexie-react-hooks';
 import { db, type LibraryEntry } from '../db.js';
+import { METADATA_REQUEST_TIER_KEY } from '../components/MetadataSettings.js';
+import { useSetting } from '../hooks/useSetting.js';
 import { useFilesystemRescan } from '../hooks/useFilesystemRescan.js';
 import { groupTvShows } from '../library-groups.js';
 import {
@@ -9,6 +11,7 @@ import {
   refreshLibraryMetadata,
   refreshSeriesSeasons,
 } from '../metadata/client.js';
+import type { MetadataRequestTier } from '../metadata/types.js';
 
 function seasonLabel(seasonNumber?: number): string {
   if (seasonNumber == null) return 'Other Files';
@@ -66,6 +69,7 @@ export function TvShow() {
   const seriesMetadata = useLiveQuery(() => db.seriesMetadata.toArray());
   const seasonCacheEntries = useLiveQuery(() => db.metadataSeasonCache.toArray());
   const filesystemRescan = useFilesystemRescan({ autoOnMount: true, autoKey: decodedId });
+  const [requestTier] = useSetting<MetadataRequestTier>(METADATA_REQUEST_TIER_KEY, 'essential');
   const [isRefreshingMetadata, setIsRefreshingMetadata] = useState(false);
   const [metadataStatusMessage, setMetadataStatusMessage] = useState<string | null>(null);
   const [seasonMetadataStatusMessage, setSeasonMetadataStatusMessage] = useState<string | null>(null);
@@ -99,8 +103,34 @@ export function TvShow() {
   const resolvedSeasonCount = [...seasonCacheByNumber.values()].filter(
     (entry) => entry.status === 'resolved',
   ).length;
+  const entriesBySeasonAndEpisode = new Map<number, Map<number, LibraryEntry>>();
+  const otherEntries: LibraryEntry[] = [];
+  for (const entry of show?.entries ?? []) {
+    if (entry.seasonNumber == null || entry.episodeNumber == null) {
+      otherEntries.push(entry);
+      continue;
+    }
+
+    const seasonEntries =
+      entriesBySeasonAndEpisode.get(entry.seasonNumber) ?? new Map<number, LibraryEntry>();
+    const endingEpisode = entry.endingEpisodeNumber ?? entry.episodeNumber;
+    for (let episode = entry.episodeNumber; episode <= endingEpisode; episode += 1) {
+      if (!seasonEntries.has(episode)) {
+        seasonEntries.set(episode, entry);
+      }
+    }
+    entriesBySeasonAndEpisode.set(entry.seasonNumber, seasonEntries);
+  }
+
+  otherEntries.sort((left, right) => left.name.localeCompare(right.name));
+  const localSeasonNumbers = [...entriesBySeasonAndEpisode.keys()].sort((left, right) => left - right);
+  const shouldAutoFetchSeasonMetadata = requestTier === 'nice-to-have';
 
   useEffect(() => {
+    if (!shouldAutoFetchSeasonMetadata) {
+      return;
+    }
+
     if (!show?.seriesMetadata?.key || show.seriesMetadata.status !== 'resolved') {
       return;
     }
@@ -113,7 +143,10 @@ export function TvShow() {
     setIsRefreshingSeasonMetadata(true);
     setSeasonMetadataStatusMessage(null);
 
-    void refreshSeriesSeasons({ seriesKey: show.seriesMetadata.key })
+    void refreshSeriesSeasons({
+      seriesKey: show.seriesMetadata.key,
+      seasonNumbers: localSeasonNumbers,
+    })
       .catch((error) => {
         if (!cancelled) {
           setSeasonMetadataStatusMessage(
@@ -130,7 +163,14 @@ export function TvShow() {
     return () => {
       cancelled = true;
     };
-  }, [expectedSeasonCount, resolvedSeasonCount, show?.seriesMetadata?.key, show?.seriesMetadata?.status]);
+  }, [
+    expectedSeasonCount,
+    localSeasonNumbers.join(','),
+    resolvedSeasonCount,
+    shouldAutoFetchSeasonMetadata,
+    show?.seriesMetadata?.key,
+    show?.seriesMetadata?.status,
+  ]);
 
   if (
     entries === undefined ||
@@ -170,26 +210,6 @@ export function TvShow() {
     );
   }
 
-  const entriesBySeasonAndEpisode = new Map<number, Map<number, LibraryEntry>>();
-  const otherEntries: LibraryEntry[] = [];
-  for (const entry of show.entries) {
-    if (entry.seasonNumber == null || entry.episodeNumber == null) {
-      otherEntries.push(entry);
-      continue;
-    }
-
-    const seasonEntries = entriesBySeasonAndEpisode.get(entry.seasonNumber) ?? new Map<number, LibraryEntry>();
-    const endingEpisode = entry.endingEpisodeNumber ?? entry.episodeNumber;
-    for (let episode = entry.episodeNumber; episode <= endingEpisode; episode += 1) {
-      if (!seasonEntries.has(episode)) {
-        seasonEntries.set(episode, entry);
-      }
-    }
-    entriesBySeasonAndEpisode.set(entry.seasonNumber, seasonEntries);
-  }
-
-  otherEntries.sort((left, right) => left.name.localeCompare(right.name));
-
   const metadataKeys = [
     ...new Set(
       show.entries
@@ -208,12 +228,45 @@ export function TvShow() {
         await invalidateMetadata(metadataKeys);
       }
       await refreshLibraryMetadata({ entries: show.entries, force: true });
-      await Promise.all(metadataKeys.map((seriesKey) => refreshSeriesSeasons({ seriesKey, force: true })));
+      if (shouldAutoFetchSeasonMetadata) {
+        await Promise.all(
+          metadataKeys.map((seriesKey) =>
+            refreshSeriesSeasons({
+              seriesKey,
+              force: true,
+              seasonNumbers: localSeasonNumbers,
+            }),
+          ),
+        );
+      }
       setMetadataStatusMessage('Metadata refreshed.');
     } catch (error) {
       setMetadataStatusMessage(error instanceof Error ? error.message : 'Metadata refresh failed.');
     } finally {
       setIsRefreshingMetadata(false);
+    }
+  };
+
+  const handleLoadEpisodeMetadata = async () => {
+    if (!show.seriesMetadata?.key) {
+      return;
+    }
+
+    setIsRefreshingSeasonMetadata(true);
+    setSeasonMetadataStatusMessage(null);
+    try {
+      await refreshSeriesSeasons({
+        seriesKey: show.seriesMetadata.key,
+        force: true,
+        seasonNumbers: localSeasonNumbers,
+      });
+      setSeasonMetadataStatusMessage('Episode metadata loaded.');
+    } catch (error) {
+      setSeasonMetadataStatusMessage(
+        error instanceof Error ? error.message : 'Episode metadata refresh failed.',
+      );
+    } finally {
+      setIsRefreshingSeasonMetadata(false);
     }
   };
 
@@ -301,6 +354,16 @@ export function TvShow() {
           >
             {isRefreshingMetadata ? 'Refreshing Metadata...' : 'Refresh Metadata'}
           </button>
+          {!shouldAutoFetchSeasonMetadata && localSeasonNumbers.length > 0 ? (
+            <button
+              type="button"
+              className="btn btn-secondary"
+              onClick={() => void handleLoadEpisodeMetadata()}
+              disabled={isRefreshingSeasonMetadata}
+            >
+              {isRefreshingSeasonMetadata ? 'Loading Episode Metadata...' : 'Load Episode Metadata'}
+            </button>
+          ) : null}
           {filesystemRescan.showManualButton ? (
             <button
               type="button"
@@ -323,7 +386,7 @@ export function TvShow() {
           {metadataStatusMessage}
         </div>
       ) : null}
-      {isRefreshingSeasonMetadata ? (
+      {isRefreshingSeasonMetadata && shouldAutoFetchSeasonMetadata ? (
         <div className="page-toolbar-status" aria-live="polite">
           Loading episode metadata...
         </div>
@@ -350,6 +413,12 @@ export function TvShow() {
           </div>
           {show.seriesMetadata?.overview ? (
             <p className="detail-overview">{show.seriesMetadata.overview}</p>
+          ) : null}
+          {!shouldAutoFetchSeasonMetadata ? (
+            <p className="detail-overview">
+              Request tier is set to `Essential`, so only show-level matching and metadata are fetched
+              automatically. Use `Load Episode Metadata` here or switch the tier to `Nice to Have`.
+            </p>
           ) : null}
         </div>
       </div>

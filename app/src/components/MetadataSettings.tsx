@@ -3,6 +3,7 @@ import type { MetadataTransportStateEntry } from '../db.js';
 import { useSetting } from '../hooks/useSetting.js';
 import { refreshLibraryMetadata } from '../scan.js';
 import { getMetadataTransportState } from '../metadata/client.js';
+import type { MetadataRequestTier } from '../metadata/types.js';
 import {
   TMDB_READ_ACCESS_TOKEN_KEY,
   TMDB_STANDBY_READ_ACCESS_TOKEN_KEY,
@@ -13,12 +14,17 @@ interface MetadataSettingsProps {
 }
 
 export const SHOW_METADATA_DEBUG_KEY = 'show-metadata-debug';
+export const METADATA_REQUEST_TIER_KEY = 'metadata-request-tier';
 
 export function MetadataSettings({ hasEntries }: MetadataSettingsProps) {
   const [token, setToken] = useSetting<string>(TMDB_READ_ACCESS_TOKEN_KEY, '');
   const [standbyToken, setStandbyToken] = useSetting<string>(
     TMDB_STANDBY_READ_ACCESS_TOKEN_KEY,
     '',
+  );
+  const [requestTier, setRequestTier] = useSetting<MetadataRequestTier>(
+    METADATA_REQUEST_TIER_KEY,
+    'essential',
   );
   const [showDebug, setShowDebug] = useSetting<boolean>(SHOW_METADATA_DEBUG_KEY, false);
   const [refreshing, setRefreshing] = useState(false);
@@ -136,6 +142,18 @@ export function MetadataSettings({ hasEntries }: MetadataSettingsProps) {
           </button>
           {status ? <span className="metadata-settings-status">{status}</span> : null}
         </div>
+        <label className="metadata-settings-label" htmlFor="metadata-request-tier">
+          Request Tier
+        </label>
+        <select
+          id="metadata-request-tier"
+          className="metadata-settings-input"
+          value={requestTier}
+          onChange={(event) => setRequestTier(event.target.value as MetadataRequestTier)}
+        >
+          <option value="essential">Essential</option>
+          <option value="nice-to-have">Nice to Have</option>
+        </select>
         <label className="metadata-settings-checkbox">
           <input
             type="checkbox"
@@ -144,6 +162,10 @@ export function MetadataSettings({ hasEntries }: MetadataSettingsProps) {
           />
           Show metadata debug details on library cards
         </label>
+        <p className="metadata-settings-note">
+          `Essential` only does title matching plus show/movie-level metadata. `Nice to Have`
+          also loads per-season episode metadata when you open a show.
+        </p>
         <p className="metadata-settings-note">
           `app/.env.local` takes precedence over IndexedDB values. Optional standby env var:
           `VITE_TMDB_READ_ACCESS_TOKEN_STANDBY`. The coordinator prefers `primary`, cools down

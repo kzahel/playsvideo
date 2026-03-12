@@ -237,8 +237,17 @@ export async function refreshSeriesSeasons(
     return;
   }
 
+  const requestedSeasonNumbers = normalizeRequestedSeasonNumbers(options.seasonNumbers);
+  const seasonsToFetch =
+    requestedSeasonNumbers.length > 0
+      ? seasonSummaries.filter((season) => requestedSeasonNumbers.includes(season.seasonNumber))
+      : seasonSummaries;
+  if (seasonsToFetch.length === 0) {
+    return;
+  }
+
   const imageConfig = await getCachedImageConfig();
-  for (const season of seasonSummaries) {
+  for (const season of seasonsToFetch) {
     const cacheKey = buildSeasonMetadataCacheKey(series.key, season.seasonNumber);
     const existing = await metadataRepository.getSeasonCache(cacheKey);
     if (!options.force && existing && !isSeasonMetadataStale(existing)) {
@@ -616,6 +625,16 @@ function toSeasonPayload(
 
 function needsSeasonSummaryRefresh(entry: SeriesMetadataEntry): boolean {
   return entry.status === 'resolved' && (!entry.seasons || entry.seasons.length === 0);
+}
+
+function normalizeRequestedSeasonNumbers(seasonNumbers?: number[]): number[] {
+  if (!seasonNumbers || seasonNumbers.length === 0) {
+    return [];
+  }
+
+  return [...new Set(seasonNumbers)]
+    .filter((seasonNumber) => Number.isInteger(seasonNumber) && seasonNumber >= 0)
+    .sort((left, right) => left - right);
 }
 
 async function refreshSeriesMetadataEntry(entry: SeriesMetadataEntry): Promise<SeriesMetadataEntry> {
