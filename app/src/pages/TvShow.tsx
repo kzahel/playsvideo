@@ -270,17 +270,11 @@ export function TvShow() {
     }
   };
 
-  const seasonsToRender = new Set<number>(localSeasonNumbers);
-  for (const seasonNumber of seasonCacheByNumber.keys()) {
-    seasonsToRender.add(seasonNumber);
-  }
-
   const seasonSections =
     show.seriesMetadata?.status === 'resolved' && metadataSeasons.length > 0
-      ? [...seasonsToRender]
-          .sort((left, right) => left - right)
-          .map((seasonNumber) => {
-            const metadataSeason = metadataSeasons.find((season) => season.seasonNumber === seasonNumber);
+      ? [
+          ...metadataSeasons.map((metadataSeason) => {
+            const seasonNumber = metadataSeason.seasonNumber;
             const cachedSeason = seasonCacheByNumber.get(seasonNumber);
             const localSeasonEntries = entriesBySeasonAndEpisode.get(seasonNumber);
             const episodes =
@@ -295,18 +289,41 @@ export function TvShow() {
             return {
               seasonNumber,
               title: seasonLabel(seasonNumber),
-              episodeCount: metadataSeason?.episodeCount ?? localSeasonEntries?.size ?? 0,
+              episodeCount: metadataSeason.episodeCount,
+              localEpisodeCount: localSeasonEntries?.size ?? 0,
               episodes,
               status: cachedSeason?.status ?? (localSeasonEntries ? ('resolved' as const) : undefined),
               hasResolvedEpisodeMetadata: cachedSeason?.status === 'resolved',
             };
-          })
+          }),
+          ...[...entriesBySeasonAndEpisode.entries()]
+            .filter(
+              ([seasonNumber]) =>
+                !metadataSeasons.some((season) => season.seasonNumber === seasonNumber),
+            )
+            .sort(([left], [right]) => left - right)
+            .map(([seasonNumber, seasonEntries]) => ({
+              seasonNumber,
+              title: seasonLabel(seasonNumber),
+              episodeCount: seasonEntries.size,
+              localEpisodeCount: seasonEntries.size,
+              episodes: [...seasonEntries.entries()]
+                .sort(([left], [right]) => left - right)
+                .map(([episodeNumber, entry]) => ({
+                  episodeNumber,
+                  name: entry.name,
+                })),
+              status: 'resolved' as const,
+              hasResolvedEpisodeMetadata: false,
+            })),
+        ]
       : [...entriesBySeasonAndEpisode.entries()]
           .sort(([left], [right]) => left - right)
           .map(([seasonNumber, seasonEntries]) => ({
             seasonNumber,
             title: seasonLabel(seasonNumber),
             episodeCount: seasonEntries.size,
+            localEpisodeCount: seasonEntries.size,
             episodes: [...seasonEntries.entries()]
               .sort(([left], [right]) => left - right)
               .map(([episodeNumber, entry]) => ({
@@ -416,7 +433,7 @@ export function TvShow() {
             <div className="season-heading">
               <h2>{season.title}</h2>
               <span className="season-count">
-                {(entriesBySeasonAndEpisode.get(season.seasonNumber)?.size ?? 0)}/{season.episodeCount} present
+                {season.localEpisodeCount}/{season.episodeCount} present
               </span>
             </div>
             <div className="episode-list">
@@ -488,6 +505,18 @@ export function TvShow() {
                   <span className="episode-body">
                     <span className="episode-name">Episode metadata unavailable</span>
                     <span className="episode-file-state">Refresh metadata to retry.</span>
+                  </span>
+                </div>
+              ) : season.localEpisodeCount === 0 ? (
+                <div className="episode-row episode-row-missing">
+                  <span className="episode-code">{seasonLabel(season.seasonNumber)}</span>
+                  <span className="episode-body">
+                    <span className="episode-name">No files found for this season</span>
+                    <span className="episode-file-state">
+                      {season.hasResolvedEpisodeMetadata
+                        ? 'Episode metadata is available, but no local files matched this season.'
+                        : 'Episode list has not been loaded for this season.'}
+                    </span>
                   </span>
                 </div>
               ) : (
