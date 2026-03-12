@@ -5,18 +5,18 @@ import { refreshLibraryMetadata } from '../scan.js';
 import { getMetadataTransportState } from '../metadata/client.js';
 import type { MetadataRequestTier } from '../metadata/types.js';
 import {
+  METADATA_REQUEST_TIER_KEY,
+  SHOW_METADATA_DEBUG_KEY,
   TMDB_READ_ACCESS_TOKEN_KEY,
   TMDB_STANDBY_READ_ACCESS_TOKEN_KEY,
 } from '../metadata/settings.js';
 
 interface MetadataSettingsProps {
   hasEntries: boolean;
+  requestsEnabled: boolean;
 }
 
-export const SHOW_METADATA_DEBUG_KEY = 'show-metadata-debug';
-export const METADATA_REQUEST_TIER_KEY = 'metadata-request-tier';
-
-export function MetadataSettings({ hasEntries }: MetadataSettingsProps) {
+export function MetadataSettings({ hasEntries, requestsEnabled }: MetadataSettingsProps) {
   const [token, setToken] = useSetting<string>(TMDB_READ_ACCESS_TOKEN_KEY, '');
   const [standbyToken, setStandbyToken] = useSetting<string>(
     TMDB_STANDBY_READ_ACCESS_TOKEN_KEY,
@@ -29,15 +29,10 @@ export function MetadataSettings({ hasEntries }: MetadataSettingsProps) {
   const [showDebug, setShowDebug] = useSetting<boolean>(SHOW_METADATA_DEBUG_KEY, false);
   const [refreshing, setRefreshing] = useState(false);
   const [status, setStatus] = useState('');
-  const [open, setOpen] = useState(false);
   const [transportState, setTransportState] = useState<MetadataTransportStateEntry[]>([]);
   const [loadingTransportState, setLoadingTransportState] = useState(false);
 
   useEffect(() => {
-    if (!open) {
-      return;
-    }
-
     let cancelled = false;
     const loadTransportState = async () => {
       setLoadingTransportState(true);
@@ -64,9 +59,14 @@ export function MetadataSettings({ hasEntries }: MetadataSettingsProps) {
       cancelled = true;
       window.clearInterval(interval);
     };
-  }, [open]);
+  }, []);
 
   const handleRefresh = async () => {
+    if (!requestsEnabled) {
+      setStatus('TMDB requests are disabled.');
+      return;
+    }
+
     setRefreshing(true);
     setStatus('');
     try {
@@ -82,18 +82,27 @@ export function MetadataSettings({ hasEntries }: MetadataSettingsProps) {
   };
 
   return (
-    <details
-      className="metadata-settings"
-      open={open}
-      onToggle={(event) => setOpen(event.currentTarget.open)}
-    >
-      <summary>Metadata Enrichment</summary>
+    <section className="settings-card metadata-settings">
+      <div className="settings-card-header">
+        <div>
+          <h2>Metadata Enrichment</h2>
+          <p className="settings-card-copy">
+            Configure TMDB lookups, refresh behavior, and debug visibility.
+          </p>
+        </div>
+      </div>
       <div className="metadata-settings-body">
         <p className="metadata-settings-copy">
           Parses TV episode names like "Yellowstone S01E07" and can enrich them with TMDB series
           artwork and metadata. Browser-entered tokens are stored locally, and deployed builds can
           ship worker-only TMDB credentials.
         </p>
+        {!requestsEnabled ? (
+          <p className="metadata-settings-note">
+            TMDB requests are disabled. No parsed titles or file-derived lookups will be sent until
+            you re-enable them above.
+          </p>
+        ) : null}
         <label className="metadata-settings-label" htmlFor="tmdb-token">
           TMDB API Read Access Token
         </label>
@@ -125,7 +134,7 @@ export function MetadataSettings({ hasEntries }: MetadataSettingsProps) {
             type="button"
             className="btn btn-secondary"
             onClick={handleRefresh}
-            disabled={!hasEntries || refreshing}
+            disabled={!hasEntries || refreshing || !requestsEnabled}
           >
             {refreshing ? 'Refreshing...' : 'Refresh Metadata'}
           </button>
@@ -206,6 +215,6 @@ export function MetadataSettings({ hasEntries }: MetadataSettingsProps) {
           )}
         </div>
       </div>
-    </details>
+    </section>
   );
 }

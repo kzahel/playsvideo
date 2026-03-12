@@ -2,12 +2,12 @@ import { useLiveQuery } from 'dexie-react-hooks';
 import { db } from '../db.js';
 import { LibraryEntryCard } from '../components/LibraryEntry.js';
 import { FolderPicker } from '../components/FolderPicker.js';
-import { MetadataSettings, SHOW_METADATA_DEBUG_KEY } from '../components/MetadataSettings.js';
 import { useSetting } from '../hooks/useSetting.js';
 import { useFilesystemRescan } from '../hooks/useFilesystemRescan.js';
 import { removeFolder } from '../scan.js';
 import { folderProvider } from '../folder-provider.js';
 import { isExtension } from '../context.js';
+import { SHOW_METADATA_DEBUG_KEY } from '../metadata/settings.js';
 
 export function Library() {
   const entries = useLiveQuery(() => db.library.orderBy('name').toArray());
@@ -54,9 +54,6 @@ export function Library() {
           {filesystemRescan.statusMessage}
         </div>
       ) : null}
-
-      <MetadataSettings hasEntries={entries.length > 0} />
-
       {stale && (
         <div className="stale-banner">
           Select folder again to enable playback. Files shown from last scan.

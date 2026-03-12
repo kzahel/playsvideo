@@ -4,13 +4,17 @@ import { useEngine } from '../hooks/useEngine';
 import { useSetting } from '../hooks/useSetting';
 import { useCustomControls } from '../hooks/useCustomControls';
 import { useFullscreen } from '../hooks/useFullscreen';
+import { PLAYER_CONTROLS_TYPE_KEY } from '../settings.js';
 
 export function FilePlayer() {
   const [file, setFile] = useState<File | null>(null);
   const subtitleInputRef = useRef<HTMLInputElement | null>(null);
   const fileInputRef = useRef<HTMLInputElement | null>(null);
   const [containerEl, setContainerEl] = useState<HTMLDivElement | null>(null);
-  const [controlsType, setControlsType] = useSetting<'stock' | 'custom'>('pv-controls-type', 'stock');
+  const [controlsType, setControlsType] = useSetting<'stock' | 'custom'>(
+    PLAYER_CONTROLS_TYPE_KEY,
+    'stock',
+  );
 
   // File Handling API (launchQueue)
   useEffect(() => {

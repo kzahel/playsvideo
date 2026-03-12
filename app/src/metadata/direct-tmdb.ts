@@ -139,6 +139,7 @@ export async function refreshLibraryMetadata(
   options?: RefreshLibraryMetadataOptions,
 ): Promise<void> {
   const entries = await metadataRepository.hydrateParsedLibraryEntries(options?.entries);
+  if (!(await metadataRepository.areTmdbRequestsEnabled())) return;
   const credentials = await metadataRepository.listTmdbCredentials();
   if (credentials.length === 0) return;
 
@@ -209,6 +210,8 @@ export async function refreshLibraryMetadata(
 export async function refreshSeriesSeasons(
   options: RefreshSeriesSeasonsOptions,
 ): Promise<void> {
+  if (!(await metadataRepository.areTmdbRequestsEnabled())) return;
+
   let series = await metadataRepository.getSeriesMetadata(options.seriesKey);
   if (!series) {
     return;

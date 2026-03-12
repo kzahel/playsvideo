@@ -20,6 +20,9 @@ export function Sidebar({ open, onClose }: SidebarProps) {
           <NavLink to="/movies" onClick={onClose}>
             Movies
           </NavLink>
+          <NavLink to="/settings" onClick={onClose}>
+            Settings
+          </NavLink>
         </nav>
       </aside>
     </>

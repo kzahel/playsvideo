@@ -12,7 +12,16 @@
   <link rel="apple-touch-icon" href="/icons/icon-192.png">
   <script>
     (function() {
-      var t = localStorage.getItem('pv-theme');
+      var pref = localStorage.getItem('pv-theme-preference');
+      var t =
+        pref === 'light' || pref === 'dark'
+          ? pref
+          : pref === 'system'
+            ? (window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light')
+            : localStorage.getItem('pv-theme');
+      if (!t && window.matchMedia) {
+        t = window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light';
+      }
       if (t) document.documentElement.setAttribute('data-theme', t);
     })();
   </script>

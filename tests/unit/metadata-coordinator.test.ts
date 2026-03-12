@@ -17,6 +17,7 @@ type TransportState = {
 };
 
 type RepositoryMock = {
+  areTmdbRequestsEnabled: ReturnType<typeof vi.fn>;
   listTmdbCredentials: ReturnType<typeof vi.fn>;
   getTransportState: ReturnType<typeof vi.fn>;
   putTransportState: ReturnType<typeof vi.fn>;
@@ -40,12 +41,14 @@ async function flushMicrotasks(count = 4): Promise<void> {
 
 async function loadCoordinator(options?: {
   credentials?: Credential[];
+  requestsEnabled?: boolean;
   transportStateByKey?: Record<string, TransportState | undefined>;
 }) {
   vi.resetModules();
 
   const transportStateByKey = new Map(Object.entries(options?.transportStateByKey ?? {}));
   const repository: RepositoryMock = {
+    areTmdbRequestsEnabled: vi.fn(async () => options?.requestsEnabled ?? true),
     listTmdbCredentials: vi.fn(async () => options?.credentials ?? []),
     getTransportState: vi.fn(async (key: string) => transportStateByKey.get(key)),
     putTransportState: vi.fn(async (entry: TransportState) => {
@@ -243,6 +246,24 @@ describe('metadataCoordinator', () => {
       expect.objectContaining<Partial<InstanceType<typeof MetadataTransportInvalidError>>>({
         name: 'MetadataTransportInvalidError',
         message: 'No TMDB credentials are configured',
+      }),
+    );
+
+    expect(globalThis.fetch).not.toHaveBeenCalled();
+  });
+
+  it('throws when TMDB requests are disabled in settings', async () => {
+    const { metadataCoordinator, MetadataTransportInvalidError } = await loadCoordinator({
+      requestsEnabled: false,
+      credentials: [{ slot: 'primary', token: 'primary-token' }],
+    });
+
+    await expect(
+      metadataCoordinator.fetchJson('tv:yellowstone', 'https://example.test/tv/search'),
+    ).rejects.toEqual(
+      expect.objectContaining<Partial<InstanceType<typeof MetadataTransportInvalidError>>>({
+        name: 'MetadataTransportInvalidError',
+        message: 'TMDB requests are disabled in settings',
       }),
     );
 

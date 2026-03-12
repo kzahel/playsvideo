@@ -6,6 +6,7 @@ import { FilePlayer } from './pages/FilePlayer';
 import { MediaBrowser, MoviesBrowser, ShowsBrowser } from './pages/MediaBrowser';
 import { TvShow } from './pages/TvShow';
 import { Movie } from './pages/Movie';
+import { Settings } from './pages/Settings';
 
 export const router = createBrowserRouter(
   [
@@ -19,6 +20,7 @@ export const router = createBrowserRouter(
         { path: 'movies', Component: MoviesBrowser },
         { path: 'tv/:showId', Component: TvShow },
         { path: 'movie/:movieId', Component: Movie },
+        { path: 'settings', Component: Settings },
         { path: 'play/:id', Component: Player },
         { path: 'play-file', Component: FilePlayer },
       ],

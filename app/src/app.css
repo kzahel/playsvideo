@@ -166,21 +166,11 @@ body {
 }
 
 .metadata-settings {
-  width: min(860px, calc(100% - 2rem));
-  margin: 0 auto 1rem;
-  border: 1px solid rgba(128, 128, 128, 0.2);
-  border-radius: 12px;
-  background: rgba(128, 128, 128, 0.04);
-}
-
-.metadata-settings summary {
-  cursor: pointer;
-  padding: 0.9rem 1rem;
-  font-weight: 600;
+  width: min(860px, 100%);
 }
 
 .metadata-settings-body {
-  padding: 0 1rem 1rem;
+  padding: 0;
 }
 
 .metadata-settings-copy,
@@ -401,6 +391,44 @@ body {
   text-align: center;
   margin: 0 auto 1rem;
   width: min(1100px, calc(100% - 2rem));
+}
+
+.settings-page {
+  width: min(860px, calc(100% - 2rem));
+  margin: 0 auto;
+  padding: 1.5rem 0 2rem;
+}
+
+.settings-hero {
+  margin-bottom: 1rem;
+}
+
+.settings-hero h1 {
+  font-size: 1.8rem;
+  margin-bottom: 0.35rem;
+}
+
+.settings-hero p,
+.settings-card-copy {
+  color: var(--muted);
+  line-height: 1.5;
+}
+
+.settings-card {
+  margin-bottom: 1rem;
+  border: 1px solid rgba(128, 128, 128, 0.2);
+  border-radius: 12px;
+  background: rgba(128, 128, 128, 0.04);
+  padding: 1rem;
+}
+
+.settings-card-header {
+  margin-bottom: 0.25rem;
+}
+
+.settings-card-header h2 {
+  font-size: 1.05rem;
+  margin-bottom: 0.2rem;
 }
 
 .media-section + .media-section {

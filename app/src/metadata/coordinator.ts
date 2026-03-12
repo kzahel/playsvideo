@@ -25,7 +25,7 @@ export class MetadataTransportInvalidError extends Error {
 }
 
 const inFlightRequests = new Map<string, Promise<unknown>>();
-const requestQueue: QueueJob<unknown>[] = [];
+const requestQueue: Array<QueueJob<any>> = [];
 let activeRequests = 0;
 
 export const metadataCoordinator = {
@@ -54,6 +54,10 @@ export const metadataCoordinator = {
 };
 
 async function fetchWithCredentialFallback<T>(url: string): Promise<T> {
+  if (!(await metadataRepository.areTmdbRequestsEnabled())) {
+    throw new MetadataTransportInvalidError('TMDB requests are disabled in settings');
+  }
+
   const attemptedSlots = new Set<MetadataCredentialSlot>();
 
   while (true) {
@@ -140,10 +144,11 @@ async function hasAlternativeCredential(
 
 async function selectCredential(
   attemptedSlots: Set<MetadataCredentialSlot>,
-):
+): Promise<
   | { credential: TmdbCredential }
   | { cooldownUntil: number }
-  | null {
+  | null
+> {
   const credentials = await metadataRepository.listTmdbCredentials();
   if (credentials.length === 0) {
     return null;

@@ -2,7 +2,6 @@ import { useEffect, useState } from 'react';
 import { Link, useParams } from 'react-router-dom';
 import { useLiveQuery } from 'dexie-react-hooks';
 import { db, type LibraryEntry } from '../db.js';
-import { METADATA_REQUEST_TIER_KEY } from '../components/MetadataSettings.js';
 import { useSetting } from '../hooks/useSetting.js';
 import { useFilesystemRescan } from '../hooks/useFilesystemRescan.js';
 import { groupTvShows } from '../library-groups.js';
@@ -11,6 +10,10 @@ import {
   refreshLibraryMetadata,
   refreshSeriesSeasons,
 } from '../metadata/client.js';
+import {
+  METADATA_REQUEST_TIER_KEY,
+  TMDB_REQUESTS_ENABLED_KEY,
+} from '../metadata/settings.js';
 import type { MetadataRequestTier } from '../metadata/types.js';
 
 function seasonLabel(seasonNumber?: number): string {
@@ -70,6 +73,7 @@ export function TvShow() {
   const seasonCacheEntries = useLiveQuery(() => db.metadataSeasonCache.toArray());
   const filesystemRescan = useFilesystemRescan({ autoOnMount: true, autoKey: decodedId });
   const [requestTier] = useSetting<MetadataRequestTier>(METADATA_REQUEST_TIER_KEY, 'essential');
+  const [tmdbRequestsEnabled] = useSetting<boolean>(TMDB_REQUESTS_ENABLED_KEY, true);
   const [isRefreshingMetadata, setIsRefreshingMetadata] = useState(false);
   const [metadataStatusMessage, setMetadataStatusMessage] = useState<string | null>(null);
   const [seasonMetadataStatusMessage, setSeasonMetadataStatusMessage] = useState<string | null>(null);
@@ -124,7 +128,8 @@ export function TvShow() {
 
   otherEntries.sort((left, right) => left.name.localeCompare(right.name));
   const localSeasonNumbers = [...entriesBySeasonAndEpisode.keys()].sort((left, right) => left - right);
-  const shouldAutoFetchSeasonMetadata = requestTier === 'nice-to-have';
+  const shouldAutoFetchSeasonMetadata =
+    tmdbRequestsEnabled && requestTier === 'nice-to-have';
 
   useEffect(() => {
     if (!shouldAutoFetchSeasonMetadata) {
@@ -354,7 +359,7 @@ export function TvShow() {
             type="button"
             className="btn btn-secondary"
             onClick={() => void handleRefreshMetadata()}
-            disabled={isRefreshingMetadata}
+            disabled={isRefreshingMetadata || !tmdbRequestsEnabled}
           >
             {isRefreshingMetadata ? 'Refreshing Metadata...' : 'Refresh Metadata'}
           </button>
@@ -363,7 +368,7 @@ export function TvShow() {
               type="button"
               className="btn btn-secondary"
               onClick={() => void handleLoadEpisodeMetadata()}
-              disabled={isRefreshingSeasonMetadata}
+              disabled={isRefreshingSeasonMetadata || !tmdbRequestsEnabled}
             >
               {isRefreshingSeasonMetadata ? 'Loading Episode Metadata...' : 'Load Episode Metadata'}
             </button>
@@ -388,6 +393,11 @@ export function TvShow() {
       {metadataStatusMessage ? (
         <div className="page-toolbar-status" aria-live="polite">
           {metadataStatusMessage}
+        </div>
+      ) : null}
+      {!tmdbRequestsEnabled ? (
+        <div className="page-toolbar-status" aria-live="polite">
+          Metadata requests are disabled in Settings.
         </div>
       ) : null}
       {isRefreshingSeasonMetadata && shouldAutoFetchSeasonMetadata ? (
@@ -420,8 +430,9 @@ export function TvShow() {
           ) : null}
           {!shouldAutoFetchSeasonMetadata ? (
             <p className="detail-overview">
-              Request tier is set to `Essential`, so only show-level matching and metadata are fetched
-              automatically. Use `Load Episode Metadata` here or switch the tier to `Nice to Have`.
+              {tmdbRequestsEnabled
+                ? 'Request tier is set to `Essential`, so only show-level matching and metadata are fetched automatically. Use `Load Episode Metadata` here or switch the tier to `Nice to Have`.'
+                : 'TMDB requests are disabled in Settings, so only local filename parsing is used on this page.'}
             </p>
           ) : null}
         </div>
@@ -524,7 +535,9 @@ export function TvShow() {
                   <span className="episode-code">{seasonLabel(season.seasonNumber)}</span>
                   <span className="episode-body">
                     <span className="episode-name">Loading season episodes...</span>
-                    <span className="episode-file-state">Checking TMDB.</span>
+                    <span className="episode-file-state">
+                      {tmdbRequestsEnabled ? 'Checking TMDB.' : 'Episode metadata is disabled in Settings.'}
+                    </span>
                   </span>
                 </div>
               )}

@@ -7,13 +7,17 @@ import { folderProvider } from '../folder-provider.js';
 import { useSetting } from '../hooks/useSetting';
 import { useCustomControls } from '../hooks/useCustomControls';
 import { useFullscreen } from '../hooks/useFullscreen';
+import { PLAYER_CONTROLS_TYPE_KEY } from '../settings.js';
 
 export function Player() {
   const { id } = useParams<{ id: string }>();
   const entryId = Number(id);
   const subtitleInputRef = useRef<HTMLInputElement | null>(null);
   const [containerEl, setContainerEl] = useState<HTMLDivElement | null>(null);
-  const [controlsType, setControlsType] = useSetting<'stock' | 'custom'>('pv-controls-type', 'stock');
+  const [controlsType, setControlsType] = useSetting<'stock' | 'custom'>(
+    PLAYER_CONTROLS_TYPE_KEY,
+    'stock',
+  );
 
   const entry = useLiveQuery(() => db.library.get(entryId), [entryId]);
   const {

@@ -2,9 +2,11 @@ import { useState } from 'react';
 import { Link, useParams } from 'react-router-dom';
 import { useLiveQuery } from 'dexie-react-hooks';
 import { db } from '../db.js';
+import { useSetting } from '../hooks/useSetting.js';
 import { useFilesystemRescan } from '../hooks/useFilesystemRescan.js';
 import { groupMovies } from '../library-groups.js';
 import { invalidateMetadata, refreshLibraryMetadata } from '../metadata/client.js';
+import { TMDB_REQUESTS_ENABLED_KEY } from '../metadata/settings.js';
 
 export function Movie() {
   const { movieId } = useParams<{ movieId: string }>();
@@ -12,6 +14,7 @@ export function Movie() {
   const entries = useLiveQuery(() => db.library.toArray());
   const movieMetadata = useLiveQuery(() => db.movieMetadata.toArray());
   const filesystemRescan = useFilesystemRescan({ autoOnMount: true, autoKey: decodedId });
+  const [tmdbRequestsEnabled] = useSetting<boolean>(TMDB_REQUESTS_ENABLED_KEY, true);
   const [isRefreshingMetadata, setIsRefreshingMetadata] = useState(false);
   const [metadataStatusMessage, setMetadataStatusMessage] = useState<string | null>(null);
 
@@ -88,7 +91,7 @@ export function Movie() {
             type="button"
             className="btn btn-secondary"
             onClick={() => void handleRefreshMetadata()}
-            disabled={isRefreshingMetadata}
+            disabled={isRefreshingMetadata || !tmdbRequestsEnabled}
           >
             {isRefreshingMetadata ? 'Refreshing Metadata...' : 'Refresh Metadata'}
           </button>
@@ -112,6 +115,11 @@ export function Movie() {
       {metadataStatusMessage ? (
         <div className="page-toolbar-status" aria-live="polite">
           {metadataStatusMessage}
+        </div>
+      ) : null}
+      {!tmdbRequestsEnabled ? (
+        <div className="page-toolbar-status" aria-live="polite">
+          Metadata requests are disabled in Settings.
         </div>
       ) : null}
       <div className="detail-hero">

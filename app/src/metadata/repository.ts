@@ -12,7 +12,11 @@ import type {
 } from '../db.js';
 import { parseMediaMetadata } from '../media-metadata.js';
 import { getRuntimeCredential } from './runtime-credential-provider.js';
-import { TMDB_READ_ACCESS_TOKEN_KEY, TMDB_STANDBY_READ_ACCESS_TOKEN_KEY } from './settings.js';
+import {
+  TMDB_READ_ACCESS_TOKEN_KEY,
+  TMDB_REQUESTS_ENABLED_KEY,
+  TMDB_STANDBY_READ_ACCESS_TOKEN_KEY,
+} from './settings.js';
 
 const TMDB_CONFIG_CACHE_KEY = 'tmdb-image-config-v1';
 
@@ -47,6 +51,11 @@ function toParsedLibraryFields(entry: LibraryEntry): ParsedLibraryFields {
 }
 
 export const metadataRepository = {
+  async areTmdbRequestsEnabled(): Promise<boolean> {
+    const configured = await db.settings.get(TMDB_REQUESTS_ENABLED_KEY);
+    return configured?.value !== false;
+  },
+
   async hydrateParsedLibraryEntries(entries?: LibraryEntry[]): Promise<LibraryEntry[]> {
     const source = entries ?? (await db.library.toArray());
     if (source.length === 0) {
@@ -134,6 +143,10 @@ export const metadataRepository = {
   },
 
   async listTmdbCredentials(): Promise<TmdbCredential[]> {
+    if (!(await this.areTmdbRequestsEnabled())) {
+      return [];
+    }
+
     const [primary, standby] = await Promise.all([
       this.getTmdbCredential('primary'),
       this.getTmdbCredential('standby'),
