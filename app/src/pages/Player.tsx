@@ -3,7 +3,7 @@ import { useParams, Link, useNavigate } from 'react-router-dom';
 import { useLiveQuery } from 'dexie-react-hooks';
 import { db, type LibraryEntry } from '../db';
 import { useEngine } from '../hooks/useEngine';
-import { folderProvider } from '../folder-provider.js';
+import { folderProvider, type SiblingSubtitleFile } from '../folder-provider.js';
 import { useSetting } from '../hooks/useSetting';
 import { useCustomControls } from '../hooks/useCustomControls';
 import { useFullscreen } from '../hooks/useFullscreen';
@@ -67,6 +67,9 @@ export function Player() {
   const entryId = Number(id);
   const subtitleInputRef = useRef<HTMLInputElement | null>(null);
   const [containerEl, setContainerEl] = useState<HTMLDivElement | null>(null);
+  const [siblingSubtitles, setSiblingSubtitles] = useState<SiblingSubtitleFile[]>([]);
+  const [loadingSiblingSubtitles, setLoadingSiblingSubtitles] = useState(false);
+  const [siblingSubtitleStatus, setSiblingSubtitleStatus] = useState('');
   const [controlsType, setControlsType] = useSetting<'stock' | 'custom'>(
     PLAYER_CONTROLS_TYPE_KEY,
     'stock',
@@ -129,6 +132,45 @@ export function Player() {
 
     navigate(`/play/${nextEpisode.id}`);
   }, [autoplayNextEpisode, hasEnded, navigate, nextEpisode]);
+
+  useEffect(() => {
+    if (!entry || phase !== 'ready') {
+      setSiblingSubtitles([]);
+      setLoadingSiblingSubtitles(false);
+      setSiblingSubtitleStatus('');
+      return;
+    }
+
+    let cancelled = false;
+    setLoadingSiblingSubtitles(true);
+    setSiblingSubtitleStatus('');
+    void folderProvider
+      .listSiblingSubtitleFiles(entry)
+      .then((files) => {
+        if (cancelled) {
+          return;
+        }
+        setSiblingSubtitles(files);
+      })
+      .catch((error) => {
+        if (cancelled) {
+          return;
+        }
+        setSiblingSubtitles([]);
+        setSiblingSubtitleStatus(
+          error instanceof Error ? error.message : 'Failed to load sibling subtitles.',
+        );
+      })
+      .finally(() => {
+        if (!cancelled) {
+          setLoadingSiblingSubtitles(false);
+        }
+      });
+
+    return () => {
+      cancelled = true;
+    };
+  }, [entry, phase]);
 
   if (entry === undefined) {
     return <div className="player-page">Loading...</div>;
@@ -220,6 +262,31 @@ export function Player() {
       <div className="player-subtitle-status">
         {subtitleStatus || (phase === 'ready' ? 'External subtitles: none' : '')}
       </div>
+      {phase === 'ready' && (loadingSiblingSubtitles || siblingSubtitles.length > 0 || siblingSubtitleStatus) ? (
+        <div className="player-sibling-subtitles">
+          <div className="player-sibling-subtitles-title">Sibling subtitle files</div>
+          {loadingSiblingSubtitles ? (
+            <div className="player-sibling-subtitles-copy">Checking for subtitle files...</div>
+          ) : null}
+          {!loadingSiblingSubtitles && siblingSubtitles.length > 0 ? (
+            <div className="player-sibling-subtitles-actions">
+              {siblingSubtitles.map((subtitle) => (
+                <button
+                  key={subtitle.path}
+                  type="button"
+                  className="btn btn-secondary"
+                  onClick={() => void loadSubtitleFile(subtitle.file)}
+                >
+                  {subtitle.name}
+                </button>
+              ))}
+            </div>
+          ) : null}
+          {!loadingSiblingSubtitles && siblingSubtitles.length === 0 && siblingSubtitleStatus ? (
+            <div className="player-sibling-subtitles-copy">{siblingSubtitleStatus}</div>
+          ) : null}
+        </div>
+      ) : null}
       {!autoplayNextEpisode && hasEnded && nextEpisode ? (
         <div className="player-next-episode-banner">
           <span>Episode finished. Continue to {formatEpisodeCode(nextEpisode)}.</span>

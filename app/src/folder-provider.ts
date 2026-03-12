@@ -1,5 +1,6 @@
 import { db, type LibraryEntry } from './db.js';
 import { isExtension } from './context.js';
+import { isSiblingSubtitleCandidate } from './subtitle-sibling.js';
 
 const VIDEO_EXTENSIONS = new Set([
   '.mp4',
@@ -22,6 +23,11 @@ function isVideoFile(name: string): boolean {
   return VIDEO_EXTENSIONS.has(name.slice(dot).toLowerCase());
 }
 
+function parentPath(path: string): string {
+  const slash = path.lastIndexOf('/');
+  return slash === -1 ? '' : path.slice(0, slash);
+}
+
 export interface ScannedFile {
   name: string;
   path: string;
@@ -35,6 +41,12 @@ export interface FolderResult {
   files: ScannedFile[];
 }
 
+export interface SiblingSubtitleFile {
+  file: File;
+  name: string;
+  path: string;
+}
+
 export type FolderRescanAccessState = 'ready' | 'needs-user-gesture' | 'unavailable';
 
 export interface FolderProvider {
@@ -43,6 +55,7 @@ export interface FolderProvider {
   hasLiveAccess(): boolean;
   pickFolder(): Promise<FolderResult>;
   getFile(entry: LibraryEntry): Promise<File>;
+  listSiblingSubtitleFiles(entry: LibraryEntry): Promise<SiblingSubtitleFile[]>;
   rescan(directoryId?: number): Promise<FolderResult>;
 }
 
@@ -143,6 +156,41 @@ class FsAccessProvider implements FolderProvider {
     return fileHandle.getFile();
   }
 
+  async listSiblingSubtitleFiles(entry: LibraryEntry): Promise<SiblingSubtitleFile[]> {
+    const dir = await db.directories.get(entry.directoryId);
+    if (!dir?.handle) {
+      return [];
+    }
+
+    await ensurePermission(dir.handle);
+    const parts = entry.path.split('/');
+    let current: FileSystemDirectoryHandle = dir.handle;
+    for (let index = 0; index < parts.length - 1; index += 1) {
+      current = await current.getDirectoryHandle(parts[index]);
+    }
+
+    const siblings: SiblingSubtitleFile[] = [];
+    const folder = parentPath(entry.path);
+    for await (const handle of current.values()) {
+      if (handle.kind !== 'file') {
+        continue;
+      }
+      if (!isSiblingSubtitleCandidate(entry.name, handle.name)) {
+        continue;
+      }
+
+      const file = await (handle as FileSystemFileHandle).getFile();
+      siblings.push({
+        file,
+        name: handle.name,
+        path: folder ? `${folder}/${handle.name}` : handle.name,
+      });
+    }
+
+    siblings.sort((left, right) => left.name.localeCompare(right.name));
+    return siblings;
+  }
+
   async rescan(directoryId?: number): Promise<FolderResult> {
     const dir = directoryId
       ? await db.directories.get(directoryId)
@@ -187,6 +235,7 @@ function triggerWebkitDirectoryPicker(): Promise<File[]> {
 class WebkitDirectoryProvider implements FolderProvider {
   readonly requiresPermissionGrant = false;
   private fileMap = new Map<string, File>();
+  private pathFileMap = new Map<string, File>();
 
   async getRescanAccessState(): Promise<FolderRescanAccessState> {
     const directories = await db.directories.toArray();
@@ -215,6 +264,27 @@ class WebkitDirectoryProvider implements FolderProvider {
     return file;
   }
 
+  async listSiblingSubtitleFiles(entry: LibraryEntry): Promise<SiblingSubtitleFile[]> {
+    const folder = parentPath(entry.path);
+    const siblings: SiblingSubtitleFile[] = [];
+    for (const [path, file] of this.pathFileMap.entries()) {
+      if (parentPath(path) !== folder) {
+        continue;
+      }
+      if (!isSiblingSubtitleCandidate(entry.name, file.name)) {
+        continue;
+      }
+      siblings.push({
+        file,
+        name: file.name,
+        path,
+      });
+    }
+
+    siblings.sort((left, right) => left.name.localeCompare(right.name));
+    return siblings;
+  }
+
   async rescan(): Promise<FolderResult> {
     const rawFiles = await triggerWebkitDirectoryPicker();
     return await this.processFiles(rawFiles);
@@ -222,6 +292,7 @@ class WebkitDirectoryProvider implements FolderProvider {
 
   private async processFiles(rawFiles: File[]): Promise<FolderResult> {
     this.fileMap.clear();
+    this.pathFileMap.clear();
     const files: ScannedFile[] = [];
     let folderName = '';
 
@@ -235,6 +306,7 @@ class WebkitDirectoryProvider implements FolderProvider {
 
       // Strip the root folder name to get the relative path
       const path = relPath.split('/').slice(1).join('/');
+      this.pathFileMap.set(path, file);
       if (!isVideoFile(file.name)) continue;
 
       files.push({
