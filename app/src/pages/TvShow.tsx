@@ -270,12 +270,19 @@ export function TvShow() {
     }
   };
 
+  const seasonsToRender = new Set<number>(localSeasonNumbers);
+  for (const seasonNumber of seasonCacheByNumber.keys()) {
+    seasonsToRender.add(seasonNumber);
+  }
+
   const seasonSections =
     show.seriesMetadata?.status === 'resolved' && metadataSeasons.length > 0
-      ? [
-          ...metadataSeasons.map((season) => {
-            const cachedSeason = seasonCacheByNumber.get(season.seasonNumber);
-            const localSeasonEntries = entriesBySeasonAndEpisode.get(season.seasonNumber);
+      ? [...seasonsToRender]
+          .sort((left, right) => left - right)
+          .map((seasonNumber) => {
+            const metadataSeason = metadataSeasons.find((season) => season.seasonNumber === seasonNumber);
+            const cachedSeason = seasonCacheByNumber.get(seasonNumber);
+            const localSeasonEntries = entriesBySeasonAndEpisode.get(seasonNumber);
             const episodes =
               cachedSeason?.status === 'resolved'
                 ? (cachedSeason.payload?.episodes ?? [])
@@ -286,34 +293,14 @@ export function TvShow() {
                       name: entry.name,
                     }));
             return {
-              seasonNumber: season.seasonNumber,
-              title: seasonLabel(season.seasonNumber),
-              episodeCount: season.episodeCount,
-              episodes,
-              status: cachedSeason?.status,
-              hasResolvedEpisodeMetadata: cachedSeason?.status === 'resolved',
-            };
-          }),
-          ...[...entriesBySeasonAndEpisode.entries()]
-            .filter(
-              ([seasonNumber]) =>
-                !metadataSeasons.some((season) => season.seasonNumber === seasonNumber),
-            )
-            .sort(([left], [right]) => left - right)
-            .map(([seasonNumber, seasonEntries]) => ({
               seasonNumber,
               title: seasonLabel(seasonNumber),
-              episodeCount: seasonEntries.size,
-              episodes: [...seasonEntries.entries()]
-                .sort(([left], [right]) => left - right)
-                .map(([episodeNumber, entry]) => ({
-                  episodeNumber,
-                  name: entry.name,
-                })),
-              status: 'resolved' as const,
-              hasResolvedEpisodeMetadata: false,
-            })),
-        ]
+              episodeCount: metadataSeason?.episodeCount ?? localSeasonEntries?.size ?? 0,
+              episodes,
+              status: cachedSeason?.status ?? (localSeasonEntries ? ('resolved' as const) : undefined),
+              hasResolvedEpisodeMetadata: cachedSeason?.status === 'resolved',
+            };
+          })
       : [...entriesBySeasonAndEpisode.entries()]
           .sort(([left], [right]) => left - right)
           .map(([seasonNumber, seasonEntries]) => ({
