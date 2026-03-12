@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import { useSetting } from '../hooks/useSetting.js';
 import { refreshLibraryMetadata } from '../scan.js';
-import { TMDB_READ_ACCESS_TOKEN_KEY } from '../tmdb.js';
+import { TMDB_READ_ACCESS_TOKEN_KEY } from '../metadata/client.js';
 
 interface MetadataSettingsProps {
   hasEntries: boolean;

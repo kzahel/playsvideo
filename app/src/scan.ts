@@ -1,10 +1,10 @@
 import { db, type LibraryEntry } from './db.js';
 import { folderProvider, type ScannedFile } from './folder-provider.js';
 import { parseMediaMetadata } from './media-metadata.js';
-import { refreshLibraryMetadata } from './tmdb.js';
+import { refreshLibraryMetadata } from './metadata/client.js';
 
 export { type ScannedFile } from './folder-provider.js';
-export { refreshLibraryMetadata } from './tmdb.js';
+export { refreshLibraryMetadata } from './metadata/client.js';
 
 export async function setFolder(): Promise<void> {
   const result = await folderProvider.pickFolder();
