@@ -27,6 +27,7 @@ interface UseEngineResult {
   videoRef: React.RefObject<HTMLVideoElement | null>;
   status: string;
   phase: string;
+  hasEnded: boolean;
   needsPermission: boolean;
   retryPermission: () => void;
   subtitleStatus: string;
@@ -103,6 +104,7 @@ export function useEngine(source: EngineSource | null): UseEngineResult {
   const readyDetailRef = useRef<unknown>(null);
   const [status, setStatus] = useState('');
   const [phase, setPhase] = useState('idle');
+  const [hasEnded, setHasEnded] = useState(false);
   const [subtitleStatus, setSubtitleStatus] = useState('');
   const [diagnosticsStatus, setDiagnosticsStatus] = useState('');
   const [needsPermission, setNeedsPermission] = useState(false);
@@ -206,6 +208,7 @@ export function useEngine(source: EngineSource | null): UseEngineResult {
     engine.addEventListener('loading', ((e: CustomEvent) => {
       setStatus(`Opening ${e.detail.file?.name ?? ''}...`);
       setPhase('demuxing');
+      setHasEnded(false);
       setSubtitleStatus('');
       pushDiagnosticEvent(
         diagnosticsRef,
@@ -218,6 +221,7 @@ export function useEngine(source: EngineSource | null): UseEngineResult {
       const mode = e.detail.passthrough ? 'direct playback' : `${e.detail.totalSegments} segments`;
       setStatus(`Ready \u2014 ${mode}`);
       setPhase('ready');
+      setHasEnded(false);
       readyDetailRef.current = e.detail;
       pushDiagnosticEvent(
         diagnosticsRef,
@@ -311,14 +315,17 @@ export function useEngine(source: EngineSource | null): UseEngineResult {
     };
     const onEnded = () => {
       logVideoEvent('video:ended');
+      setHasEnded(true);
       if (entry) {
         savePosition().then(() => scheduleSyncIfLoggedIn());
       }
     };
+    const onPlay = () => setHasEnded(false);
     const onVideoError = () =>
       pushDiagnosticEvent(diagnosticsRef, 'video:error', formatMediaError(video.error) ?? 'unknown');
 
     video.addEventListener('playing', onPlaying);
+    video.addEventListener('play', onPlay);
     video.addEventListener('waiting', onWaiting);
     video.addEventListener('stalled', onStalled);
     video.addEventListener('seeking', onSeeking);
@@ -377,6 +384,7 @@ export function useEngine(source: EngineSource | null): UseEngineResult {
       }
       if (interval) clearInterval(interval);
       video.removeEventListener('playing', onPlaying);
+      video.removeEventListener('play', onPlay);
       video.removeEventListener('waiting', onWaiting);
       video.removeEventListener('stalled', onStalled);
       video.removeEventListener('seeking', onSeeking);
@@ -429,6 +437,7 @@ export function useEngine(source: EngineSource | null): UseEngineResult {
     videoRef,
     status,
     phase,
+    hasEnded,
     needsPermission,
     retryPermission,
     subtitleStatus,

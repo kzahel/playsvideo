@@ -10,6 +10,7 @@ import {
 import { invalidateMetadata } from '../metadata/client.js';
 import type { MetadataRequestTier } from '../metadata/types.js';
 import {
+  AUTOPLAY_NEXT_EPISODE_KEY,
   AUTO_RESCAN_DETAIL_PAGES_KEY,
   EMBEDDED_SUBTITLE_POLICY_KEY,
   getStoredThemePreference,
@@ -28,6 +29,10 @@ export function Settings() {
   const [controlsType, setControlsType] = useSetting<'stock' | 'custom'>(
     PLAYER_CONTROLS_TYPE_KEY,
     'stock',
+  );
+  const [autoplayNextEpisode, setAutoplayNextEpisode] = useSetting<boolean>(
+    AUTOPLAY_NEXT_EPISODE_KEY,
+    false,
   );
   const [embeddedSubtitlePolicy, setEmbeddedSubtitlePolicy] = useSetting<EmbeddedSubtitlePolicy>(
     EMBEDDED_SUBTITLE_POLICY_KEY,
@@ -109,6 +114,14 @@ export function Settings() {
           <option value="stock">Native browser controls</option>
           <option value="custom">Custom controls</option>
         </select>
+        <label className="metadata-settings-checkbox">
+          <input
+            type="checkbox"
+            checked={autoplayNextEpisode}
+            onChange={(event) => setAutoplayNextEpisode(event.target.checked)}
+          />
+          Autoplay the next episode when one is available
+        </label>
       </section>
 
       <section className="settings-card">

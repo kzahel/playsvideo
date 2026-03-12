@@ -1,16 +1,69 @@
-import { useRef, useState } from 'react';
-import { useParams, Link } from 'react-router-dom';
+import { useEffect, useMemo, useRef, useState } from 'react';
+import { useParams, Link, useNavigate } from 'react-router-dom';
 import { useLiveQuery } from 'dexie-react-hooks';
-import { db } from '../db';
+import { db, type LibraryEntry } from '../db';
 import { useEngine } from '../hooks/useEngine';
 import { folderProvider } from '../folder-provider.js';
 import { useSetting } from '../hooks/useSetting';
 import { useCustomControls } from '../hooks/useCustomControls';
 import { useFullscreen } from '../hooks/useFullscreen';
-import { PLAYER_CONTROLS_TYPE_KEY } from '../settings.js';
+import { AUTOPLAY_NEXT_EPISODE_KEY, PLAYER_CONTROLS_TYPE_KEY } from '../settings.js';
+
+function buildSeriesIdentity(entry: LibraryEntry): string | null {
+  if (entry.detectedMediaType !== 'tv' || !entry.parsedTitle) {
+    return null;
+  }
+
+  if (entry.seriesMetadataKey) {
+    return entry.seriesMetadataKey;
+  }
+
+  return `tv-local:${entry.parsedTitle}:${entry.parsedYear ?? ''}`;
+}
+
+function compareEpisodeEntries(left: LibraryEntry, right: LibraryEntry): number {
+  const leftSeason = left.seasonNumber ?? Number.MAX_SAFE_INTEGER;
+  const rightSeason = right.seasonNumber ?? Number.MAX_SAFE_INTEGER;
+  if (leftSeason !== rightSeason) {
+    return leftSeason - rightSeason;
+  }
+
+  const leftEpisode = left.episodeNumber ?? Number.MAX_SAFE_INTEGER;
+  const rightEpisode = right.episodeNumber ?? Number.MAX_SAFE_INTEGER;
+  if (leftEpisode !== rightEpisode) {
+    return leftEpisode - rightEpisode;
+  }
+
+  const leftEnding = left.endingEpisodeNumber ?? left.episodeNumber ?? Number.MAX_SAFE_INTEGER;
+  const rightEnding = right.endingEpisodeNumber ?? right.episodeNumber ?? Number.MAX_SAFE_INTEGER;
+  if (leftEnding !== rightEnding) {
+    return leftEnding - rightEnding;
+  }
+
+  return left.id - right.id;
+}
+
+function formatEpisodeCode(entry: LibraryEntry): string {
+  if (entry.seasonNumber == null || entry.episodeNumber == null) {
+    return entry.name;
+  }
+
+  const prefix = `S${String(entry.seasonNumber).padStart(2, '0')}E${String(
+    entry.episodeNumber,
+  ).padStart(2, '0')}`;
+  if (
+    entry.endingEpisodeNumber != null &&
+    entry.endingEpisodeNumber > entry.episodeNumber
+  ) {
+    return `${prefix}-E${String(entry.endingEpisodeNumber).padStart(2, '0')}`;
+  }
+
+  return prefix;
+}
 
 export function Player() {
   const { id } = useParams<{ id: string }>();
+  const navigate = useNavigate();
   const entryId = Number(id);
   const subtitleInputRef = useRef<HTMLInputElement | null>(null);
   const [containerEl, setContainerEl] = useState<HTMLDivElement | null>(null);
@@ -18,12 +71,15 @@ export function Player() {
     PLAYER_CONTROLS_TYPE_KEY,
     'stock',
   );
+  const [autoplayNextEpisode] = useSetting<boolean>(AUTOPLAY_NEXT_EPISODE_KEY, false);
 
   const entry = useLiveQuery(() => db.library.get(entryId), [entryId]);
+  const entries = useLiveQuery(() => db.library.toArray());
   const {
     videoRef,
     status,
     phase,
+    hasEnded,
     needsPermission,
     retryPermission,
     subtitleStatus,
@@ -35,6 +91,44 @@ export function Player() {
     useEngine(entry ? { kind: 'entry', entry } : null);
   useCustomControls(videoRef, containerEl, controlsType === 'custom');
   useFullscreen(videoRef, containerEl);
+
+  const { previousEpisode, nextEpisode } = useMemo(() => {
+    if (!entry || entries === undefined) {
+      return { previousEpisode: null, nextEpisode: null };
+    }
+
+    const seriesIdentity = buildSeriesIdentity(entry);
+    if (!seriesIdentity || entry.seasonNumber == null || entry.episodeNumber == null) {
+      return { previousEpisode: null, nextEpisode: null };
+    }
+
+    const siblings = entries
+      .filter((candidate) => candidate.id !== entry.id)
+      .filter((candidate) => buildSeriesIdentity(candidate) === seriesIdentity)
+      .filter(
+        (candidate) => candidate.seasonNumber != null && candidate.episodeNumber != null,
+      )
+      .concat(entry)
+      .sort(compareEpisodeEntries);
+
+    const currentIndex = siblings.findIndex((candidate) => candidate.id === entry.id);
+    if (currentIndex === -1) {
+      return { previousEpisode: null, nextEpisode: null };
+    }
+
+    return {
+      previousEpisode: siblings[currentIndex - 1] ?? null,
+      nextEpisode: siblings[currentIndex + 1] ?? null,
+    };
+  }, [entries, entry]);
+
+  useEffect(() => {
+    if (!hasEnded || !autoplayNextEpisode || !nextEpisode) {
+      return;
+    }
+
+    navigate(`/play/${nextEpisode.id}`);
+  }, [autoplayNextEpisode, hasEnded, navigate, nextEpisode]);
 
   if (entry === undefined) {
     return <div className="player-page">Loading...</div>;
@@ -81,6 +175,22 @@ export function Player() {
             : 'Select folder to play'}
         </button>
       )}
+      {previousEpisode || nextEpisode ? (
+        <div className="player-episode-nav">
+          {previousEpisode ? (
+            <Link to={`/play/${previousEpisode.id}`} className="btn btn-secondary">
+              Previous Episode: {formatEpisodeCode(previousEpisode)}
+            </Link>
+          ) : (
+            <span className="player-episode-nav-spacer" />
+          )}
+          {nextEpisode ? (
+            <Link to={`/play/${nextEpisode.id}`} className="btn btn-secondary">
+              Next Episode: {formatEpisodeCode(nextEpisode)}
+            </Link>
+          ) : null}
+        </div>
+      ) : null}
       <div className="player-actions">
         <button
           className="btn btn-secondary"
@@ -110,6 +220,14 @@ export function Player() {
       <div className="player-subtitle-status">
         {subtitleStatus || (phase === 'ready' ? 'External subtitles: none' : '')}
       </div>
+      {!autoplayNextEpisode && hasEnded && nextEpisode ? (
+        <div className="player-next-episode-banner">
+          <span>Episode finished. Continue to {formatEpisodeCode(nextEpisode)}.</span>
+          <Link to={`/play/${nextEpisode.id}`} className="btn btn-primary">
+            Play Next Episode
+          </Link>
+        </div>
+      ) : null}
       <div className="player-diagnostics-status">
         {diagnosticsStatus || 'Copy diagnostics after a playback issue to share what happened.'}
       </div>

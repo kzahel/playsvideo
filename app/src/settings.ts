@@ -5,6 +5,7 @@ export const THEME_PREFERENCE_KEY = 'ui-theme-preference';
 export const THEME_PREFERENCE_STORAGE_KEY = 'pv-theme-preference';
 export const RESOLVED_THEME_STORAGE_KEY = 'pv-theme';
 export const PLAYER_CONTROLS_TYPE_KEY = 'pv-controls-type';
+export const AUTOPLAY_NEXT_EPISODE_KEY = 'playback-autoplay-next-episode';
 export const AUTO_RESCAN_DETAIL_PAGES_KEY = 'scan-auto-rescan-detail-pages';
 export const EMBEDDED_SUBTITLE_POLICY_KEY = 'subtitle-embedded-policy';
 
