@@ -10,7 +10,7 @@ import type {
   MetadataInvalidateSuccess,
   MetadataRefreshLibrarySuccess,
   MetadataRefreshSeriesSeasonsSuccess,
-} from '../../../src/metadata-protocol.js';
+} from './protocol.js';
 import type { MetadataTransportStateEntry } from '../db.js';
 
 export const metadataClient: MetadataClient = {

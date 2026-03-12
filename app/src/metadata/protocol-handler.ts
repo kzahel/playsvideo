@@ -16,7 +16,7 @@ import type {
   MetadataMatchTvRequest,
   MetadataRequestEnvelope,
   MetadataResponseEnvelope,
-} from '../../../src/metadata-protocol.js';
+} from './protocol.js';
 
 export async function handleMetadataRequest(
   request: MetadataRequestEnvelope,

@@ -2,7 +2,7 @@ import { isExtension } from '../context.js';
 import type {
   MetadataRequestEnvelope,
   MetadataResponseEnvelope,
-} from '../../../src/metadata-protocol.js';
+} from './protocol.js';
 import { sendExtensionMetadataRequest } from './extension-host.js';
 import { sendWebMetadataRequest } from './web-host.js';
 

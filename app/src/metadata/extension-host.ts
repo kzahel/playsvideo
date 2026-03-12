@@ -1,8 +1,8 @@
 import type {
   MetadataRequestEnvelope,
   MetadataResponseEnvelope,
-} from '../../../src/metadata-protocol.js';
-import { isMetadataErrorResponse } from '../../../src/metadata-protocol.js';
+} from './protocol.js';
+import { isMetadataErrorResponse } from './protocol.js';
 
 export async function sendExtensionMetadataRequest<TMessage extends MetadataResponseEnvelope['message']>(
   message: MetadataRequestEnvelope['message'],

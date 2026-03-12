@@ -1,8 +1,8 @@
 import type {
   MetadataRequestEnvelope,
   MetadataResponseEnvelope,
-} from '../../../src/metadata-protocol.js';
-import { isMetadataErrorResponse } from '../../../src/metadata-protocol.js';
+} from './protocol.js';
+import { isMetadataErrorResponse } from './protocol.js';
 import { getActiveAppServiceWorker } from '../service-worker.js';
 
 export async function sendWebMetadataRequest<TMessage extends MetadataResponseEnvelope['message']>(

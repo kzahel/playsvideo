@@ -5,12 +5,12 @@ import type {
   MetadataTransportStateEntry,
   MovieMetadataEntry,
   SeriesMetadataEntry,
-} from '../app/src/db.js';
-import type { ParsedMediaMetadata } from '../app/src/media-metadata.js';
+} from '../db.js';
+import type { ParsedMediaMetadata } from '../media-metadata.js';
 import type {
   RefreshLibraryMetadataOptions,
   RefreshSeriesSeasonsOptions,
-} from '../app/src/metadata/types.js';
+} from './types.js';
 
 export type MetadataMessageId = string;
 

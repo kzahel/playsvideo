@@ -284,7 +284,10 @@ describe('metadataCoordinator', () => {
     );
 
     const first = metadataCoordinator.fetchJson('tv:yellowstone', 'https://example.test/tv/search');
-    const second = metadataCoordinator.fetchJson('tv:yellowstone', 'https://example.test/tv/search');
+    const second = metadataCoordinator.fetchJson(
+      'tv:yellowstone',
+      'https://example.test/tv/search',
+    );
 
     await flushMicrotasks();
     expect(globalThis.fetch).toHaveBeenCalledTimes(1);
