@@ -1,9 +1,11 @@
 import { db } from '../db.js';
 import type {
   LibraryEntry,
+  MetadataCredentialSlot,
   MetadataParseCacheEntry,
   MetadataSeasonCacheEntry,
   MetadataTransportStateEntry,
+  MetadataTransportKind,
   MovieMetadataEntry,
   ParsedLibraryFields,
   SeriesMetadataEntry,
@@ -136,6 +138,10 @@ export const metadataRepository = {
     await db.seriesMetadata.put(entry);
   },
 
+  async getSeriesMetadata(key: string): Promise<SeriesMetadataEntry | undefined> {
+    return db.seriesMetadata.get(key);
+  },
+
   async getMovieMetadataByKeys(keys: string[]): Promise<Map<string, MovieMetadataEntry>> {
     const entries = await db.movieMetadata.bulkGet(keys);
     return new Map(
@@ -147,6 +153,10 @@ export const metadataRepository = {
 
   async putMovieMetadata(entry: MovieMetadataEntry): Promise<void> {
     await db.movieMetadata.put(entry);
+  },
+
+  async getMovieMetadata(key: string): Promise<MovieMetadataEntry | undefined> {
+    return db.movieMetadata.get(key);
   },
 
   async getCachedImageConfig(maxAgeMs: number): Promise<CachedImageConfig | null> {
@@ -176,6 +186,41 @@ export const metadataRepository = {
 
   async putTransportState(entry: MetadataTransportStateEntry): Promise<void> {
     await db.metadataTransportState.put(entry);
+  },
+
+  async listTransportState(filters?: {
+    transport?: MetadataTransportKind;
+    credentialSlot?: MetadataCredentialSlot;
+  }): Promise<MetadataTransportStateEntry[]> {
+    const entries = await db.metadataTransportState.toArray();
+    return entries.filter((entry) => {
+      if (filters?.transport && entry.transport !== filters.transport) {
+        return false;
+      }
+      if (filters?.credentialSlot && entry.credentialSlot !== filters.credentialSlot) {
+        return false;
+      }
+      return true;
+    });
+  },
+
+  async invalidateMetadata(keys?: string[]): Promise<void> {
+    if (!keys || keys.length === 0) {
+      await Promise.all([
+        db.seriesMetadata.clear(),
+        db.movieMetadata.clear(),
+        db.metadataSeasonCache.clear(),
+        db.metadataTransportState.clear(),
+      ]);
+      return;
+    }
+
+    await Promise.all([
+      db.seriesMetadata.bulkDelete(keys),
+      db.movieMetadata.bulkDelete(keys),
+      db.metadataSeasonCache.bulkDelete(keys),
+      db.metadataTransportState.bulkDelete(keys),
+    ]);
   },
 };
 
