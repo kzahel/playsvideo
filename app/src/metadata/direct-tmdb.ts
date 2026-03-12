@@ -1,20 +1,18 @@
 import {
-  db,
-  type LibraryEntry,
   type MovieMetadataEntry,
   type SeriesMetadataEntry,
   type SeriesMetadataSearchCandidate,
 } from '../db.js';
+import type { CachedImageConfig } from './repository.js';
 import {
   buildMovieMetadataKey,
   buildSeriesMetadataKey,
   normalizeLookupText,
-  parseMediaMetadata,
 } from '../media-metadata.js';
+import { metadataRepository } from './repository.js';
 import type { MetadataClient, RefreshLibraryMetadataOptions } from './types.js';
 
 const TMDB_API_BASE_URL = 'https://api.themoviedb.org/3';
-const TMDB_CONFIG_CACHE_KEY = 'tmdb-image-config-v1';
 const CONFIG_TTL_MS = 7 * 24 * 60 * 60 * 1000;
 const RESOLVED_TTL_MS = 30 * 24 * 60 * 60 * 1000;
 const NOT_FOUND_TTL_MS = 7 * 24 * 60 * 60 * 1000;
@@ -73,14 +71,6 @@ interface TmdbConfigResponse {
   };
 }
 
-interface CachedImageConfig {
-  secureBaseUrl: string;
-  posterSize: string;
-  backdropSize: string;
-  logoSize: string;
-  fetchedAt: number;
-}
-
 interface SeriesLookupCandidate {
   key: string;
   title: string;
@@ -95,17 +85,17 @@ interface MovieLookupCandidate {
   year?: number;
 }
 
-export const TMDB_READ_ACCESS_TOKEN_KEY = 'tmdb-read-access-token';
-
 export const directTmdbMetadataClient: MetadataClient = {
   refreshLibraryMetadata,
 };
 
+export { TMDB_READ_ACCESS_TOKEN_KEY } from './repository.js';
+
 export async function refreshLibraryMetadata(
   options?: RefreshLibraryMetadataOptions,
 ): Promise<void> {
-  const entries = await backfillParsedLibraryEntries(options?.entries);
-  const token = await getTmdbReadAccessToken();
+  const entries = await metadataRepository.hydrateParsedLibraryEntries(options?.entries);
+  const token = await metadataRepository.getTmdbReadAccessToken();
   if (!token) return;
 
   const seriesCandidates = new Map<string, SeriesLookupCandidate>();
@@ -140,11 +130,8 @@ export async function refreshLibraryMetadata(
   if (seriesCandidates.size === 0 && movieCandidates.size === 0) return;
 
   if (seriesCandidates.size > 0) {
-    const existingMetadata = await db.seriesMetadata.bulkGet(Array.from(seriesCandidates.keys()));
-    const existingByKey = new Map(
-      existingMetadata
-        .filter((entry): entry is SeriesMetadataEntry => Boolean(entry))
-        .map((entry) => [entry.key, entry]),
+    const existingByKey = await metadataRepository.getSeriesMetadataByKeys(
+      Array.from(seriesCandidates.keys()),
     );
 
     for (const candidate of seriesCandidates.values()) {
@@ -154,16 +141,13 @@ export async function refreshLibraryMetadata(
       }
 
       const metadata = await lookupSeriesMetadata(candidate, token);
-      await db.seriesMetadata.put(metadata);
+      await metadataRepository.putSeriesMetadata(metadata);
     }
   }
 
   if (movieCandidates.size > 0) {
-    const existingMetadata = await db.movieMetadata.bulkGet(Array.from(movieCandidates.keys()));
-    const existingByKey = new Map(
-      existingMetadata
-        .filter((entry): entry is MovieMetadataEntry => Boolean(entry))
-        .map((entry) => [entry.key, entry]),
+    const existingByKey = await metadataRepository.getMovieMetadataByKeys(
+      Array.from(movieCandidates.keys()),
     );
 
     for (const candidate of movieCandidates.values()) {
@@ -173,38 +157,9 @@ export async function refreshLibraryMetadata(
       }
 
       const metadata = await lookupMovieMetadata(candidate, token);
-      await db.movieMetadata.put(metadata);
+      await metadataRepository.putMovieMetadata(metadata);
     }
   }
-}
-
-async function backfillParsedLibraryEntries(entries?: LibraryEntry[]): Promise<LibraryEntry[]> {
-  const source = entries ?? (await db.library.toArray());
-  const updates: LibraryEntry[] = [];
-  const hydrated = source.map((entry) => {
-    if (
-      entry.detectedMediaType &&
-      entry.parsedTitle !== undefined &&
-      (entry.detectedMediaType !== 'tv' || entry.seriesMetadataKey) &&
-      (entry.detectedMediaType !== 'movie' || entry.movieMetadataKey)
-    ) {
-      return entry;
-    }
-
-    const parsed = parseMediaMetadata(entry.path);
-    const next: LibraryEntry = {
-      ...entry,
-      ...parsed,
-    };
-    updates.push(next);
-    return next;
-  });
-
-  if (updates.length > 0) {
-    await db.library.bulkPut(updates);
-  }
-
-  return hydrated;
 }
 
 async function lookupSeriesMetadata(
@@ -373,24 +328,10 @@ async function lookupMovieMetadata(
   }
 }
 
-async function getTmdbReadAccessToken(): Promise<string | null> {
-  const envToken = import.meta.env.VITE_TMDB_READ_ACCESS_TOKEN?.trim();
-  if (envToken) {
-    return envToken;
-  }
-
-  const configured = await db.settings.get(TMDB_READ_ACCESS_TOKEN_KEY);
-  if (typeof configured?.value === 'string' && configured.value.trim()) {
-    return configured.value.trim();
-  }
-
-  return null;
-}
-
 async function getCachedImageConfig(token: string): Promise<CachedImageConfig> {
-  const cached = await db.settings.get(TMDB_CONFIG_CACHE_KEY);
-  if (isCachedImageConfig(cached?.value) && Date.now() - cached.value.fetchedAt < CONFIG_TTL_MS) {
-    return cached.value;
+  const cached = await metadataRepository.getCachedImageConfig(CONFIG_TTL_MS);
+  if (cached) {
+    return cached;
   }
 
   const response = await tmdbRequest<TmdbConfigResponse>('/configuration', token);
@@ -402,7 +343,7 @@ async function getCachedImageConfig(token: string): Promise<CachedImageConfig> {
     logoSize: chooseImageSize(images?.logo_sizes, 'w500'),
     fetchedAt: Date.now(),
   };
-  await db.settings.put({ key: TMDB_CONFIG_CACHE_KEY, value: next });
+  await metadataRepository.setCachedImageConfig(next);
   return next;
 }
 
@@ -506,18 +447,6 @@ function chooseImageSize(sizes: string[] | undefined, preferred: string): string
   if (!sizes || sizes.length === 0) return preferred;
   if (sizes.includes(preferred)) return preferred;
   return sizes.at(-1) ?? preferred;
-}
-
-function isCachedImageConfig(value: unknown): value is CachedImageConfig {
-  return Boolean(
-    value &&
-      typeof value === 'object' &&
-      'secureBaseUrl' in value &&
-      'posterSize' in value &&
-      'backdropSize' in value &&
-      'logoSize' in value &&
-      'fetchedAt' in value,
-  );
 }
 
 function isMetadataStale(entry: SeriesMetadataEntry): boolean {

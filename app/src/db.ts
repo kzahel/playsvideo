@@ -3,6 +3,9 @@ import Dexie, { type EntityTable } from 'dexie';
 export type WatchState = 'unwatched' | 'in-progress' | 'watched';
 export type DetectedMediaType = 'tv' | 'movie' | 'unknown';
 export type SeriesMetadataStatus = 'resolved' | 'not-found' | 'error';
+export type MetadataTransportKind = 'direct' | 'proxy';
+export type MetadataCredentialSlot = 'primary' | 'standby';
+export type MetadataTransportStatus = 'healthy' | 'cooldown' | 'invalid';
 
 export interface SeriesMetadataSearchCandidate {
   id: number;
@@ -94,6 +97,46 @@ export interface MovieMetadataEntry {
   debugSearchCandidates?: SeriesMetadataSearchCandidate[];
 }
 
+export type ParsedLibraryFields = Pick<
+  LibraryEntry,
+  | 'detectedMediaType'
+  | 'parsedTitle'
+  | 'parsedYear'
+  | 'seasonNumber'
+  | 'episodeNumber'
+  | 'endingEpisodeNumber'
+  | 'seriesMetadataKey'
+  | 'movieMetadataKey'
+>;
+
+export interface MetadataParseCacheEntry {
+  key: string;
+  path: string;
+  lastModified: number;
+  parsedAt: number;
+  parsed: ParsedLibraryFields;
+}
+
+export interface MetadataSeasonCacheEntry {
+  key: string;
+  tmdbSeriesId: number;
+  seasonNumber: number;
+  fetchedAt: number;
+  status: SeriesMetadataStatus;
+  payload?: unknown;
+  debugError?: string;
+}
+
+export interface MetadataTransportStateEntry {
+  key: string;
+  transport: MetadataTransportKind;
+  credentialSlot?: MetadataCredentialSlot;
+  status: MetadataTransportStatus;
+  cooldownUntil?: number;
+  lastError?: string;
+  updatedAt: number;
+}
+
 class PlaysVideoDB extends Dexie {
   library!: EntityTable<LibraryEntry, 'id'>;
   directories!: EntityTable<DirectoryEntry, 'id'>;
@@ -101,6 +144,9 @@ class PlaysVideoDB extends Dexie {
   settings!: EntityTable<SettingEntry, 'key'>;
   seriesMetadata!: EntityTable<SeriesMetadataEntry, 'key'>;
   movieMetadata!: EntityTable<MovieMetadataEntry, 'key'>;
+  metadataParseCache!: EntityTable<MetadataParseCacheEntry, 'key'>;
+  metadataSeasonCache!: EntityTable<MetadataSeasonCacheEntry, 'key'>;
+  metadataTransportState!: EntityTable<MetadataTransportStateEntry, 'key'>;
 
   constructor() {
     super('playsvideo');
@@ -126,6 +172,18 @@ class PlaysVideoDB extends Dexie {
       settings: 'key',
       seriesMetadata: 'key, tmdbId, fetchedAt, query',
       movieMetadata: 'key, tmdbId, fetchedAt, query',
+    });
+    this.version(4).stores({
+      library:
+        '++id, directoryId, path, name, watchState, addedAt, detectedMediaType, parsedTitle, seriesMetadataKey, movieMetadataKey',
+      directories: '++id, name',
+      playlists: '++id, name',
+      settings: 'key',
+      seriesMetadata: 'key, tmdbId, fetchedAt, query',
+      movieMetadata: 'key, tmdbId, fetchedAt, query',
+      metadataParseCache: 'key, path, lastModified, parsedAt',
+      metadataSeasonCache: 'key, tmdbSeriesId, seasonNumber, fetchedAt, status',
+      metadataTransportState: 'key, transport, credentialSlot, status, cooldownUntil, updatedAt',
     });
   }
 }
