@@ -235,10 +235,19 @@ export const metadataRepository = {
       return;
     }
 
+    const seasonKeys = new Set(keys);
+    const relatedSeasonEntries = await db.metadataSeasonCache
+      .where('seriesMetadataKey')
+      .anyOf(keys)
+      .toArray();
+    for (const entry of relatedSeasonEntries) {
+      seasonKeys.add(entry.key);
+    }
+
     await Promise.all([
       db.seriesMetadata.bulkDelete(keys),
       db.movieMetadata.bulkDelete(keys),
-      db.metadataSeasonCache.bulkDelete(keys),
+      db.metadataSeasonCache.bulkDelete([...seasonKeys]),
       db.metadataTransportState.bulkDelete(keys),
     ]);
   },

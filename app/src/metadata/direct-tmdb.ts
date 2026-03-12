@@ -19,6 +19,7 @@ import type {
   RefreshLibraryMetadataOptions,
   RefreshSeriesSeasonsOptions,
 } from './types.js';
+import { buildSeasonMetadataCacheKey } from './types.js';
 
 const TMDB_API_BASE_URL = 'https://api.themoviedb.org/3';
 const CONFIG_TTL_MS = 7 * 24 * 60 * 60 * 1000;
@@ -611,10 +612,6 @@ function toSeasonPayload(
     episodeCount: episodes.length,
     episodes,
   };
-}
-
-function buildSeasonMetadataCacheKey(seriesKey: string, seasonNumber: number): string {
-  return `tv-season:${seriesKey}:${seasonNumber}`;
 }
 
 function needsSeasonSummaryRefresh(entry: SeriesMetadataEntry): boolean {

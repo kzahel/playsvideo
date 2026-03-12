@@ -10,6 +10,10 @@ export interface RefreshSeriesSeasonsOptions {
   force?: boolean;
 }
 
+export function buildSeasonMetadataCacheKey(seriesKey: string, seasonNumber: number): string {
+  return `tv-season:${seriesKey}:${seasonNumber}`;
+}
+
 export interface MetadataClient {
   refreshLibraryMetadata(options?: RefreshLibraryMetadataOptions): Promise<void>;
   refreshSeriesSeasons(options: RefreshSeriesSeasonsOptions): Promise<void>;

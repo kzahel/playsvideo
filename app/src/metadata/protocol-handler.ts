@@ -42,6 +42,15 @@ export async function handleMetadataRequest(
         },
       };
 
+    case 'metadata:refresh-series-seasons':
+      await directTmdbMetadataClient.refreshSeriesSeasons(message.options);
+      return {
+        id,
+        message: {
+          type: 'metadata:refresh-series-seasons:success',
+        },
+      };
+
     case 'metadata:match-tv':
     case 'metadata:get-series':
       return handleSeriesLookup(id, message);

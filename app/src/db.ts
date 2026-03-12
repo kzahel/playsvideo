@@ -15,6 +15,37 @@ export interface SeriesMetadataSearchCandidate {
   score: number;
 }
 
+export interface SeriesMetadataSeasonSummary {
+  seasonNumber: number;
+  name: string;
+  episodeCount: number;
+  airDate?: string;
+  overview?: string;
+  posterUrl?: string;
+}
+
+export interface SeasonMetadataEpisode {
+  episodeNumber: number;
+  name: string;
+  airDate?: string;
+  overview?: string;
+  runtimeMinutes?: number;
+  episodeType?: string;
+  stillUrl?: string;
+}
+
+export interface SeasonMetadataPayload {
+  id: number;
+  tmdbSeriesId: number;
+  seasonNumber: number;
+  name: string;
+  airDate?: string;
+  overview?: string;
+  posterUrl?: string;
+  episodeCount: number;
+  episodes: SeasonMetadataEpisode[];
+}
+
 export interface LibraryEntry {
   id: number;
   directoryId: number;
@@ -71,6 +102,9 @@ export interface SeriesMetadataEntry {
   posterUrl?: string;
   backdropUrl?: string;
   logoUrl?: string;
+  seasonCount?: number;
+  episodeCount?: number;
+  seasons?: SeriesMetadataSeasonSummary[];
   debugSelectedScore?: number;
   debugReason?: string;
   debugError?: string;
@@ -119,11 +153,12 @@ export interface MetadataParseCacheEntry {
 
 export interface MetadataSeasonCacheEntry {
   key: string;
+  seriesMetadataKey?: string;
   tmdbSeriesId: number;
   seasonNumber: number;
   fetchedAt: number;
   status: SeriesMetadataStatus;
-  payload?: unknown;
+  payload?: SeasonMetadataPayload;
   debugError?: string;
 }
 
@@ -183,6 +218,18 @@ class PlaysVideoDB extends Dexie {
       movieMetadata: 'key, tmdbId, fetchedAt, query',
       metadataParseCache: 'key, path, lastModified, parsedAt',
       metadataSeasonCache: 'key, tmdbSeriesId, seasonNumber, fetchedAt, status',
+      metadataTransportState: 'key, transport, credentialSlot, status, cooldownUntil, updatedAt',
+    });
+    this.version(5).stores({
+      library:
+        '++id, directoryId, path, name, watchState, addedAt, detectedMediaType, parsedTitle, seriesMetadataKey, movieMetadataKey',
+      directories: '++id, name',
+      playlists: '++id, name',
+      settings: 'key',
+      seriesMetadata: 'key, tmdbId, fetchedAt, query',
+      movieMetadata: 'key, tmdbId, fetchedAt, query',
+      metadataParseCache: 'key, path, lastModified, parsedAt',
+      metadataSeasonCache: 'key, seriesMetadataKey, tmdbSeriesId, seasonNumber, fetchedAt, status',
       metadataTransportState: 'key, transport, credentialSlot, status, cooldownUntil, updatedAt',
     });
   }

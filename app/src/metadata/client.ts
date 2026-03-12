@@ -45,7 +45,7 @@ export const metadataClient: MetadataClient = {
 };
 
 export { TMDB_READ_ACCESS_TOKEN_KEY };
-export type { MetadataClient, RefreshLibraryMetadataOptions };
+export type { MetadataClient, RefreshLibraryMetadataOptions, RefreshSeriesSeasonsOptions };
 
 export function refreshLibraryMetadata(options?: RefreshLibraryMetadataOptions): Promise<void> {
   return metadataClient.refreshLibraryMetadata(options);

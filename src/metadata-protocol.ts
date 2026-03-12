@@ -7,7 +7,10 @@ import type {
   SeriesMetadataEntry,
 } from '../app/src/db.js';
 import type { ParsedMediaMetadata } from '../app/src/media-metadata.js';
-import type { RefreshLibraryMetadataOptions } from '../app/src/metadata/types.js';
+import type {
+  RefreshLibraryMetadataOptions,
+  RefreshSeriesSeasonsOptions,
+} from '../app/src/metadata/types.js';
 
 export type MetadataMessageId = string;
 
@@ -24,6 +27,11 @@ export interface MetadataParseFilenameRequest {
 export interface MetadataRefreshLibraryRequest {
   type: 'metadata:refresh-library';
   options?: RefreshLibraryMetadataOptions;
+}
+
+export interface MetadataRefreshSeriesSeasonsRequest {
+  type: 'metadata:refresh-series-seasons';
+  options: RefreshSeriesSeasonsOptions;
 }
 
 export interface MetadataMatchTvRequest {
@@ -65,6 +73,7 @@ export interface MetadataInvalidateRequest {
 export type MetadataRequestMessage =
   | MetadataParseFilenameRequest
   | MetadataRefreshLibraryRequest
+  | MetadataRefreshSeriesSeasonsRequest
   | MetadataMatchTvRequest
   | MetadataMatchMovieRequest
   | MetadataGetSeriesRequest
@@ -82,6 +91,10 @@ export interface MetadataParseFilenameSuccess {
 
 export interface MetadataRefreshLibrarySuccess {
   type: 'metadata:refresh-library:success';
+}
+
+export interface MetadataRefreshSeriesSeasonsSuccess {
+  type: 'metadata:refresh-series-seasons:success';
 }
 
 export interface MetadataMatchTvSuccess {
@@ -134,6 +147,7 @@ export interface MetadataErrorResponse {
 export type MetadataResponseMessage =
   | MetadataParseFilenameSuccess
   | MetadataRefreshLibrarySuccess
+  | MetadataRefreshSeriesSeasonsSuccess
   | MetadataMatchTvSuccess
   | MetadataMatchMovieSuccess
   | MetadataGetSeriesSuccess
