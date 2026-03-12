@@ -389,6 +389,12 @@ body {
   margin-bottom: 0.5rem;
 }
 
+.page-toolbar-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.75rem;
+}
+
 .page-toolbar-status {
   color: var(--muted);
   font-size: 0.9rem;
@@ -542,8 +548,21 @@ body {
   margin-top: 1.5rem;
 }
 
-.season-section h2 {
+.season-heading {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 1rem;
   margin-bottom: 0.75rem;
+}
+
+.season-section h2 {
+  margin-bottom: 0;
+}
+
+.season-count {
+  color: var(--muted);
+  font-size: 0.85rem;
 }
 
 .episode-list {
@@ -568,6 +587,20 @@ body {
   border-color: var(--accent);
 }
 
+.episode-row-missing {
+  background: rgba(128, 128, 128, 0.03);
+  border-color: rgba(128, 128, 128, 0.12);
+  color: var(--muted);
+}
+
+.episode-row-missing:hover {
+  border-color: rgba(128, 128, 128, 0.12);
+}
+
+.episode-row-missing .episode-code {
+  color: var(--muted);
+}
+
 .episode-code {
   color: var(--accent);
   font-weight: 600;
@@ -583,6 +616,12 @@ body {
   display: grid;
   gap: 0.45rem;
   min-width: 0;
+}
+
+.episode-file-meta,
+.episode-file-state {
+  color: var(--muted);
+  font-size: 0.8rem;
 }
 
 .episode-watch-badge {
@@ -630,6 +669,10 @@ body {
 }
 
 @media (max-width: 720px) {
+  .page-toolbar {
+    align-items: flex-start;
+  }
+
   .detail-hero {
     grid-template-columns: 1fr;
   }

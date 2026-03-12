@@ -23,14 +23,16 @@ type MediaBrowserMode = 'all' | 'shows' | 'movies';
 function MediaBrowserContent({ mode }: { mode: MediaBrowserMode }) {
   const entries = useLiveQuery(() => db.library.toArray());
   const seriesMetadata = useLiveQuery(() => db.seriesMetadata.toArray());
+  const movieMetadata = useLiveQuery(() => db.movieMetadata.toArray());
 
-  if (entries === undefined || seriesMetadata === undefined) {
+  if (entries === undefined || seriesMetadata === undefined || movieMetadata === undefined) {
     return <div className="empty-state">Loading...</div>;
   }
 
   const metadataByKey = new Map(seriesMetadata.map((entry) => [entry.key, entry]));
+  const movieMetadataByKey = new Map(movieMetadata.map((entry) => [entry.key, entry]));
   const tvShows = groupTvShows(entries, metadataByKey);
-  const movies = groupMovies(entries);
+  const movies = groupMovies(entries, movieMetadataByKey);
 
   return (
     <div className="media-browser-page">
@@ -95,29 +97,38 @@ function MediaBrowserContent({ mode }: { mode: MediaBrowserMode }) {
             <div className="empty-state">No movies detected yet.</div>
           ) : (
             <div className="media-grid">
-              {movies.map((movie) => (
-                <Link
-                  key={movie.id}
-                  to={`/movie/${encodeURIComponent(movie.slug)}`}
-                  className="media-card media-card-poster"
-                >
-                  <div className="media-card-art">
-                    <div className="media-card-fallback">{buildFallbackLabel(movie.title)}</div>
-                  </div>
-                  <div className="media-card-body">
-                    <div className="media-card-title">{movie.title}</div>
-                    <div className="media-card-meta">
-                      {movie.year ?? 'Unknown year'} · {movie.entries.length} file
-                      {movie.entries.length === 1 ? '' : 's'}
+              {movies.map((movie) => {
+                const imageUrl = movie.movieMetadata?.posterUrl ?? movie.movieMetadata?.backdropUrl;
+                const year = formatYear(movie.movieMetadata?.releaseDate ?? movie.year);
+                return (
+                  <Link
+                    key={movie.id}
+                    to={`/movie/${encodeURIComponent(movie.slug)}`}
+                    className="media-card media-card-poster"
+                  >
+                    <div className="media-card-art">
+                      {imageUrl ? (
+                        <img src={imageUrl} alt={movie.title} loading="lazy" />
+                      ) : (
+                        <div className="media-card-fallback">{buildFallbackLabel(movie.title)}</div>
+                      )}
                     </div>
-                    <div className="media-card-overview">
-                      {movie.entries.length === 1
-                        ? movie.entries[0].name
-                        : movie.entries.map((entry) => entry.name).join(' · ')}
+                    <div className="media-card-body">
+                      <div className="media-card-title">{movie.title}</div>
+                      <div className="media-card-meta">
+                        {year ?? 'Unknown year'} · {movie.entries.length} file
+                        {movie.entries.length === 1 ? '' : 's'}
+                      </div>
+                      <div className="media-card-overview">
+                        {movie.movieMetadata?.overview ||
+                          (movie.entries.length === 1
+                            ? movie.entries[0].name
+                            : movie.entries.map((entry) => entry.name).join(' · '))}
+                      </div>
                     </div>
-                  </div>
-                </Link>
-              ))}
+                  </Link>
+                );
+              })}
             </div>
           )}
         </section>

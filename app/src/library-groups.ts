@@ -1,4 +1,4 @@
-import type { LibraryEntry, SeriesMetadataEntry } from './db.js';
+import type { LibraryEntry, MovieMetadataEntry, SeriesMetadataEntry } from './db.js';
 import { normalizeLookupText } from './media-metadata.js';
 
 export interface TvShowGroup {
@@ -16,6 +16,7 @@ export interface MovieGroup {
   title: string;
   year?: number;
   entries: LibraryEntry[];
+  movieMetadata?: MovieMetadataEntry;
 }
 
 export function buildMovieGroupKey(title: string, year?: number): string {
@@ -59,7 +60,10 @@ export function groupTvShows(
     .sort(compareGroupTitles);
 }
 
-export function groupMovies(entries: LibraryEntry[]): MovieGroup[] {
+export function groupMovies(
+  entries: LibraryEntry[],
+  metadataByKey: Map<string, MovieMetadataEntry>,
+): MovieGroup[] {
   const groups = new Map<string, MovieGroup>();
 
   for (const entry of entries) {
@@ -80,6 +84,7 @@ export function groupMovies(entries: LibraryEntry[]): MovieGroup[] {
       title: entry.parsedTitle,
       year: entry.parsedYear,
       entries: [entry],
+      movieMetadata: entry.movieMetadataKey ? metadataByKey.get(entry.movieMetadataKey) : undefined,
     });
   }
 
@@ -87,6 +92,7 @@ export function groupMovies(entries: LibraryEntry[]): MovieGroup[] {
     .map((group) => ({
       ...group,
       entries: [...group.entries].sort((left, right) => left.name.localeCompare(right.name)),
+      title: group.movieMetadata?.title ?? group.title,
       slug: buildMovieSlug(group),
     }))
     .sort(compareGroupTitles);
@@ -100,8 +106,8 @@ export function buildTvShowSlug(group: Pick<TvShowGroup, 'title' | 'year' | 'ser
   return group.year != null ? `${titleSlug}-${group.year}` : titleSlug;
 }
 
-export function buildMovieSlug(group: Pick<MovieGroup, 'title' | 'year'>): string {
-  const titleSlug = slugify(group.title);
+export function buildMovieSlug(group: Pick<MovieGroup, 'title' | 'year' | 'movieMetadata'>): string {
+  const titleSlug = slugify(group.movieMetadata?.title ?? group.title);
   return group.year != null ? `${titleSlug}-${group.year}` : titleSlug;
 }
 

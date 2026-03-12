@@ -1,7 +1,10 @@
 import {
+  type MetadataSeasonCacheEntry,
   type MovieMetadataEntry,
+  type SeasonMetadataPayload,
   type SeriesMetadataEntry,
   type SeriesMetadataSearchCandidate,
+  type SeriesMetadataSeasonSummary,
 } from '../db.js';
 import type { CachedImageConfig } from './repository.js';
 import {
@@ -11,7 +14,11 @@ import {
 } from '../media-metadata.js';
 import { metadataCoordinator } from './coordinator.js';
 import { metadataRepository } from './repository.js';
-import type { MetadataClient, RefreshLibraryMetadataOptions } from './types.js';
+import type {
+  MetadataClient,
+  RefreshLibraryMetadataOptions,
+  RefreshSeriesSeasonsOptions,
+} from './types.js';
 
 const TMDB_API_BASE_URL = 'https://api.themoviedb.org/3';
 const CONFIG_TTL_MS = 7 * 24 * 60 * 60 * 1000;
@@ -45,12 +52,40 @@ interface TmdbTvDetails {
   name: string;
   original_name?: string;
   first_air_date?: string;
+  number_of_seasons?: number;
+  number_of_episodes?: number;
   overview?: string;
   poster_path?: string;
   backdrop_path?: string;
+  seasons?: Array<{
+    season_number: number;
+    name: string;
+    episode_count?: number;
+    air_date?: string;
+    overview?: string;
+    poster_path?: string;
+  }>;
   images?: {
     logos?: TmdbImageAsset[];
   };
+}
+
+interface TmdbSeasonDetails {
+  id: number;
+  name: string;
+  air_date?: string;
+  overview?: string;
+  poster_path?: string;
+  season_number: number;
+  episodes?: Array<{
+    episode_number: number;
+    name: string;
+    air_date?: string;
+    overview?: string;
+    runtime?: number;
+    episode_type?: string;
+    still_path?: string;
+  }>;
 }
 
 interface TmdbMovieDetails {
@@ -88,6 +123,13 @@ interface MovieLookupCandidate {
 
 export const directTmdbMetadataClient: MetadataClient = {
   refreshLibraryMetadata,
+  refreshSeriesSeasons,
+  getTransportState() {
+    return metadataRepository.listTransportState({ transport: 'direct' });
+  },
+  invalidateMetadata(keys?: string[]): Promise<void> {
+    return metadataRepository.invalidateMetadata(keys);
+  },
 };
 
 export { TMDB_READ_ACCESS_TOKEN_KEY } from './repository.js';
@@ -163,6 +205,50 @@ export async function refreshLibraryMetadata(
   }
 }
 
+export async function refreshSeriesSeasons(
+  options: RefreshSeriesSeasonsOptions,
+): Promise<void> {
+  let series = await metadataRepository.getSeriesMetadata(options.seriesKey);
+  if (!series) {
+    return;
+  }
+
+  if (series.status !== 'resolved') {
+    if (!options.force && !isMetadataStale(series)) {
+      return;
+    }
+
+    series = await refreshSeriesMetadataEntry(series);
+    await metadataRepository.putSeriesMetadata(series);
+    if (series.status !== 'resolved') {
+      return;
+    }
+  } else if (options.force || needsSeasonSummaryRefresh(series)) {
+    series = await refreshSeriesMetadataEntry(series);
+    await metadataRepository.putSeriesMetadata(series);
+    if (series.status !== 'resolved') {
+      return;
+    }
+  }
+
+  const seasonSummaries = series.seasons ?? [];
+  if (seasonSummaries.length === 0 || series.tmdbId == null) {
+    return;
+  }
+
+  const imageConfig = await getCachedImageConfig();
+  for (const season of seasonSummaries) {
+    const cacheKey = buildSeasonMetadataCacheKey(series.key, season.seasonNumber);
+    const existing = await metadataRepository.getSeasonCache(cacheKey);
+    if (!options.force && existing && !isSeasonMetadataStale(existing)) {
+      continue;
+    }
+
+    const refreshed = await lookupSeasonMetadata(series, season.seasonNumber, imageConfig);
+    await metadataRepository.putSeasonCache(refreshed);
+  }
+}
+
 async function lookupSeriesMetadata(
   candidate: SeriesLookupCandidate,
 ): Promise<SeriesMetadataEntry> {
@@ -229,6 +315,9 @@ async function lookupSeriesMetadata(
         details.backdrop_path,
       ),
       logoUrl: buildImageUrl(imageConfig.secureBaseUrl, imageConfig.logoSize, logoAsset?.file_path),
+      seasonCount: details.number_of_seasons,
+      episodeCount: details.number_of_episodes,
+      seasons: buildSeasonSummaries(details, imageConfig),
       debugSelectedScore: Math.round(best.score * 10) / 10,
       debugReason: `Matched candidate above threshold 55`,
       debugSearchCandidates: debugCandidates,
@@ -242,6 +331,50 @@ async function lookupSeriesMetadata(
       fetchedAt: Date.now(),
       status: 'error',
       debugReason: 'TMDB request failed',
+      debugError: error instanceof Error ? error.message : String(error),
+    };
+  }
+}
+
+async function lookupSeasonMetadata(
+  series: SeriesMetadataEntry,
+  seasonNumber: number,
+  imageConfig: CachedImageConfig,
+): Promise<MetadataSeasonCacheEntry> {
+  if (series.tmdbId == null) {
+    return {
+      key: buildSeasonMetadataCacheKey(series.key, seasonNumber),
+      seriesMetadataKey: series.key,
+      tmdbSeriesId: -1,
+      seasonNumber,
+      fetchedAt: Date.now(),
+      status: 'error',
+      debugError: 'TMDB series id is unavailable',
+    };
+  }
+
+  try {
+    const details = await tmdbRequest<TmdbSeasonDetails>(`/tv/${series.tmdbId}/season/${seasonNumber}`, {
+      language: 'en-US',
+    });
+
+    return {
+      key: buildSeasonMetadataCacheKey(series.key, seasonNumber),
+      seriesMetadataKey: series.key,
+      tmdbSeriesId: series.tmdbId,
+      seasonNumber,
+      fetchedAt: Date.now(),
+      status: 'resolved',
+      payload: toSeasonPayload(series.tmdbId, details, imageConfig),
+    };
+  } catch (error) {
+    return {
+      key: buildSeasonMetadataCacheKey(series.key, seasonNumber),
+      seriesMetadataKey: series.key,
+      tmdbSeriesId: series.tmdbId,
+      seasonNumber,
+      fetchedAt: Date.now(),
+      status: 'error',
       debugError: error instanceof Error ? error.message : String(error),
     };
   }
@@ -432,6 +565,71 @@ function buildImageUrl(baseUrl: string, size: string, path?: string): string | u
   return `${baseUrl}${size}${path}`;
 }
 
+function buildSeasonSummaries(
+  details: TmdbTvDetails,
+  imageConfig: CachedImageConfig,
+): SeriesMetadataSeasonSummary[] {
+  return (details.seasons ?? [])
+    .filter((season) => Number.isFinite(season.season_number) && season.season_number >= 0)
+    .map((season) => ({
+      seasonNumber: season.season_number,
+      name: season.name,
+      episodeCount: season.episode_count ?? 0,
+      airDate: season.air_date,
+      overview: season.overview,
+      posterUrl: buildImageUrl(imageConfig.secureBaseUrl, imageConfig.posterSize, season.poster_path),
+    }))
+    .sort((left, right) => left.seasonNumber - right.seasonNumber);
+}
+
+function toSeasonPayload(
+  tmdbSeriesId: number,
+  details: TmdbSeasonDetails,
+  imageConfig: CachedImageConfig,
+): SeasonMetadataPayload {
+  const episodes = (details.episodes ?? [])
+    .filter((episode) => Number.isFinite(episode.episode_number) && episode.episode_number > 0)
+    .map((episode) => ({
+      episodeNumber: episode.episode_number,
+      name: episode.name,
+      airDate: episode.air_date,
+      overview: episode.overview,
+      runtimeMinutes: episode.runtime,
+      episodeType: episode.episode_type,
+      stillUrl: buildImageUrl(imageConfig.secureBaseUrl, imageConfig.backdropSize, episode.still_path),
+    }))
+    .sort((left, right) => left.episodeNumber - right.episodeNumber);
+
+  return {
+    id: details.id,
+    tmdbSeriesId,
+    seasonNumber: details.season_number,
+    name: details.name,
+    airDate: details.air_date,
+    overview: details.overview,
+    posterUrl: buildImageUrl(imageConfig.secureBaseUrl, imageConfig.posterSize, details.poster_path),
+    episodeCount: episodes.length,
+    episodes,
+  };
+}
+
+function buildSeasonMetadataCacheKey(seriesKey: string, seasonNumber: number): string {
+  return `tv-season:${seriesKey}:${seasonNumber}`;
+}
+
+function needsSeasonSummaryRefresh(entry: SeriesMetadataEntry): boolean {
+  return entry.status === 'resolved' && (!entry.seasons || entry.seasons.length === 0);
+}
+
+async function refreshSeriesMetadataEntry(entry: SeriesMetadataEntry): Promise<SeriesMetadataEntry> {
+  return lookupSeriesMetadata({
+    key: entry.key,
+    title: entry.query || entry.name || '',
+    normalizedTitle: entry.normalizedQuery || normalizeLookupText(entry.query || entry.name || ''),
+    year: entry.year,
+  });
+}
+
 function chooseImageSize(sizes: string[] | undefined, preferred: string): string {
   if (!sizes || sizes.length === 0) return preferred;
   if (sizes.includes(preferred)) return preferred;
@@ -439,6 +637,13 @@ function chooseImageSize(sizes: string[] | undefined, preferred: string): string
 }
 
 function isMetadataStale(entry: SeriesMetadataEntry): boolean {
+  const age = Date.now() - entry.fetchedAt;
+  if (entry.status === 'resolved') return age > RESOLVED_TTL_MS;
+  if (entry.status === 'not-found') return age > NOT_FOUND_TTL_MS;
+  return age > ERROR_TTL_MS;
+}
+
+function isSeasonMetadataStale(entry: MetadataSeasonCacheEntry): boolean {
   const age = Date.now() - entry.fetchedAt;
   if (entry.status === 'resolved') return age > RESOLVED_TTL_MS;
   if (entry.status === 'not-found') return age > NOT_FOUND_TTL_MS;
