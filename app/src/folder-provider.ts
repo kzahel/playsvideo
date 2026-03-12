@@ -35,8 +35,11 @@ export interface FolderResult {
   files: ScannedFile[];
 }
 
+export type FolderRescanAccessState = 'ready' | 'needs-user-gesture' | 'unavailable';
+
 export interface FolderProvider {
   readonly requiresPermissionGrant: boolean;
+  getRescanAccessState(): Promise<FolderRescanAccessState>;
   hasLiveAccess(): boolean;
   pickFolder(): Promise<FolderResult>;
   getFile(entry: LibraryEntry): Promise<File>;
@@ -87,6 +90,26 @@ async function collectFiles(handle: FileSystemDirectoryHandle): Promise<ScannedF
 
 class FsAccessProvider implements FolderProvider {
   readonly requiresPermissionGrant = true;
+
+  async getRescanAccessState(): Promise<FolderRescanAccessState> {
+    const directories = await db.directories.toArray();
+    if (directories.length === 0) {
+      return 'unavailable';
+    }
+
+    for (const directory of directories) {
+      if (!directory.handle) {
+        return 'unavailable';
+      }
+
+      const status = await directory.handle.queryPermission({ mode: 'read' });
+      if (status !== 'granted') {
+        return 'needs-user-gesture';
+      }
+    }
+
+    return 'ready';
+  }
 
   hasLiveAccess(): boolean {
     return true; // handles persist in IDB across refreshes
@@ -164,6 +187,15 @@ function triggerWebkitDirectoryPicker(): Promise<File[]> {
 class WebkitDirectoryProvider implements FolderProvider {
   readonly requiresPermissionGrant = false;
   private fileMap = new Map<string, File>();
+
+  async getRescanAccessState(): Promise<FolderRescanAccessState> {
+    const directories = await db.directories.toArray();
+    if (directories.length === 0) {
+      return 'unavailable';
+    }
+
+    return this.hasLiveAccess() ? 'ready' : 'needs-user-gesture';
+  }
 
   hasLiveAccess(): boolean {
     return this.fileMap.size > 0;
