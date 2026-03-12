@@ -1,14 +1,16 @@
 import { Link, useParams } from 'react-router-dom';
 import { useLiveQuery } from 'dexie-react-hooks';
 import { db } from '../db.js';
+import { useFilesystemRescan } from '../hooks/useFilesystemRescan.js';
 import { groupMovies } from '../library-groups.js';
 
 export function Movie() {
   const { movieId } = useParams<{ movieId: string }>();
   const decodedId = decodeURIComponent(movieId ?? '');
   const entries = useLiveQuery(() => db.library.toArray());
+  const filesystemRescan = useFilesystemRescan({ autoOnMount: true, autoKey: decodedId });
 
-  if (entries === undefined) {
+  if (entries === undefined || !filesystemRescan.directoriesReady) {
     return <div className="empty-state">Loading...</div>;
   }
 
@@ -17,21 +19,56 @@ export function Movie() {
   );
 
   if (!movie) {
+    const waitingForRescan = filesystemRescan.willAutoRescan || filesystemRescan.isAutoRescanning;
     return (
       <div className="detail-page">
-        <Link to="/movies" className="player-back">
-          &larr; Back to Movies
-        </Link>
-        <p>Movie not found.</p>
+        <div className="page-toolbar">
+          <Link to="/movies" className="player-back">
+            &larr; Back to Movies
+          </Link>
+          {filesystemRescan.showManualButton ? (
+            <button
+              type="button"
+              className="btn btn-secondary"
+              onClick={() => void filesystemRescan.rescan()}
+              disabled={filesystemRescan.isRescanning}
+            >
+              {filesystemRescan.isRescanning ? 'Rescanning...' : filesystemRescan.buttonLabel}
+            </button>
+          ) : null}
+        </div>
+        {filesystemRescan.statusMessage ? (
+          <div className="page-toolbar-status" aria-live="polite">
+            {filesystemRescan.statusMessage}
+          </div>
+        ) : null}
+        <p>{waitingForRescan ? 'Refreshing files...' : 'Movie not found.'}</p>
       </div>
     );
   }
 
   return (
     <div className="detail-page">
-      <Link to="/movies" className="player-back">
-        &larr; Back to Movies
-      </Link>
+      <div className="page-toolbar">
+        <Link to="/movies" className="player-back">
+          &larr; Back to Movies
+        </Link>
+        {filesystemRescan.showManualButton ? (
+          <button
+            type="button"
+            className="btn btn-secondary"
+            onClick={() => void filesystemRescan.rescan()}
+            disabled={filesystemRescan.isRescanning}
+          >
+            {filesystemRescan.isRescanning ? 'Rescanning...' : filesystemRescan.buttonLabel}
+          </button>
+        ) : null}
+      </div>
+      {filesystemRescan.statusMessage ? (
+        <div className="page-toolbar-status" aria-live="polite">
+          {filesystemRescan.statusMessage}
+        </div>
+      ) : null}
       <div className="detail-hero">
         <div className="detail-poster detail-poster-fallback">
           {movie.title

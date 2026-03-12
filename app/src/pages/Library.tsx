@@ -4,7 +4,8 @@ import { LibraryEntryCard } from '../components/LibraryEntry.js';
 import { FolderPicker } from '../components/FolderPicker.js';
 import { MetadataSettings, SHOW_METADATA_DEBUG_KEY } from '../components/MetadataSettings.js';
 import { useSetting } from '../hooks/useSetting.js';
-import { rescanFolder, rescanAllFolders, removeFolder } from '../scan.js';
+import { useFilesystemRescan } from '../hooks/useFilesystemRescan.js';
+import { removeFolder } from '../scan.js';
 import { folderProvider } from '../folder-provider.js';
 import { isExtension } from '../context.js';
 
@@ -13,22 +14,7 @@ export function Library() {
   const directories = useLiveQuery(() => db.directories.toArray());
   const seriesMetadata = useLiveQuery(() => db.seriesMetadata.toArray());
   const [showMetadataDebug] = useSetting<boolean>(SHOW_METADATA_DEBUG_KEY, false);
-
-  const handleRescan = async () => {
-    try {
-      await rescanFolder();
-    } catch (err) {
-      console.error('Failed to rescan:', err);
-    }
-  };
-
-  const handleRescanAll = async () => {
-    try {
-      await rescanAllFolders();
-    } catch (err) {
-      console.error('Failed to rescan:', err);
-    }
-  };
+  const filesystemRescan = useFilesystemRescan();
 
   const handleRemoveFolder = async (directoryId: number) => {
     try {
@@ -52,17 +38,22 @@ export function Library() {
     <div>
       <div className="library-header">
         <FolderPicker />
-        {hasDirectories && !multiFolder && (
-          <button type="button" className="btn btn-secondary" onClick={handleRescan}>
-            Rescan
-          </button>
-        )}
-        {hasDirectories && multiFolder && (
-          <button type="button" className="btn btn-secondary" onClick={handleRescanAll}>
-            Rescan All
+        {filesystemRescan.showManualButton && (
+          <button
+            type="button"
+            className="btn btn-secondary"
+            onClick={() => void filesystemRescan.rescan()}
+            disabled={filesystemRescan.isRescanning}
+          >
+            {filesystemRescan.isRescanning ? 'Rescanning...' : filesystemRescan.buttonLabel}
           </button>
         )}
       </div>
+      {filesystemRescan.statusMessage ? (
+        <div className="page-toolbar-status" aria-live="polite">
+          {filesystemRescan.statusMessage}
+        </div>
+      ) : null}
 
       <MetadataSettings hasEntries={entries.length > 0} />
 

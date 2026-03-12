@@ -1,6 +1,7 @@
 import { Link, useParams } from 'react-router-dom';
 import { useLiveQuery } from 'dexie-react-hooks';
 import { db, type LibraryEntry } from '../db.js';
+import { useFilesystemRescan } from '../hooks/useFilesystemRescan.js';
 import { groupTvShows } from '../library-groups.js';
 
 function seasonLabel(seasonNumber?: number): string {
@@ -36,8 +37,9 @@ export function TvShow() {
   const decodedId = decodeURIComponent(showId ?? '');
   const entries = useLiveQuery(() => db.library.toArray());
   const seriesMetadata = useLiveQuery(() => db.seriesMetadata.toArray());
+  const filesystemRescan = useFilesystemRescan({ autoOnMount: true, autoKey: decodedId });
 
-  if (entries === undefined || seriesMetadata === undefined) {
+  if (entries === undefined || seriesMetadata === undefined || !filesystemRescan.directoriesReady) {
     return <div className="empty-state">Loading...</div>;
   }
 
@@ -47,12 +49,30 @@ export function TvShow() {
   );
 
   if (!show) {
+    const waitingForRescan = filesystemRescan.willAutoRescan || filesystemRescan.isAutoRescanning;
     return (
       <div className="detail-page">
-        <Link to="/shows" className="player-back">
-          &larr; Back to Shows
-        </Link>
-        <p>Show not found.</p>
+        <div className="page-toolbar">
+          <Link to="/shows" className="player-back">
+            &larr; Back to Shows
+          </Link>
+          {filesystemRescan.showManualButton ? (
+            <button
+              type="button"
+              className="btn btn-secondary"
+              onClick={() => void filesystemRescan.rescan()}
+              disabled={filesystemRescan.isRescanning}
+            >
+              {filesystemRescan.isRescanning ? 'Rescanning...' : filesystemRescan.buttonLabel}
+            </button>
+          ) : null}
+        </div>
+        {filesystemRescan.statusMessage ? (
+          <div className="page-toolbar-status" aria-live="polite">
+            {filesystemRescan.statusMessage}
+          </div>
+        ) : null}
+        <p>{waitingForRescan ? 'Refreshing files...' : 'Show not found.'}</p>
       </div>
     );
   }
@@ -77,9 +97,26 @@ export function TvShow() {
 
   return (
     <div className="detail-page">
-      <Link to="/shows" className="player-back">
-        &larr; Back to Shows
-      </Link>
+      <div className="page-toolbar">
+        <Link to="/shows" className="player-back">
+          &larr; Back to Shows
+        </Link>
+        {filesystemRescan.showManualButton ? (
+          <button
+            type="button"
+            className="btn btn-secondary"
+            onClick={() => void filesystemRescan.rescan()}
+            disabled={filesystemRescan.isRescanning}
+          >
+            {filesystemRescan.isRescanning ? 'Rescanning...' : filesystemRescan.buttonLabel}
+          </button>
+        ) : null}
+      </div>
+      {filesystemRescan.statusMessage ? (
+        <div className="page-toolbar-status" aria-live="polite">
+          {filesystemRescan.statusMessage}
+        </div>
+      ) : null}
       <div className="detail-hero">
         {show.seriesMetadata?.posterUrl ? (
           <img
