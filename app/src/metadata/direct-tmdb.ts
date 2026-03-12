@@ -9,6 +9,7 @@ import {
   buildSeriesMetadataKey,
   normalizeLookupText,
 } from '../media-metadata.js';
+import { metadataCoordinator } from './coordinator.js';
 import { metadataRepository } from './repository.js';
 import type { MetadataClient, RefreshLibraryMetadataOptions } from './types.js';
 
@@ -357,16 +358,7 @@ async function tmdbRequest<T>(
     url.searchParams.set(key, value);
   }
 
-  const response = await fetch(url.toString(), {
-    headers: {
-      accept: 'application/json',
-      Authorization: `Bearer ${token}`,
-    },
-  });
-  if (!response.ok) {
-    throw new Error(`TMDB request failed with ${response.status}`);
-  }
-  return (await response.json()) as T;
+  return metadataCoordinator.fetchJson<T>(url.toString(), url.toString(), token);
 }
 
 function scoreSearchResults(
