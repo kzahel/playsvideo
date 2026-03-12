@@ -1,7 +1,7 @@
-import { metadataRepository } from './repository.js';
+import type { MetadataCredentialSlot, MetadataTransportStateEntry } from '../db.js';
+import { metadataRepository, type TmdbCredential } from './repository.js';
 
 const MAX_CONCURRENT_REQUESTS = 1;
-const DIRECT_TRANSPORT_STATE_KEY = 'transport:direct:primary';
 const DEFAULT_RETRY_AFTER_MS = 60_000;
 
 type QueueJob<T> = {
@@ -29,65 +29,14 @@ const requestQueue: QueueJob<unknown>[] = [];
 let activeRequests = 0;
 
 export const metadataCoordinator = {
-  async fetchJson<T>(requestKey: string, url: string, token: string): Promise<T> {
+  async fetchJson<T>(requestKey: string, url: string): Promise<T> {
     const existing = inFlightRequests.get(requestKey);
     if (existing) {
       return existing as Promise<T>;
     }
 
     const promise = enqueue(async () => {
-      await ensureDirectTransportAvailable();
-
-      const response = await fetch(url, {
-        headers: {
-          accept: 'application/json',
-          Authorization: `Bearer ${token}`,
-        },
-      });
-
-      if (response.status === 429) {
-        const retryAfterMs = getRetryAfterMs(response.headers.get('Retry-After'));
-        const cooldownUntil = Date.now() + retryAfterMs;
-        await metadataRepository.putTransportState({
-          key: DIRECT_TRANSPORT_STATE_KEY,
-          transport: 'direct',
-          credentialSlot: 'primary',
-          status: 'cooldown',
-          cooldownUntil,
-          lastError: `429 Too Many Requests`,
-          updatedAt: Date.now(),
-        });
-        throw new MetadataTransportCooldownError(
-          `TMDB direct transport cooling down until ${new Date(cooldownUntil).toISOString()}`,
-          cooldownUntil,
-        );
-      }
-
-      if (response.status === 401 || response.status === 403) {
-        await metadataRepository.putTransportState({
-          key: DIRECT_TRANSPORT_STATE_KEY,
-          transport: 'direct',
-          credentialSlot: 'primary',
-          status: 'invalid',
-          lastError: `TMDB request failed with ${response.status}`,
-          updatedAt: Date.now(),
-        });
-        throw new MetadataTransportInvalidError(`TMDB request failed with ${response.status}`);
-      }
-
-      if (!response.ok) {
-        throw new Error(`TMDB request failed with ${response.status}`);
-      }
-
-      await metadataRepository.putTransportState({
-        key: DIRECT_TRANSPORT_STATE_KEY,
-        transport: 'direct',
-        credentialSlot: 'primary',
-        status: 'healthy',
-        updatedAt: Date.now(),
-      });
-
-      return (await response.json()) as T;
+      return fetchWithCredentialFallback<T>(url);
     });
 
     inFlightRequests.set(requestKey, promise);
@@ -99,24 +48,138 @@ export const metadataCoordinator = {
   },
 };
 
-async function ensureDirectTransportAvailable(): Promise<void> {
-  const state = await metadataRepository.getTransportState(DIRECT_TRANSPORT_STATE_KEY);
-  if (!state) {
-    return;
+async function fetchWithCredentialFallback<T>(url: string): Promise<T> {
+  const attemptedSlots = new Set<MetadataCredentialSlot>();
+
+  while (true) {
+    const selection = await selectCredential(attemptedSlots);
+    if (!selection) {
+      throw new MetadataTransportInvalidError('No TMDB credentials are configured');
+    }
+
+    if ('cooldownUntil' in selection) {
+      throw new MetadataTransportCooldownError(
+        `TMDB direct transport cooling down until ${new Date(selection.cooldownUntil).toISOString()}`,
+        selection.cooldownUntil,
+      );
+    }
+
+    const { credential } = selection;
+    attemptedSlots.add(credential.slot);
+
+    const response = await fetch(url, {
+      headers: {
+        accept: 'application/json',
+        Authorization: `Bearer ${credential.token}`,
+      },
+    });
+
+    if (response.status === 429) {
+      const retryAfterMs = getRetryAfterMs(response.headers.get('Retry-After'));
+      const cooldownUntil = Date.now() + retryAfterMs;
+      await metadataRepository.putTransportState({
+        key: buildTransportStateKey(credential.slot),
+        transport: 'direct',
+        credentialSlot: credential.slot,
+        status: 'cooldown',
+        cooldownUntil,
+        lastError: `429 Too Many Requests`,
+        updatedAt: Date.now(),
+      });
+      if (await hasAlternativeCredential(attemptedSlots)) {
+        continue;
+      }
+      throw new MetadataTransportCooldownError(
+        `TMDB ${credential.slot} credential cooling down until ${new Date(cooldownUntil).toISOString()}`,
+        cooldownUntil,
+      );
+    }
+
+    if (response.status === 401 || response.status === 403) {
+      await metadataRepository.putTransportState({
+        key: buildTransportStateKey(credential.slot),
+        transport: 'direct',
+        credentialSlot: credential.slot,
+        status: 'invalid',
+        lastError: `TMDB request failed with ${response.status}`,
+        updatedAt: Date.now(),
+      });
+      if (await hasAlternativeCredential(attemptedSlots)) {
+        continue;
+      }
+      throw new MetadataTransportInvalidError(`TMDB request failed with ${response.status}`);
+    }
+
+    if (!response.ok) {
+      throw new Error(`TMDB request failed with ${response.status}`);
+    }
+
+    await metadataRepository.putTransportState({
+      key: buildTransportStateKey(credential.slot),
+      transport: 'direct',
+      credentialSlot: credential.slot,
+      status: 'healthy',
+      updatedAt: Date.now(),
+    });
+
+    return (await response.json()) as T;
+  }
+}
+
+async function hasAlternativeCredential(
+  attemptedSlots: Set<MetadataCredentialSlot>,
+): Promise<boolean> {
+  const credentials = await metadataRepository.listTmdbCredentials();
+  return credentials.some((credential) => !attemptedSlots.has(credential.slot));
+}
+
+async function selectCredential(
+  attemptedSlots: Set<MetadataCredentialSlot>,
+):
+  | { credential: TmdbCredential }
+  | { cooldownUntil: number }
+  | null {
+  const credentials = await metadataRepository.listTmdbCredentials();
+  if (credentials.length === 0) {
+    return null;
   }
 
-  if (state.status === 'invalid') {
-    throw new MetadataTransportInvalidError(
-      state.lastError ?? 'TMDB direct transport is marked invalid',
-    );
+  let earliestCooldownUntil: number | undefined;
+
+  for (const credential of credentials) {
+    if (attemptedSlots.has(credential.slot)) {
+      continue;
+    }
+
+    const state = await metadataRepository.getTransportState(buildTransportStateKey(credential.slot));
+    if (!state) {
+      return { credential };
+    }
+
+    if (state.status === 'invalid') {
+      continue;
+    }
+
+    if (state.status === 'cooldown' && state.cooldownUntil && state.cooldownUntil > Date.now()) {
+      earliestCooldownUntil =
+        earliestCooldownUntil == null
+          ? state.cooldownUntil
+          : Math.min(earliestCooldownUntil, state.cooldownUntil);
+      continue;
+    }
+
+    return { credential };
   }
 
-  if (state.status === 'cooldown' && state.cooldownUntil && state.cooldownUntil > Date.now()) {
-    throw new MetadataTransportCooldownError(
-      state.lastError ?? `TMDB direct transport cooling down until ${new Date(state.cooldownUntil).toISOString()}`,
-      state.cooldownUntil,
-    );
+  if (earliestCooldownUntil != null) {
+    return { cooldownUntil: earliestCooldownUntil };
   }
+
+  return null;
+}
+
+function buildTransportStateKey(slot: MetadataCredentialSlot): string {
+  return `transport:direct:${slot}`;
 }
 
 function enqueue<T>(run: () => Promise<T>): Promise<T> {

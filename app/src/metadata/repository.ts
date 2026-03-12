@@ -14,6 +14,12 @@ import { parseMediaMetadata } from '../media-metadata.js';
 
 const TMDB_CONFIG_CACHE_KEY = 'tmdb-image-config-v1';
 export const TMDB_READ_ACCESS_TOKEN_KEY = 'tmdb-read-access-token';
+export const TMDB_STANDBY_READ_ACCESS_TOKEN_KEY = 'tmdb-read-access-token-standby';
+
+export interface TmdbCredential {
+  slot: MetadataCredentialSlot;
+  token: string;
+}
 
 export interface CachedImageConfig {
   secureBaseUrl: string;
@@ -111,18 +117,32 @@ export const metadataRepository = {
     return hydrated;
   },
 
-  async getTmdbReadAccessToken(): Promise<string | null> {
-    const envToken = import.meta.env.VITE_TMDB_READ_ACCESS_TOKEN?.trim();
-    if (envToken) {
-      return envToken;
+  async getTmdbCredential(slot: MetadataCredentialSlot): Promise<TmdbCredential | null> {
+    const envKey =
+      slot === 'primary'
+        ? import.meta.env.VITE_TMDB_READ_ACCESS_TOKEN?.trim()
+        : import.meta.env.VITE_TMDB_READ_ACCESS_TOKEN_STANDBY?.trim();
+    if (envKey) {
+      return { slot, token: envKey };
     }
 
-    const configured = await db.settings.get(TMDB_READ_ACCESS_TOKEN_KEY);
+    const settingKey =
+      slot === 'primary' ? TMDB_READ_ACCESS_TOKEN_KEY : TMDB_STANDBY_READ_ACCESS_TOKEN_KEY;
+    const configured = await db.settings.get(settingKey);
     if (typeof configured?.value === 'string' && configured.value.trim()) {
-      return configured.value.trim();
+      return { slot, token: configured.value.trim() };
     }
 
     return null;
+  },
+
+  async listTmdbCredentials(): Promise<TmdbCredential[]> {
+    const [primary, standby] = await Promise.all([
+      this.getTmdbCredential('primary'),
+      this.getTmdbCredential('standby'),
+    ]);
+
+    return [primary, standby].filter((entry): entry is TmdbCredential => Boolean(entry));
   },
 
   async getSeriesMetadataByKeys(keys: string[]): Promise<Map<string, SeriesMetadataEntry>> {

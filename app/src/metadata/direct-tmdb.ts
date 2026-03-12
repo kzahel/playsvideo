@@ -96,8 +96,8 @@ export async function refreshLibraryMetadata(
   options?: RefreshLibraryMetadataOptions,
 ): Promise<void> {
   const entries = await metadataRepository.hydrateParsedLibraryEntries(options?.entries);
-  const token = await metadataRepository.getTmdbReadAccessToken();
-  if (!token) return;
+  const credentials = await metadataRepository.listTmdbCredentials();
+  if (credentials.length === 0) return;
 
   const seriesCandidates = new Map<string, SeriesLookupCandidate>();
   const movieCandidates = new Map<string, MovieLookupCandidate>();
@@ -141,7 +141,7 @@ export async function refreshLibraryMetadata(
         continue;
       }
 
-      const metadata = await lookupSeriesMetadata(candidate, token);
+      const metadata = await lookupSeriesMetadata(candidate);
       await metadataRepository.putSeriesMetadata(metadata);
     }
   }
@@ -157,7 +157,7 @@ export async function refreshLibraryMetadata(
         continue;
       }
 
-      const metadata = await lookupMovieMetadata(candidate, token);
+      const metadata = await lookupMovieMetadata(candidate);
       await metadataRepository.putMovieMetadata(metadata);
     }
   }
@@ -165,10 +165,9 @@ export async function refreshLibraryMetadata(
 
 async function lookupSeriesMetadata(
   candidate: SeriesLookupCandidate,
-  token: string,
 ): Promise<SeriesMetadataEntry> {
   try {
-    const search = await tmdbRequest<TmdbSearchResponse>('/search/tv', token, {
+    const search = await tmdbRequest<TmdbSearchResponse>('/search/tv', {
       query: candidate.title,
       language: 'en-US',
       include_adult: 'false',
@@ -199,12 +198,12 @@ async function lookupSeriesMetadata(
       };
     }
 
-    const details = await tmdbRequest<TmdbTvDetails>(`/tv/${match.id}`, token, {
+    const details = await tmdbRequest<TmdbTvDetails>(`/tv/${match.id}`, {
       language: 'en-US',
       append_to_response: 'images',
       include_image_language: 'en,null',
     });
-    const imageConfig = await getCachedImageConfig(token);
+    const imageConfig = await getCachedImageConfig();
     const logoAsset = chooseBestLogo(details.images?.logos ?? []);
 
     return {
@@ -250,10 +249,9 @@ async function lookupSeriesMetadata(
 
 async function lookupMovieMetadata(
   candidate: MovieLookupCandidate,
-  token: string,
 ): Promise<MovieMetadataEntry> {
   try {
-    const search = await tmdbRequest<TmdbSearchResponse>('/search/movie', token, {
+    const search = await tmdbRequest<TmdbSearchResponse>('/search/movie', {
       query: candidate.title,
       language: 'en-US',
       include_adult: 'false',
@@ -284,10 +282,10 @@ async function lookupMovieMetadata(
       };
     }
 
-    const details = await tmdbRequest<TmdbMovieDetails>(`/movie/${match.id}`, token, {
+    const details = await tmdbRequest<TmdbMovieDetails>(`/movie/${match.id}`, {
       language: 'en-US',
     });
-    const imageConfig = await getCachedImageConfig(token);
+    const imageConfig = await getCachedImageConfig();
 
     return {
       key: candidate.key,
@@ -329,13 +327,13 @@ async function lookupMovieMetadata(
   }
 }
 
-async function getCachedImageConfig(token: string): Promise<CachedImageConfig> {
+async function getCachedImageConfig(): Promise<CachedImageConfig> {
   const cached = await metadataRepository.getCachedImageConfig(CONFIG_TTL_MS);
   if (cached) {
     return cached;
   }
 
-  const response = await tmdbRequest<TmdbConfigResponse>('/configuration', token);
+  const response = await tmdbRequest<TmdbConfigResponse>('/configuration');
   const images = response.images;
   const next: CachedImageConfig = {
     secureBaseUrl: images?.secure_base_url ?? 'https://image.tmdb.org/t/p/',
@@ -350,7 +348,6 @@ async function getCachedImageConfig(token: string): Promise<CachedImageConfig> {
 
 async function tmdbRequest<T>(
   path: string,
-  token: string,
   query?: Record<string, string>,
 ): Promise<T> {
   const url = new URL(`${TMDB_API_BASE_URL}${path}`);
@@ -358,7 +355,7 @@ async function tmdbRequest<T>(
     url.searchParams.set(key, value);
   }
 
-  return metadataCoordinator.fetchJson<T>(url.toString(), url.toString(), token);
+  return metadataCoordinator.fetchJson<T>(url.toString(), url.toString());
 }
 
 function scoreSearchResults(

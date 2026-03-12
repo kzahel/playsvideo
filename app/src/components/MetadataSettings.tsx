@@ -1,7 +1,10 @@
 import { useState } from 'react';
 import { useSetting } from '../hooks/useSetting.js';
 import { refreshLibraryMetadata } from '../scan.js';
-import { TMDB_READ_ACCESS_TOKEN_KEY } from '../metadata/client.js';
+import {
+  TMDB_READ_ACCESS_TOKEN_KEY,
+  TMDB_STANDBY_READ_ACCESS_TOKEN_KEY,
+} from '../metadata/repository.js';
 
 interface MetadataSettingsProps {
   hasEntries: boolean;
@@ -11,11 +14,17 @@ export const SHOW_METADATA_DEBUG_KEY = 'show-metadata-debug';
 
 export function MetadataSettings({ hasEntries }: MetadataSettingsProps) {
   const [token, setToken] = useSetting<string>(TMDB_READ_ACCESS_TOKEN_KEY, '');
+  const [standbyToken, setStandbyToken] = useSetting<string>(TMDB_STANDBY_READ_ACCESS_TOKEN_KEY, '');
   const [showDebug, setShowDebug] = useSetting<boolean>(SHOW_METADATA_DEBUG_KEY, false);
   const [refreshing, setRefreshing] = useState(false);
   const [status, setStatus] = useState('');
   const envConfigured = Boolean(import.meta.env.VITE_TMDB_READ_ACCESS_TOKEN?.trim());
-  const hasToken = token.trim().length > 0 || envConfigured;
+  const standbyEnvConfigured = Boolean(import.meta.env.VITE_TMDB_READ_ACCESS_TOKEN_STANDBY?.trim());
+  const hasToken =
+    token.trim().length > 0 ||
+    standbyToken.trim().length > 0 ||
+    envConfigured ||
+    standbyEnvConfigured;
 
   const handleRefresh = async () => {
     setRefreshing(true);
@@ -53,6 +62,21 @@ export function MetadataSettings({ hasEntries }: MetadataSettingsProps) {
           autoComplete="off"
           spellCheck={false}
         />
+        <label className="metadata-settings-label" htmlFor="tmdb-token-standby">
+          TMDB Standby Read Access Token
+        </label>
+        <input
+          id="tmdb-token-standby"
+          className="metadata-settings-input"
+          type="password"
+          value={standbyToken}
+          onChange={(event) => setStandbyToken(event.target.value)}
+          placeholder={
+            standbyEnvConfigured ? 'Configured via app/.env.local' : 'Optional standby token'
+          }
+          autoComplete="off"
+          spellCheck={false}
+        />
         <div className="metadata-settings-actions">
           <button
             type="button"
@@ -73,9 +97,10 @@ export function MetadataSettings({ hasEntries }: MetadataSettingsProps) {
           Show metadata debug details on library cards
         </label>
         <p className="metadata-settings-note">
-          `app/.env.local` takes precedence over the value stored in IndexedDB. For this
-          client-only prototype, the token is visible to the browser runtime. After changing the
-          token, click "Refresh Metadata" or rescan the folder.
+          `app/.env.local` takes precedence over IndexedDB values. Optional standby env var:
+          `VITE_TMDB_READ_ACCESS_TOKEN_STANDBY`. The coordinator prefers `primary`, cools down
+          only the rate-limited slot, and falls through to `standby` when available. After
+          changing tokens, click "Refresh Metadata" or rescan the folder.
         </p>
       </div>
     </details>
