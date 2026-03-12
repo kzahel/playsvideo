@@ -133,7 +133,7 @@ export const directTmdbMetadataClient: MetadataClient = {
   },
 };
 
-export { TMDB_READ_ACCESS_TOKEN_KEY } from './repository.js';
+export { TMDB_READ_ACCESS_TOKEN_KEY } from './settings.js';
 
 export async function refreshLibraryMetadata(
   options?: RefreshLibraryMetadataOptions,

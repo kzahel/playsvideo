@@ -2,16 +2,44 @@ import type {
   MetadataRequestEnvelope,
   MetadataResponseEnvelope,
 } from '../../../src/metadata-protocol.js';
-import { handleMetadataRequest } from './protocol-handler.js';
 import { isMetadataErrorResponse } from '../../../src/metadata-protocol.js';
 
 export async function sendWebMetadataRequest<TMessage extends MetadataResponseEnvelope['message']>(
   message: MetadataRequestEnvelope['message'],
 ): Promise<TMessage> {
-  const envelope = await handleMetadataRequest({
-    id: crypto.randomUUID(),
-    message,
-  } satisfies MetadataRequestEnvelope);
+  if (!('serviceWorker' in navigator)) {
+    throw new Error('Service workers are unavailable in this browser');
+  }
+
+  const registration = await navigator.serviceWorker.ready;
+  const worker = registration.active ?? registration.waiting ?? registration.installing;
+  if (!worker) {
+    throw new Error('Metadata service worker is not active');
+  }
+
+  const envelope = await new Promise<MetadataResponseEnvelope>((resolve, reject) => {
+    const channel = new MessageChannel();
+    const timeout = window.setTimeout(() => {
+      reject(new Error('Metadata service worker timed out'));
+    }, 15_000);
+
+    channel.port1.onmessage = (event) => {
+      window.clearTimeout(timeout);
+      resolve(event.data as MetadataResponseEnvelope);
+    };
+    channel.port1.onmessageerror = () => {
+      window.clearTimeout(timeout);
+      reject(new Error('Metadata service worker returned an invalid response'));
+    };
+
+    worker.postMessage(
+      {
+        id: crypto.randomUUID(),
+        message,
+      } satisfies MetadataRequestEnvelope,
+      [channel.port2],
+    );
+  });
 
   if (isMetadataErrorResponse(envelope)) {
     throw new Error(envelope.message.message);

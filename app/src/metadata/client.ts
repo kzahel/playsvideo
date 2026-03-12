@@ -1,8 +1,4 @@
-import {
-  TMDB_READ_ACCESS_TOKEN_KEY,
-  directTmdbMetadataClient,
-  refreshLibraryMetadata as refreshLibraryMetadataDirect,
-} from './direct-tmdb.js';
+import { TMDB_READ_ACCESS_TOKEN_KEY } from './settings.js';
 import { sendMetadataRequest } from './host.js';
 import type {
   MetadataClient,
@@ -62,7 +58,3 @@ export function invalidateMetadata(keys?: string[]): Promise<void> {
 export function getMetadataTransportState(): Promise<MetadataTransportStateEntry[]> {
   return metadataClient.getTransportState();
 }
-
-export const directMetadataClient = {
-  refreshLibraryMetadata: refreshLibraryMetadataDirect,
-};

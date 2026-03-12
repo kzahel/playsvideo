@@ -4,6 +4,8 @@ import { RouterProvider } from 'react-router-dom';
 import { router } from './routes';
 import './app.css';
 
+const serviceWorkerUrl = import.meta.env.DEV ? '/app/sw-dev.js' : '/app/sw.js';
+
 createRoot(document.getElementById('root')!).render(
   <StrictMode>
     <RouterProvider router={router} />
@@ -11,5 +13,5 @@ createRoot(document.getElementById('root')!).render(
 );
 
 if ('serviceWorker' in navigator) {
-  navigator.serviceWorker.register('/app/sw.js');
+  navigator.serviceWorker.register(serviceWorkerUrl, { type: 'module' });
 }

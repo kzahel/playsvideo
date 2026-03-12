@@ -1,5 +1,7 @@
+import { registerEnvCredentialProvider } from '../app/src/metadata/env-credential-provider.js';
 import { registerMetadataBridge } from './metadata-bridge.js';
 
+registerEnvCredentialProvider();
 registerMetadataBridge();
 
 chrome.action.onClicked.addListener(() => {

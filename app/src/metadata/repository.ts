@@ -11,10 +11,10 @@ import type {
   SeriesMetadataEntry,
 } from '../db.js';
 import { parseMediaMetadata } from '../media-metadata.js';
+import { getRuntimeCredential } from './runtime-credential-provider.js';
+import { TMDB_READ_ACCESS_TOKEN_KEY, TMDB_STANDBY_READ_ACCESS_TOKEN_KEY } from './settings.js';
 
 const TMDB_CONFIG_CACHE_KEY = 'tmdb-image-config-v1';
-export const TMDB_READ_ACCESS_TOKEN_KEY = 'tmdb-read-access-token';
-export const TMDB_STANDBY_READ_ACCESS_TOKEN_KEY = 'tmdb-read-access-token-standby';
 
 export interface TmdbCredential {
   slot: MetadataCredentialSlot;
@@ -118,12 +118,9 @@ export const metadataRepository = {
   },
 
   async getTmdbCredential(slot: MetadataCredentialSlot): Promise<TmdbCredential | null> {
-    const envKey =
-      slot === 'primary'
-        ? import.meta.env.VITE_TMDB_READ_ACCESS_TOKEN?.trim()
-        : import.meta.env.VITE_TMDB_READ_ACCESS_TOKEN_STANDBY?.trim();
-    if (envKey) {
-      return { slot, token: envKey };
+    const runtimeCredential = await getRuntimeCredential(slot);
+    if (runtimeCredential) {
+      return runtimeCredential;
     }
 
     const settingKey =

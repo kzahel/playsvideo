@@ -7,7 +7,7 @@ import type { MetadataRequestTier } from '../metadata/types.js';
 import {
   TMDB_READ_ACCESS_TOKEN_KEY,
   TMDB_STANDBY_READ_ACCESS_TOKEN_KEY,
-} from '../metadata/repository.js';
+} from '../metadata/settings.js';
 
 interface MetadataSettingsProps {
   hasEntries: boolean;
@@ -32,15 +32,6 @@ export function MetadataSettings({ hasEntries }: MetadataSettingsProps) {
   const [open, setOpen] = useState(false);
   const [transportState, setTransportState] = useState<MetadataTransportStateEntry[]>([]);
   const [loadingTransportState, setLoadingTransportState] = useState(false);
-  const envConfigured = Boolean(import.meta.env.VITE_TMDB_READ_ACCESS_TOKEN?.trim());
-  const standbyEnvConfigured = Boolean(
-    import.meta.env.VITE_TMDB_READ_ACCESS_TOKEN_STANDBY?.trim(),
-  );
-  const hasToken =
-    token.trim().length > 0 ||
-    standbyToken.trim().length > 0 ||
-    envConfigured ||
-    standbyEnvConfigured;
 
   useEffect(() => {
     if (!open) {
@@ -100,8 +91,8 @@ export function MetadataSettings({ hasEntries }: MetadataSettingsProps) {
       <div className="metadata-settings-body">
         <p className="metadata-settings-copy">
           Parses TV episode names like "Yellowstone S01E07" and can enrich them with TMDB series
-          artwork and metadata. For local config, put `VITE_TMDB_READ_ACCESS_TOKEN` in
-          `app/.env.local`.
+          artwork and metadata. Browser-entered tokens are stored locally, and deployed builds can
+          ship worker-only TMDB credentials.
         </p>
         <label className="metadata-settings-label" htmlFor="tmdb-token">
           TMDB API Read Access Token
@@ -112,7 +103,7 @@ export function MetadataSettings({ hasEntries }: MetadataSettingsProps) {
           type="password"
           value={token}
           onChange={(event) => setToken(event.target.value)}
-          placeholder={envConfigured ? 'Configured via app/.env.local' : 'Paste token'}
+          placeholder="Optional override token"
           autoComplete="off"
           spellCheck={false}
         />
@@ -125,9 +116,7 @@ export function MetadataSettings({ hasEntries }: MetadataSettingsProps) {
           type="password"
           value={standbyToken}
           onChange={(event) => setStandbyToken(event.target.value)}
-          placeholder={
-            standbyEnvConfigured ? 'Configured via app/.env.local' : 'Optional standby token'
-          }
+          placeholder="Optional standby token"
           autoComplete="off"
           spellCheck={false}
         />
@@ -136,7 +125,7 @@ export function MetadataSettings({ hasEntries }: MetadataSettingsProps) {
             type="button"
             className="btn btn-secondary"
             onClick={handleRefresh}
-            disabled={!hasEntries || !hasToken || refreshing}
+            disabled={!hasEntries || refreshing}
           >
             {refreshing ? 'Refreshing...' : 'Refresh Metadata'}
           </button>
@@ -167,10 +156,9 @@ export function MetadataSettings({ hasEntries }: MetadataSettingsProps) {
           also loads per-season episode metadata when you open a show.
         </p>
         <p className="metadata-settings-note">
-          `app/.env.local` takes precedence over IndexedDB values. Optional standby env var:
-          `VITE_TMDB_READ_ACCESS_TOKEN_STANDBY`. The coordinator prefers `primary`, cools down
-          only the rate-limited slot, and falls through to `standby` when available. After
-          changing tokens, click "Refresh Metadata" or rescan the folder.
+          A standby token is optional. If you only configure a primary token, the app cools down
+          on `429`, keeps serving cached metadata, and retries later. After changing tokens, click
+          "Refresh Metadata" or rescan the folder.
         </p>
         <div className="metadata-transport-state">
           <div className="metadata-transport-state-header">
