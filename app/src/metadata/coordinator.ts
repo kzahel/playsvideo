@@ -40,9 +40,14 @@ export const metadataCoordinator = {
     });
 
     inFlightRequests.set(requestKey, promise);
-    promise.finally(() => {
-      inFlightRequests.delete(requestKey);
-    });
+    promise.then(
+      () => {
+        inFlightRequests.delete(requestKey);
+      },
+      () => {
+        inFlightRequests.delete(requestKey);
+      },
+    );
 
     return promise;
   },
