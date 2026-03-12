@@ -1,4 +1,4 @@
-import type { LibraryEntry } from '../db.js';
+import type { LibraryEntry, MetadataTransportStateEntry } from '../db.js';
 
 export interface RefreshLibraryMetadataOptions {
   entries?: LibraryEntry[];
@@ -7,4 +7,5 @@ export interface RefreshLibraryMetadataOptions {
 
 export interface MetadataClient {
   refreshLibraryMetadata(options?: RefreshLibraryMetadataOptions): Promise<void>;
+  getTransportState(): Promise<MetadataTransportStateEntry[]>;
 }

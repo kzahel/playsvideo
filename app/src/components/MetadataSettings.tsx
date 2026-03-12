@@ -1,6 +1,8 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
+import type { MetadataTransportStateEntry } from '../db.js';
 import { useSetting } from '../hooks/useSetting.js';
 import { refreshLibraryMetadata } from '../scan.js';
+import { getMetadataTransportState } from '../metadata/client.js';
 import {
   TMDB_READ_ACCESS_TOKEN_KEY,
   TMDB_STANDBY_READ_ACCESS_TOKEN_KEY,
@@ -14,17 +16,58 @@ export const SHOW_METADATA_DEBUG_KEY = 'show-metadata-debug';
 
 export function MetadataSettings({ hasEntries }: MetadataSettingsProps) {
   const [token, setToken] = useSetting<string>(TMDB_READ_ACCESS_TOKEN_KEY, '');
-  const [standbyToken, setStandbyToken] = useSetting<string>(TMDB_STANDBY_READ_ACCESS_TOKEN_KEY, '');
+  const [standbyToken, setStandbyToken] = useSetting<string>(
+    TMDB_STANDBY_READ_ACCESS_TOKEN_KEY,
+    '',
+  );
   const [showDebug, setShowDebug] = useSetting<boolean>(SHOW_METADATA_DEBUG_KEY, false);
   const [refreshing, setRefreshing] = useState(false);
   const [status, setStatus] = useState('');
+  const [open, setOpen] = useState(false);
+  const [transportState, setTransportState] = useState<MetadataTransportStateEntry[]>([]);
+  const [loadingTransportState, setLoadingTransportState] = useState(false);
   const envConfigured = Boolean(import.meta.env.VITE_TMDB_READ_ACCESS_TOKEN?.trim());
-  const standbyEnvConfigured = Boolean(import.meta.env.VITE_TMDB_READ_ACCESS_TOKEN_STANDBY?.trim());
+  const standbyEnvConfigured = Boolean(
+    import.meta.env.VITE_TMDB_READ_ACCESS_TOKEN_STANDBY?.trim(),
+  );
   const hasToken =
     token.trim().length > 0 ||
     standbyToken.trim().length > 0 ||
     envConfigured ||
     standbyEnvConfigured;
+
+  useEffect(() => {
+    if (!open) {
+      return;
+    }
+
+    let cancelled = false;
+    const loadTransportState = async () => {
+      setLoadingTransportState(true);
+      try {
+        const entries = await getMetadataTransportState();
+        if (!cancelled) {
+          setTransportState(entries);
+        }
+      } catch (error) {
+        console.warn('Failed to load metadata transport state:', error);
+      } finally {
+        if (!cancelled) {
+          setLoadingTransportState(false);
+        }
+      }
+    };
+
+    void loadTransportState();
+    const interval = window.setInterval(() => {
+      void loadTransportState();
+    }, 10_000);
+
+    return () => {
+      cancelled = true;
+      window.clearInterval(interval);
+    };
+  }, [open]);
 
   const handleRefresh = async () => {
     setRefreshing(true);
@@ -32,6 +75,7 @@ export function MetadataSettings({ hasEntries }: MetadataSettingsProps) {
     try {
       await refreshLibraryMetadata({ force: true });
       setStatus('Metadata refreshed.');
+      setTransportState(await getMetadataTransportState());
     } catch (error) {
       console.error('Failed to refresh TMDB metadata:', error);
       setStatus('Metadata refresh failed.');
@@ -41,7 +85,11 @@ export function MetadataSettings({ hasEntries }: MetadataSettingsProps) {
   };
 
   return (
-    <details className="metadata-settings">
+    <details
+      className="metadata-settings"
+      open={open}
+      onToggle={(event) => setOpen(event.currentTarget.open)}
+    >
       <summary>Metadata Enrichment</summary>
       <div className="metadata-settings-body">
         <p className="metadata-settings-copy">
@@ -102,6 +150,51 @@ export function MetadataSettings({ hasEntries }: MetadataSettingsProps) {
           only the rate-limited slot, and falls through to `standby` when available. After
           changing tokens, click "Refresh Metadata" or rescan the folder.
         </p>
+        <div className="metadata-transport-state">
+          <div className="metadata-transport-state-header">
+            <strong>Transport Health</strong>
+            {loadingTransportState ? (
+              <span className="metadata-transport-loading">Checking...</span>
+            ) : null}
+          </div>
+          {transportState.length > 0 ? (
+            <div className="metadata-transport-list">
+              {transportState
+                .slice()
+                .sort((left, right) => left.key.localeCompare(right.key))
+                .map((entry) => (
+                  <div key={entry.key} className="metadata-transport-card">
+                    <div className="metadata-transport-topline">
+                      <span className="metadata-transport-slot">
+                        {entry.credentialSlot ?? 'default'}
+                      </span>
+                      <span className={`metadata-transport-badge ${entry.status}`}>
+                        {entry.status}
+                      </span>
+                    </div>
+                    <div className="metadata-transport-copy">transport: {entry.transport}</div>
+                    {entry.cooldownUntil ? (
+                      <div className="metadata-transport-copy">
+                        cooldown until: {new Date(entry.cooldownUntil).toLocaleString()}
+                      </div>
+                    ) : null}
+                    {entry.lastError ? (
+                      <div className="metadata-transport-copy metadata-transport-error">
+                        last error: {entry.lastError}
+                      </div>
+                    ) : null}
+                    <div className="metadata-transport-copy">
+                      updated: {new Date(entry.updatedAt).toLocaleString()}
+                    </div>
+                  </div>
+                ))}
+            </div>
+          ) : (
+            <div className="metadata-transport-empty">
+              No transport activity yet. Refresh metadata to initialize transport state.
+            </div>
+          )}
+        </div>
       </div>
     </details>
   );
