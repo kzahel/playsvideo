@@ -4,6 +4,7 @@ import type { LibraryEntry } from '../db';
 import { db } from '../db';
 import { getFile, setFolder } from '../scan.js';
 import { folderProvider } from '../folder-provider.js';
+import { scheduleSyncIfLoggedIn } from '../firebase.js';
 
 export type EngineSource =
   | { kind: 'entry'; entry: LibraryEntry }
@@ -291,8 +292,18 @@ export function useEngine(source: EngineSource | null): UseEngineResult {
     const onStalled = () => logVideoEvent('video:stalled');
     const onSeeking = () => logVideoEvent('video:seeking');
     const onSeeked = () => logVideoEvent('video:seeked');
-    const onPause = () => logVideoEvent('video:pause');
-    const onEnded = () => logVideoEvent('video:ended');
+    const onPause = () => {
+      logVideoEvent('video:pause');
+      if (entry) {
+        savePosition().then(() => scheduleSyncIfLoggedIn());
+      }
+    };
+    const onEnded = () => {
+      logVideoEvent('video:ended');
+      if (entry) {
+        savePosition().then(() => scheduleSyncIfLoggedIn());
+      }
+    };
     const onVideoError = () =>
       pushDiagnosticEvent(diagnosticsRef, 'video:error', formatMediaError(video.error) ?? 'unknown');
 
@@ -350,7 +361,9 @@ export function useEngine(source: EngineSource | null): UseEngineResult {
     })();
 
     return () => {
-      if (entry) savePosition();
+      if (entry) {
+        savePosition().then(() => scheduleSyncIfLoggedIn());
+      }
       if (interval) clearInterval(interval);
       video.removeEventListener('playing', onPlaying);
       video.removeEventListener('waiting', onWaiting);

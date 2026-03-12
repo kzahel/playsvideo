@@ -8,18 +8,19 @@
     "typecheck": "tsc --noEmit"
   },
   "dependencies": {
+    "dexie": "^4.0.0",
+    "dexie-react-hooks": "^1.1.0",
+    "firebase": "^12.10.0",
     "playsvideo": "workspace:*",
     "react": "^19.0.0",
     "react-dom": "^19.0.0",
-    "react-router-dom": "^7.0.0",
-    "dexie": "^4.0.0",
-    "dexie-react-hooks": "^1.1.0"
+    "react-router-dom": "^7.0.0"
   },
   "devDependencies": {
-    "@vitejs/plugin-react": "^4.0.0",
     "@types/react": "^19.0.0",
     "@types/react-dom": "^19.0.0",
-    "vite": "^6.0.0",
-    "typescript": "^5.7.0"
+    "@vitejs/plugin-react": "^4.0.0",
+    "typescript": "^5.7.0",
+    "vite": "^6.0.0"
   }
 }

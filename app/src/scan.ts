@@ -1,7 +1,10 @@
 import { db, type LibraryEntry } from './db.js';
 import { folderProvider, type ScannedFile } from './folder-provider.js';
+import { parseMediaMetadata } from './media-metadata.js';
+import { refreshLibraryMetadata } from './tmdb.js';
 
 export { type ScannedFile } from './folder-provider.js';
+export { refreshLibraryMetadata } from './tmdb.js';
 
 export async function setFolder(): Promise<void> {
   const result = await folderProvider.pickFolder();
@@ -48,11 +51,12 @@ async function syncToLibrary(directoryId: number, files: ScannedFile[]): Promise
   // Delete current directory's entries (they'll be re-added below)
   await db.library.where('directoryId').equals(directoryId).delete();
 
+  const nextEntries: LibraryEntry[] = [];
   for (const file of files) {
     const identity = `${file.name}|${file.size}|${file.lastModified}`;
     const old = oldByIdentity.get(identity);
-    // Use put with old ID to preserve player URLs across folder re-selections
-    await db.library.put({
+    const parsed = parseMediaMetadata(file.path);
+    nextEntries.push({
       ...(old?.id != null ? { id: old.id } : {}),
       directoryId,
       name: file.name,
@@ -63,8 +67,13 @@ async function syncToLibrary(directoryId: number, files: ScannedFile[]): Promise
       playbackPositionSec: old?.playbackPositionSec ?? 0,
       durationSec: old?.durationSec ?? 0,
       addedAt: old?.addedAt ?? Date.now(),
+      ...parsed,
     } as LibraryEntry);
   }
 
+  if (nextEntries.length > 0) {
+    await db.library.bulkPut(nextEntries);
+  }
   await db.directories.update(directoryId, { lastScannedAt: Date.now() });
+  await refreshLibraryMetadata({ entries: nextEntries });
 }

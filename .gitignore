@@ -22,3 +22,8 @@ tests/golden/output/
 test-results/
 tests/tmp/
 .claude/
+.env.local
+.env.*.local
+app/.env
+app/.env.local
+app/.env.*.local

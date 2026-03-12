@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react';
 import { Link, Outlet } from 'react-router-dom';
 import { Sidebar } from './components/Sidebar';
+import { AuthButton } from './components/AuthButton.js';
 
 export function App() {
   const [sidebarOpen, setSidebarOpen] = useState(false);
@@ -70,6 +71,7 @@ export function App() {
           >
             {theme === 'dark' ? '\u2600' : '\u263E'}
           </button>
+          <AuthButton />
         </div>
       </header>
       <Sidebar open={sidebarOpen} onClose={() => setSidebarOpen(false)} />
