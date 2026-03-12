@@ -3,19 +3,12 @@ import type {
   MetadataResponseEnvelope,
 } from '../../../src/metadata-protocol.js';
 import { isMetadataErrorResponse } from '../../../src/metadata-protocol.js';
+import { getActiveAppServiceWorker } from '../service-worker.js';
 
 export async function sendWebMetadataRequest<TMessage extends MetadataResponseEnvelope['message']>(
   message: MetadataRequestEnvelope['message'],
 ): Promise<TMessage> {
-  if (!('serviceWorker' in navigator)) {
-    throw new Error('Service workers are unavailable in this browser');
-  }
-
-  const registration = await navigator.serviceWorker.ready;
-  const worker = registration.active ?? registration.waiting ?? registration.installing;
-  if (!worker) {
-    throw new Error('Metadata service worker is not active');
-  }
+  const worker = await getActiveAppServiceWorker();
 
   const envelope = await new Promise<MetadataResponseEnvelope>((resolve, reject) => {
     const channel = new MessageChannel();
