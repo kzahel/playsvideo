@@ -7,13 +7,18 @@ import { useFilesystemRescan } from '../hooks/useFilesystemRescan.js';
 import { groupMovies } from '../library-groups.js';
 import { invalidateMetadata, refreshLibraryMetadata } from '../metadata/client.js';
 import { TMDB_REQUESTS_ENABLED_KEY } from '../metadata/settings.js';
+import { AUTO_RESCAN_DETAIL_PAGES_KEY } from '../settings.js';
 
 export function Movie() {
   const { movieId } = useParams<{ movieId: string }>();
   const decodedId = decodeURIComponent(movieId ?? '');
   const entries = useLiveQuery(() => db.library.toArray());
   const movieMetadata = useLiveQuery(() => db.movieMetadata.toArray());
-  const filesystemRescan = useFilesystemRescan({ autoOnMount: true, autoKey: decodedId });
+  const [autoRescanDetailPages] = useSetting<boolean>(AUTO_RESCAN_DETAIL_PAGES_KEY, true);
+  const filesystemRescan = useFilesystemRescan({
+    autoOnMount: autoRescanDetailPages,
+    autoKey: decodedId,
+  });
   const [tmdbRequestsEnabled] = useSetting<boolean>(TMDB_REQUESTS_ENABLED_KEY, true);
   const [isRefreshingMetadata, setIsRefreshingMetadata] = useState(false);
   const [metadataStatusMessage, setMetadataStatusMessage] = useState<string | null>(null);

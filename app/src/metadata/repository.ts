@@ -239,8 +239,10 @@ export const metadataRepository = {
       await Promise.all([
         db.seriesMetadata.clear(),
         db.movieMetadata.clear(),
+        db.metadataParseCache.clear(),
         db.metadataSeasonCache.clear(),
         db.metadataTransportState.clear(),
+        db.settings.delete(TMDB_CONFIG_CACHE_KEY),
       ]);
       return;
     }

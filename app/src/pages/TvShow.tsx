@@ -15,6 +15,7 @@ import {
   TMDB_REQUESTS_ENABLED_KEY,
 } from '../metadata/settings.js';
 import type { MetadataRequestTier } from '../metadata/types.js';
+import { AUTO_RESCAN_DETAIL_PAGES_KEY } from '../settings.js';
 
 function seasonLabel(seasonNumber?: number): string {
   if (seasonNumber == null) return 'Other Files';
@@ -71,7 +72,11 @@ export function TvShow() {
   const entries = useLiveQuery(() => db.library.toArray());
   const seriesMetadata = useLiveQuery(() => db.seriesMetadata.toArray());
   const seasonCacheEntries = useLiveQuery(() => db.metadataSeasonCache.toArray());
-  const filesystemRescan = useFilesystemRescan({ autoOnMount: true, autoKey: decodedId });
+  const [autoRescanDetailPages] = useSetting<boolean>(AUTO_RESCAN_DETAIL_PAGES_KEY, true);
+  const filesystemRescan = useFilesystemRescan({
+    autoOnMount: autoRescanDetailPages,
+    autoKey: decodedId,
+  });
   const [requestTier] = useSetting<MetadataRequestTier>(METADATA_REQUEST_TIER_KEY, 'essential');
   const [tmdbRequestsEnabled] = useSetting<boolean>(TMDB_REQUESTS_ENABLED_KEY, true);
   const [isRefreshingMetadata, setIsRefreshingMetadata] = useState(false);

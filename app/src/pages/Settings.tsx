@@ -1,3 +1,4 @@
+import { useState } from 'react';
 import { useLiveQuery } from 'dexie-react-hooks';
 import { MetadataSettings } from '../components/MetadataSettings.js';
 import { db } from '../db.js';
@@ -6,9 +7,13 @@ import {
   METADATA_REQUEST_TIER_KEY,
   TMDB_REQUESTS_ENABLED_KEY,
 } from '../metadata/settings.js';
+import { invalidateMetadata } from '../metadata/client.js';
 import type { MetadataRequestTier } from '../metadata/types.js';
 import {
+  AUTO_RESCAN_DETAIL_PAGES_KEY,
+  EMBEDDED_SUBTITLE_POLICY_KEY,
   getStoredThemePreference,
+  type EmbeddedSubtitlePolicy,
   PLAYER_CONTROLS_TYPE_KEY,
   type ThemePreference,
   THEME_PREFERENCE_KEY,
@@ -24,11 +29,34 @@ export function Settings() {
     PLAYER_CONTROLS_TYPE_KEY,
     'stock',
   );
+  const [embeddedSubtitlePolicy, setEmbeddedSubtitlePolicy] = useSetting<EmbeddedSubtitlePolicy>(
+    EMBEDDED_SUBTITLE_POLICY_KEY,
+    'auto',
+  );
+  const [autoRescanDetailPages, setAutoRescanDetailPages] = useSetting<boolean>(
+    AUTO_RESCAN_DETAIL_PAGES_KEY,
+    true,
+  );
   const [tmdbRequestsEnabled, setTmdbRequestsEnabled] = useSetting<boolean>(
     TMDB_REQUESTS_ENABLED_KEY,
     true,
   );
   const [requestTier] = useSetting<MetadataRequestTier>(METADATA_REQUEST_TIER_KEY, 'essential');
+  const [clearingMetadataCache, setClearingMetadataCache] = useState(false);
+  const [cacheStatus, setCacheStatus] = useState('');
+
+  const handleClearMetadataCache = async () => {
+    setClearingMetadataCache(true);
+    setCacheStatus('');
+    try {
+      await invalidateMetadata();
+      setCacheStatus('Metadata cache cleared.');
+    } catch (error) {
+      setCacheStatus(error instanceof Error ? error.message : 'Failed to clear metadata cache.');
+    } finally {
+      setClearingMetadataCache(false);
+    }
+  };
 
   return (
     <div className="settings-page">
@@ -86,6 +114,50 @@ export function Settings() {
       <section className="settings-card">
         <div className="settings-card-header">
           <div>
+            <h2>Subtitles</h2>
+            <p className="settings-card-copy">
+              Choose whether embedded subtitle tracks should be shown automatically.
+            </p>
+          </div>
+        </div>
+        <label className="metadata-settings-label" htmlFor="embedded-subtitle-policy">
+          Embedded subtitle default
+        </label>
+        <select
+          id="embedded-subtitle-policy"
+          className="metadata-settings-input"
+          value={embeddedSubtitlePolicy}
+          onChange={(event) =>
+            setEmbeddedSubtitlePolicy(event.target.value as EmbeddedSubtitlePolicy)
+          }
+        >
+          <option value="auto">Auto-show first embedded track</option>
+          <option value="off">Keep embedded subtitles off by default</option>
+        </select>
+      </section>
+
+      <section className="settings-card">
+        <div className="settings-card-header">
+          <div>
+            <h2>Scanning</h2>
+            <p className="settings-card-copy">
+              Control whether show and movie pages automatically refresh local folder contents.
+            </p>
+          </div>
+        </div>
+        <label className="metadata-settings-checkbox">
+          <input
+            type="checkbox"
+            checked={autoRescanDetailPages}
+            onChange={(event) => setAutoRescanDetailPages(event.target.checked)}
+          />
+          Automatically rescan folders when opening show and movie pages
+        </label>
+      </section>
+
+      <section className="settings-card">
+        <div className="settings-card-header">
+          <div>
             <h2>Privacy</h2>
             <p className="settings-card-copy">
               Decide whether parsed titles from your local files can be sent to TMDB.
@@ -106,6 +178,32 @@ export function Settings() {
         </p>
         <p className="metadata-settings-note">
           Request tier is currently set to `{requestTier === 'nice-to-have' ? 'Nice to Have' : 'Essential'}`.
+        </p>
+      </section>
+
+      <section className="settings-card">
+        <div className="settings-card-header">
+          <div>
+            <h2>Cache</h2>
+            <p className="settings-card-copy">
+              Clear cached TMDB metadata and derived metadata state without removing your library.
+            </p>
+          </div>
+        </div>
+        <div className="settings-card-actions">
+          <button
+            type="button"
+            className="btn btn-secondary"
+            onClick={() => void handleClearMetadataCache()}
+            disabled={clearingMetadataCache}
+          >
+            {clearingMetadataCache ? 'Clearing Cache...' : 'Clear Metadata Cache'}
+          </button>
+          {cacheStatus ? <span className="metadata-settings-status">{cacheStatus}</span> : null}
+        </div>
+        <p className="metadata-settings-note">
+          This clears cached TMDB show/movie matches, season data, transport state, and parsed
+          filename cache. It does not remove watched progress or scanned library entries.
         </p>
       </section>
 

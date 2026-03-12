@@ -116,12 +116,15 @@ export interface SegmentStateDetail {
   segments: SegmentState[];
 }
 
+export type EmbeddedSubtitlePolicy = 'auto' | 'off';
+
 export interface EngineOptions {
   /**
    * Number of internal audio transcode workers to create for worker-mode playback.
    * Use 0 to disable the pool and keep all transcode work inside the coordinator worker.
    */
   transcodeWorkers?: number;
+  embeddedSubtitlePolicy?: EmbeddedSubtitlePolicy;
 }
 
 export interface LoadWithOptionsInput {
@@ -298,6 +301,7 @@ export class PlaysVideoEngine extends EventTarget {
     this.video = video;
     this.options = {
       transcodeWorkers: options.transcodeWorkers ?? defaultTranscodeWorkerCount(),
+      embeddedSubtitlePolicy: options.embeddedSubtitlePolicy ?? 'auto',
     };
   }
 
@@ -994,8 +998,8 @@ export class PlaysVideoEngine extends EventTarget {
         webvtt: msg.webvtt,
         source: 'embedded',
         trackIndex: msg.trackIndex,
-        defaultTrack: msg.trackIndex === 0,
-        selectTrack: msg.trackIndex === 0,
+        defaultTrack: this.shouldAutoSelectEmbeddedSubtitle(msg.trackIndex),
+        selectTrack: this.shouldAutoSelectEmbeddedSubtitle(msg.trackIndex),
       });
     } else if (msg.type === 'subtitle-progress') {
       this.handleWorkerSubtitleProgress(msg);
@@ -1639,8 +1643,8 @@ export class PlaysVideoEngine extends EventTarget {
           webvtt,
           source: 'embedded',
           trackIndex: track.index,
-          defaultTrack: track.index === 0,
-          selectTrack: track.index === 0,
+          defaultTrack: this.shouldAutoSelectEmbeddedSubtitle(track.index),
+          selectTrack: this.shouldAutoSelectEmbeddedSubtitle(track.index),
         });
       }
     } catch (error) {
@@ -1660,6 +1664,10 @@ export class PlaysVideoEngine extends EventTarget {
       this.attachedSubtitleTracks[0];
     if (!preferred) return;
     queueMicrotask(() => this.showTextTrack(preferred.element));
+  }
+
+  private shouldAutoSelectEmbeddedSubtitle(trackIndex: number): boolean {
+    return this.options.embeddedSubtitlePolicy === 'auto' && trackIndex === 0;
   }
 }
 

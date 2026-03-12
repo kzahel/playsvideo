@@ -1,5 +1,6 @@
 export { PlaysVideoEngine } from './engine.js';
 export type {
+  EmbeddedSubtitlePolicy,
   EngineOptions,
   EnginePhase,
   ReadyDetail,

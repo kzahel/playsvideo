@@ -1,9 +1,12 @@
 export type ThemePreference = 'system' | 'light' | 'dark';
+export type EmbeddedSubtitlePolicy = 'auto' | 'off';
 
 export const THEME_PREFERENCE_KEY = 'ui-theme-preference';
 export const THEME_PREFERENCE_STORAGE_KEY = 'pv-theme-preference';
 export const RESOLVED_THEME_STORAGE_KEY = 'pv-theme';
 export const PLAYER_CONTROLS_TYPE_KEY = 'pv-controls-type';
+export const AUTO_RESCAN_DETAIL_PAGES_KEY = 'scan-auto-rescan-detail-pages';
+export const EMBEDDED_SUBTITLE_POLICY_KEY = 'subtitle-embedded-policy';
 
 export function isThemePreference(value: unknown): value is ThemePreference {
   return value === 'system' || value === 'light' || value === 'dark';

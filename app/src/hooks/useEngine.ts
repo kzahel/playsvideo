@@ -2,9 +2,14 @@ import { useRef, useState, useEffect, useCallback, type MutableRefObject } from 
 import { PlaysVideoEngine } from 'playsvideo';
 import type { LibraryEntry } from '../db';
 import { db } from '../db';
+import { useSetting } from './useSetting.js';
 import { getFile, setFolder } from '../scan.js';
 import { folderProvider } from '../folder-provider.js';
 import { scheduleSyncIfLoggedIn } from '../firebase.js';
+import {
+  EMBEDDED_SUBTITLE_POLICY_KEY,
+  type EmbeddedSubtitlePolicy,
+} from '../settings.js';
 
 export type EngineSource =
   | { kind: 'entry'; entry: LibraryEntry }
@@ -102,6 +107,10 @@ export function useEngine(source: EngineSource | null): UseEngineResult {
   const [diagnosticsStatus, setDiagnosticsStatus] = useState('');
   const [needsPermission, setNeedsPermission] = useState(false);
   const [retryCounter, setRetryCounter] = useState(0);
+  const [embeddedSubtitlePolicy] = useSetting<EmbeddedSubtitlePolicy>(
+    EMBEDDED_SUBTITLE_POLICY_KEY,
+    'auto',
+  );
 
   const savePosition = useCallback(async () => {
     const currentEntry = entryRef.current;
@@ -180,7 +189,9 @@ export function useEngine(source: EngineSource | null): UseEngineResult {
     if (!source || !videoRef.current) return;
 
     const video = videoRef.current;
-    const engine = new PlaysVideoEngine(video);
+    const engine = new PlaysVideoEngine(video, {
+      embeddedSubtitlePolicy,
+    });
     engineRef.current = engine;
     diagnosticsRef.current = [];
     playbackDecisionRef.current = null;
@@ -376,7 +387,7 @@ export function useEngine(source: EngineSource | null): UseEngineResult {
       engine.destroy();
       engineRef.current = null;
     };
-  }, [sourceKey, retryCounter]);
+  }, [embeddedSubtitlePolicy, sourceKey, retryCounter]);
 
   const retryPermission = useCallback(async () => {
     if (!folderProvider.requiresPermissionGrant) {
