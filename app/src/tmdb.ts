@@ -1,10 +1,12 @@
 import {
   db,
   type LibraryEntry,
+  type MovieMetadataEntry,
   type SeriesMetadataEntry,
   type SeriesMetadataSearchCandidate,
 } from './db.js';
 import {
+  buildMovieMetadataKey,
   buildSeriesMetadataKey,
   normalizeLookupText,
   parseMediaMetadata,
@@ -22,6 +24,9 @@ interface TmdbSearchResult {
   name: string;
   original_name?: string;
   first_air_date?: string;
+  title?: string;
+  original_title?: string;
+  release_date?: string;
   popularity?: number;
 }
 
@@ -48,6 +53,16 @@ interface TmdbTvDetails {
   };
 }
 
+interface TmdbMovieDetails {
+  id: number;
+  title: string;
+  original_title?: string;
+  release_date?: string;
+  overview?: string;
+  poster_path?: string;
+  backdrop_path?: string;
+}
+
 interface TmdbConfigResponse {
   images?: {
     secure_base_url?: string;
@@ -72,6 +87,13 @@ interface SeriesLookupCandidate {
   year?: number;
 }
 
+interface MovieLookupCandidate {
+  key: string;
+  title: string;
+  normalizedTitle: string;
+  year?: number;
+}
+
 export const TMDB_READ_ACCESS_TOKEN_KEY = 'tmdb-read-access-token';
 
 export async function refreshLibraryMetadata(options?: {
@@ -82,35 +104,73 @@ export async function refreshLibraryMetadata(options?: {
   const token = await getTmdbReadAccessToken();
   if (!token) return;
 
-  const candidates = new Map<string, SeriesLookupCandidate>();
+  const seriesCandidates = new Map<string, SeriesLookupCandidate>();
+  const movieCandidates = new Map<string, MovieLookupCandidate>();
   for (const entry of entries) {
-    if (entry.detectedMediaType !== 'tv' || !entry.parsedTitle) continue;
-    const key = entry.seriesMetadataKey ?? buildSeriesMetadataKey(entry.parsedTitle, entry.parsedYear);
-    candidates.set(key, {
-      key,
-      title: entry.parsedTitle,
-      normalizedTitle: normalizeLookupText(entry.parsedTitle),
-      year: entry.parsedYear,
-    });
-  }
+    if (!entry.parsedTitle) continue;
 
-  if (candidates.size === 0) return;
-
-  const existingMetadata = await db.seriesMetadata.bulkGet(Array.from(candidates.keys()));
-  const existingByKey = new Map(
-    existingMetadata
-      .filter((entry): entry is SeriesMetadataEntry => Boolean(entry))
-      .map((entry) => [entry.key, entry]),
-  );
-
-  for (const candidate of candidates.values()) {
-    const existing = existingByKey.get(candidate.key);
-    if (!options?.force && existing && !isMetadataStale(existing)) {
+    if (entry.detectedMediaType === 'tv') {
+      const key =
+        entry.seriesMetadataKey ?? buildSeriesMetadataKey(entry.parsedTitle, entry.parsedYear);
+      seriesCandidates.set(key, {
+        key,
+        title: entry.parsedTitle,
+        normalizedTitle: normalizeLookupText(entry.parsedTitle),
+        year: entry.parsedYear,
+      });
       continue;
     }
 
-    const metadata = await lookupSeriesMetadata(candidate, token);
-    await db.seriesMetadata.put(metadata);
+    if (entry.detectedMediaType === 'movie') {
+      const key =
+        entry.movieMetadataKey ?? buildMovieMetadataKey(entry.parsedTitle, entry.parsedYear);
+      movieCandidates.set(key, {
+        key,
+        title: entry.parsedTitle,
+        normalizedTitle: normalizeLookupText(entry.parsedTitle),
+        year: entry.parsedYear,
+      });
+    }
+  }
+
+  if (seriesCandidates.size === 0 && movieCandidates.size === 0) return;
+
+  if (seriesCandidates.size > 0) {
+    const existingMetadata = await db.seriesMetadata.bulkGet(Array.from(seriesCandidates.keys()));
+    const existingByKey = new Map(
+      existingMetadata
+        .filter((entry): entry is SeriesMetadataEntry => Boolean(entry))
+        .map((entry) => [entry.key, entry]),
+    );
+
+    for (const candidate of seriesCandidates.values()) {
+      const existing = existingByKey.get(candidate.key);
+      if (!options?.force && existing && !isMetadataStale(existing)) {
+        continue;
+      }
+
+      const metadata = await lookupSeriesMetadata(candidate, token);
+      await db.seriesMetadata.put(metadata);
+    }
+  }
+
+  if (movieCandidates.size > 0) {
+    const existingMetadata = await db.movieMetadata.bulkGet(Array.from(movieCandidates.keys()));
+    const existingByKey = new Map(
+      existingMetadata
+        .filter((entry): entry is MovieMetadataEntry => Boolean(entry))
+        .map((entry) => [entry.key, entry]),
+    );
+
+    for (const candidate of movieCandidates.values()) {
+      const existing = existingByKey.get(candidate.key);
+      if (!options?.force && existing && !isMetadataStale(existing)) {
+        continue;
+      }
+
+      const metadata = await lookupMovieMetadata(candidate, token);
+      await db.movieMetadata.put(metadata);
+    }
   }
 }
 
@@ -121,7 +181,8 @@ async function backfillParsedLibraryEntries(entries?: LibraryEntry[]): Promise<L
     if (
       entry.detectedMediaType &&
       entry.parsedTitle !== undefined &&
-      (entry.detectedMediaType !== 'tv' || entry.seriesMetadataKey)
+      (entry.detectedMediaType !== 'tv' || entry.seriesMetadataKey) &&
+      (entry.detectedMediaType !== 'movie' || entry.movieMetadataKey)
     ) {
       return entry;
     }
@@ -223,6 +284,83 @@ async function lookupSeriesMetadata(
   }
 }
 
+async function lookupMovieMetadata(
+  candidate: MovieLookupCandidate,
+  token: string,
+): Promise<MovieMetadataEntry> {
+  try {
+    const search = await tmdbRequest<TmdbSearchResponse>('/search/movie', token, {
+      query: candidate.title,
+      language: 'en-US',
+      include_adult: 'false',
+      ...(candidate.year ? { primary_release_year: String(candidate.year) } : {}),
+    });
+    const scored = scoreSearchResults(candidate, search.results ?? [], 'movie');
+    const debugCandidates = scored.slice(0, 5).map((item) => ({
+      id: item.result.id,
+      name: item.result.title ?? item.result.name ?? '',
+      originalName: item.result.original_title ?? item.result.original_name,
+      firstAirDate: item.result.release_date ?? item.result.first_air_date,
+      score: Math.round(item.score * 10) / 10,
+    })) satisfies SeriesMetadataSearchCandidate[];
+    const best = scored[0];
+    const match = best && best.score >= 55 ? best.result : undefined;
+    if (!match) {
+      return {
+        key: candidate.key,
+        query: candidate.title,
+        normalizedQuery: candidate.normalizedTitle,
+        year: candidate.year,
+        fetchedAt: Date.now(),
+        status: 'not-found',
+        debugReason: best
+          ? `Best score ${Math.round(best.score * 10) / 10} was below threshold 55`
+          : 'TMDB search returned no results',
+        debugSearchCandidates: debugCandidates,
+      };
+    }
+
+    const details = await tmdbRequest<TmdbMovieDetails>(`/movie/${match.id}`, token, {
+      language: 'en-US',
+    });
+    const imageConfig = await getCachedImageConfig(token);
+
+    return {
+      key: candidate.key,
+      query: candidate.title,
+      normalizedQuery: candidate.normalizedTitle,
+      year: candidate.year,
+      fetchedAt: Date.now(),
+      status: 'resolved',
+      tmdbId: details.id,
+      title: details.title,
+      originalTitle: details.original_title,
+      overview: details.overview,
+      releaseDate: details.release_date,
+      posterUrl: buildImageUrl(imageConfig.secureBaseUrl, imageConfig.posterSize, details.poster_path),
+      backdropUrl: buildImageUrl(
+        imageConfig.secureBaseUrl,
+        imageConfig.backdropSize,
+        details.backdrop_path,
+      ),
+      debugSelectedScore: Math.round(best.score * 10) / 10,
+      debugReason: `Matched candidate above threshold 55`,
+      debugSearchCandidates: debugCandidates,
+    };
+  } catch (error) {
+    return {
+      key: candidate.key,
+      query: candidate.title,
+      normalizedQuery: candidate.normalizedTitle,
+      year: candidate.year,
+      fetchedAt: Date.now(),
+      status: 'error',
+      debugReason: 'TMDB request failed',
+      debugError: error instanceof Error ? error.message : String(error),
+    };
+  }
+}
+
 async function getTmdbReadAccessToken(): Promise<string | null> {
   const envToken = import.meta.env.VITE_TMDB_READ_ACCESS_TOKEN?.trim();
   if (envToken) {
@@ -279,28 +417,40 @@ async function tmdbRequest<T>(
 }
 
 function scoreSearchResults(
-  candidate: SeriesLookupCandidate,
+  candidate: SeriesLookupCandidate | MovieLookupCandidate,
   results: TmdbSearchResult[],
+  mode: 'tv' | 'movie' = 'tv',
 ): Array<{ result: TmdbSearchResult; score: number }> {
   return results
-    .map((result) => ({ result, score: scoreSearchResult(candidate, result) }))
+    .map((result) => ({ result, score: scoreSearchResult(candidate, result, mode) }))
     .sort((left, right) => right.score - left.score);
 }
 
-function scoreSearchResult(candidate: SeriesLookupCandidate, result: TmdbSearchResult): number {
-  const name = normalizeLookupText(result.name);
-  const originalName = normalizeLookupText(result.original_name ?? '');
+function scoreSearchResult(
+  candidate: SeriesLookupCandidate | MovieLookupCandidate,
+  result: TmdbSearchResult,
+  mode: 'tv' | 'movie',
+): number {
+  const primaryName = normalizeLookupText(
+    mode === 'movie' ? (result.title ?? result.name ?? '') : (result.name ?? result.title ?? ''),
+  );
+  const alternateName = normalizeLookupText(
+    mode === 'movie'
+      ? (result.original_title ?? result.original_name ?? '')
+      : (result.original_name ?? result.original_title ?? ''),
+  );
   const overlap = Math.max(
-    tokenOverlap(candidate.normalizedTitle, name),
-    tokenOverlap(candidate.normalizedTitle, originalName),
+    tokenOverlap(candidate.normalizedTitle, primaryName),
+    tokenOverlap(candidate.normalizedTitle, alternateName),
   );
   let score = overlap * 100;
 
-  if (candidate.normalizedTitle === name || candidate.normalizedTitle === originalName) {
+  if (candidate.normalizedTitle === primaryName || candidate.normalizedTitle === alternateName) {
     score += 40;
   }
 
-  if (candidate.year != null && result.first_air_date?.startsWith(String(candidate.year))) {
+  const dateValue = mode === 'movie' ? result.release_date : result.first_air_date;
+  if (candidate.year != null && dateValue?.startsWith(String(candidate.year))) {
     score += 20;
   }
 

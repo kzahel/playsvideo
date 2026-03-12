@@ -30,6 +30,7 @@ export interface LibraryEntry {
   episodeNumber?: number;
   endingEpisodeNumber?: number;
   seriesMetadataKey?: string;
+  movieMetadataKey?: string;
 }
 
 export interface DirectoryEntry {
@@ -73,12 +74,33 @@ export interface SeriesMetadataEntry {
   debugSearchCandidates?: SeriesMetadataSearchCandidate[];
 }
 
+export interface MovieMetadataEntry {
+  key: string;
+  query: string;
+  normalizedQuery: string;
+  fetchedAt: number;
+  status: SeriesMetadataStatus;
+  year?: number;
+  tmdbId?: number;
+  title?: string;
+  originalTitle?: string;
+  overview?: string;
+  releaseDate?: string;
+  posterUrl?: string;
+  backdropUrl?: string;
+  debugSelectedScore?: number;
+  debugReason?: string;
+  debugError?: string;
+  debugSearchCandidates?: SeriesMetadataSearchCandidate[];
+}
+
 class PlaysVideoDB extends Dexie {
   library!: EntityTable<LibraryEntry, 'id'>;
   directories!: EntityTable<DirectoryEntry, 'id'>;
   playlists!: EntityTable<PlaylistEntry, 'id'>;
   settings!: EntityTable<SettingEntry, 'key'>;
   seriesMetadata!: EntityTable<SeriesMetadataEntry, 'key'>;
+  movieMetadata!: EntityTable<MovieMetadataEntry, 'key'>;
 
   constructor() {
     super('playsvideo');
@@ -95,6 +117,15 @@ class PlaysVideoDB extends Dexie {
       playlists: '++id, name',
       settings: 'key',
       seriesMetadata: 'key, tmdbId, fetchedAt, query',
+    });
+    this.version(3).stores({
+      library:
+        '++id, directoryId, path, name, watchState, addedAt, detectedMediaType, parsedTitle, seriesMetadataKey, movieMetadataKey',
+      directories: '++id, name',
+      playlists: '++id, name',
+      settings: 'key',
+      seriesMetadata: 'key, tmdbId, fetchedAt, query',
+      movieMetadata: 'key, tmdbId, fetchedAt, query',
     });
   }
 }

@@ -51,6 +51,7 @@ export interface ParsedMediaMetadata {
   episodeNumber?: number;
   endingEpisodeNumber?: number;
   seriesMetadataKey?: string;
+  movieMetadataKey?: string;
 }
 
 export function normalizeLookupText(value: string): string {
@@ -66,6 +67,10 @@ export function normalizeLookupText(value: string): string {
 
 export function buildSeriesMetadataKey(title: string, year?: number): string {
   return `tv:${normalizeLookupText(title)}:${year ?? ''}`;
+}
+
+export function buildMovieMetadataKey(title: string, year?: number): string {
+  return `movie:${normalizeLookupText(title)}:${year ?? ''}`;
 }
 
 export function parseMediaMetadata(path: string): ParsedMediaMetadata {
@@ -118,6 +123,7 @@ export function parseMediaMetadata(path: string): ParsedMediaMetadata {
       detectedMediaType: 'movie',
       parsedTitle: movie.title,
       parsedYear: movie.year,
+      movieMetadataKey: buildMovieMetadataKey(movie.title, movie.year),
     };
   }
 

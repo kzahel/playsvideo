@@ -10,7 +10,7 @@ import {
   onAuthStateChanged,
   type User,
 } from 'firebase/auth';
-import { db, type WatchState } from './db.js';
+import { db, type LibraryEntry, type MovieMetadataEntry, type SeriesMetadataEntry, type WatchState } from './db.js';
 import { isExtension } from './context.js';
 
 const firebaseConfig = {
@@ -85,6 +85,73 @@ function syncKey(name: string, size: number, durationSec: number): string {
   return `${name}|${size}|${durationSec}`;
 }
 
+function buildFallbackSyncKey(entry: Pick<LibraryEntry, 'name' | 'size' | 'durationSec'>): string {
+  return `file:${syncKey(entry.name, entry.size, entry.durationSec)}`;
+}
+
+function buildPreferredSyncKey(
+  entry: LibraryEntry,
+  seriesMetadataByKey: Map<string, SeriesMetadataEntry>,
+  movieMetadataByKey: Map<string, MovieMetadataEntry>,
+): string {
+  if (
+    entry.detectedMediaType === 'tv' &&
+    entry.seriesMetadataKey &&
+    entry.seasonNumber != null &&
+    entry.episodeNumber != null
+  ) {
+    const seriesMetadata = seriesMetadataByKey.get(entry.seriesMetadataKey);
+    if (seriesMetadata?.status === 'resolved' && seriesMetadata.tmdbId != null) {
+      const episodeKey =
+        entry.endingEpisodeNumber != null
+          ? `${String(entry.episodeNumber).padStart(2, '0')}-${String(entry.endingEpisodeNumber).padStart(2, '0')}`
+          : String(entry.episodeNumber).padStart(2, '0');
+      return `tmdb:tv:${seriesMetadata.tmdbId}:s${String(entry.seasonNumber).padStart(2, '0')}:e${episodeKey}`;
+    }
+  }
+
+  if (entry.detectedMediaType === 'movie' && entry.movieMetadataKey) {
+    const movieMetadata = movieMetadataByKey.get(entry.movieMetadataKey);
+    if (movieMetadata?.status === 'resolved' && movieMetadata.tmdbId != null) {
+      return `tmdb:movie:${movieMetadata.tmdbId}`;
+    }
+  }
+
+  return buildFallbackSyncKey(entry);
+}
+
+function buildSyncIdentityContext(
+  entries: LibraryEntry[],
+  seriesMetadata: SeriesMetadataEntry[],
+  movieMetadata: MovieMetadataEntry[],
+): {
+  preferredKeyByEntryId: Map<number, string>;
+  fallbackKeyByEntryId: Map<number, string>;
+  legacyToPreferredKey: Map<string, string>;
+} {
+  const seriesMetadataByKey = new Map(seriesMetadata.map((entry) => [entry.key, entry]));
+  const movieMetadataByKey = new Map(movieMetadata.map((entry) => [entry.key, entry]));
+  const preferredKeyByEntryId = new Map<number, string>();
+  const fallbackKeyByEntryId = new Map<number, string>();
+  const legacyToPreferredKey = new Map<string, string>();
+
+  for (const entry of entries) {
+    const preferredKey = buildPreferredSyncKey(entry, seriesMetadataByKey, movieMetadataByKey);
+    const fallbackKey = buildFallbackSyncKey(entry);
+    preferredKeyByEntryId.set(entry.id, preferredKey);
+    fallbackKeyByEntryId.set(entry.id, fallbackKey);
+    if (preferredKey !== fallbackKey) {
+      legacyToPreferredKey.set(fallbackKey, preferredKey);
+    }
+  }
+
+  return {
+    preferredKeyByEntryId,
+    fallbackKeyByEntryId,
+    legacyToPreferredKey,
+  };
+}
+
 export async function pullSyncBlob(uid: string): Promise<SyncBlob | null> {
   const snap = await getDoc(doc(firestore, 'sync', uid));
   if (!snap.exists()) return null;
@@ -96,11 +163,16 @@ export async function pushSyncBlob(uid: string, blob: SyncBlob): Promise<void> {
 }
 
 export async function buildLocalBlob(): Promise<SyncBlob> {
-  const entries = await db.library.toArray();
+  const [entries, seriesMetadata, movieMetadata] = await Promise.all([
+    db.library.toArray(),
+    db.seriesMetadata.toArray(),
+    db.movieMetadata.toArray(),
+  ]);
+  const { preferredKeyByEntryId } = buildSyncIdentityContext(entries, seriesMetadata, movieMetadata);
   const blob: SyncBlob = { v: 1, entries: {} };
   for (const entry of entries) {
     if (entry.durationSec <= 0) continue;
-    const key = syncKey(entry.name, entry.size, entry.durationSec);
+    const key = preferredKeyByEntryId.get(entry.id) ?? buildFallbackSyncKey(entry);
     blob.entries[key] = {
       position: entry.playbackPositionSec,
       watchState: entry.watchState,
@@ -117,29 +189,55 @@ function pickWinner(local: SyncEntry, remote: SyncEntry): SyncEntry {
 }
 
 export async function mergeAndSync(uid: string): Promise<void> {
-  const [remote, local] = await Promise.all([pullSyncBlob(uid), buildLocalBlob()]);
+  const [remote, entries, seriesMetadata, movieMetadata] = await Promise.all([
+    pullSyncBlob(uid),
+    db.library.toArray(),
+    db.seriesMetadata.toArray(),
+    db.movieMetadata.toArray(),
+  ]);
+  const {
+    preferredKeyByEntryId,
+    fallbackKeyByEntryId,
+    legacyToPreferredKey,
+  } = buildSyncIdentityContext(entries, seriesMetadata, movieMetadata);
+
+  const local: SyncBlob = { v: 1, entries: {} };
+  for (const entry of entries) {
+    if (entry.durationSec <= 0) continue;
+    const key = preferredKeyByEntryId.get(entry.id) ?? buildFallbackSyncKey(entry);
+    local.entries[key] = {
+      position: entry.playbackPositionSec,
+      watchState: entry.watchState,
+      durationSec: entry.durationSec,
+      watchedAt: Date.now(),
+    };
+  }
 
   const merged: SyncBlob = { v: 1, entries: { ...local.entries } };
 
   if (remote?.entries) {
     for (const [key, remoteEntry] of Object.entries(remote.entries)) {
-      const localEntry = merged.entries[key];
+      const canonicalKey = legacyToPreferredKey.get(key) ?? key;
+      const localEntry = merged.entries[canonicalKey];
       if (!localEntry) {
-        merged.entries[key] = remoteEntry;
+        merged.entries[canonicalKey] = remoteEntry;
       } else {
-        merged.entries[key] = pickWinner(localEntry, remoteEntry);
+        merged.entries[canonicalKey] = pickWinner(localEntry, remoteEntry);
       }
     }
   }
 
   // Apply remote winners to local IDB
   if (remote?.entries) {
-    const allLocal = await db.library.toArray();
-    for (const entry of allLocal) {
+    for (const entry of entries) {
       if (entry.durationSec <= 0) continue;
-      const key = syncKey(entry.name, entry.size, entry.durationSec);
-      const winner = merged.entries[key];
-      if (winner && remote.entries[key] && remote.entries[key].watchedAt > (local.entries[key]?.watchedAt ?? 0)) {
+      const preferredKey = preferredKeyByEntryId.get(entry.id) ?? buildFallbackSyncKey(entry);
+      const fallbackKey = fallbackKeyByEntryId.get(entry.id) ?? buildFallbackSyncKey(entry);
+      const remoteEntry = remote.entries[preferredKey] ?? remote.entries[fallbackKey];
+      const winner = merged.entries[preferredKey];
+      const localWatchedAt =
+        local.entries[preferredKey]?.watchedAt ?? local.entries[fallbackKey]?.watchedAt ?? 0;
+      if (winner && remoteEntry && remoteEntry.watchedAt > localWatchedAt) {
         await db.library.update(entry.id, {
           playbackPositionSec: winner.position,
           watchState: winner.watchState,
