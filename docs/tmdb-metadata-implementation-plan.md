@@ -34,6 +34,18 @@ Both the web app and the extension should call one shared worker-owned metadata 
 
 The UI should only call a local interface such as `metadataClient.matchTv(...)`, not `fetch()` TMDB endpoints directly.
 
+Important clarification:
+
+- Dexie remains the durable local metadata database.
+- The background/host layer owns TMDB access and refresh policy.
+- We do not need to move every local metadata read out of Dexie immediately.
+
+The key rule is:
+
+- no UI code should call TMDB directly
+
+It is acceptable for UI code to continue reading already-cached metadata from Dexie while the worker/host layer remains the only code allowed to refresh that data from TMDB.
+
 ## Phase 1: isolate the metadata client
 
 Goal:
@@ -93,6 +105,7 @@ Exit criteria:
 
 - transport code can be swapped without changing cache schema
 - stale and negative cache handling is explicit instead of implicit
+- Dexie remains the backing store for cached metadata
 
 ## Phase 3: add a request coordinator
 
@@ -174,6 +187,7 @@ Exit criteria:
 
 - extension UI no longer performs direct TMDB requests
 - extension background owns rate limiting and durable metadata policy
+- Dexie remains the local cached metadata store
 
 ## Phase 6: wire the web app host
 
@@ -203,6 +217,11 @@ Exit criteria:
 
 - web app and extension call the same metadata host interface
 - only the host adapter differs
+
+Note:
+
+- this phase does not require eliminating Dexie reads in the UI
+- it requires unifying the TMDB/network boundary
 
 ## Phase 7: add per-credential health state
 
@@ -361,3 +380,4 @@ We are done with the first major architecture pass when:
 - cache records are durable and transport-independent
 - `429` behavior is coordinated and persisted
 - TMDB remains the canonical source for sync identity and slugs
+- Dexie remains the local metadata database while TMDB calls are centralized through the host/background layer

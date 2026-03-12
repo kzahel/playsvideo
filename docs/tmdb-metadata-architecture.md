@@ -42,6 +42,33 @@ The only runtime difference is the host transport boundary:
 
 UI code should never call TMDB directly.
 
+### 2a. Dexie remains the local metadata database
+
+Dexie/IndexedDB remains the durable local source of truth for cached metadata and library state.
+
+It should continue to store:
+
+- scanned library entries
+- parsed filename cache
+- TMDB match/entity cache
+- season cache
+- transport health state
+- watch progress
+
+The worker/host layer does not replace Dexie. It sits above Dexie and owns:
+
+- all TMDB network access
+- request orchestration
+- rate limiting
+- cooldown state
+- transport selection
+- invalidation and refresh policy
+
+This distinction matters:
+
+- Dexie is the persistent local database
+- background/service worker is the only layer allowed to hit TMDB directly
+
 ### 3. Direct TMDB is the initial transport
 
 We start with direct TMDB access from the worker-owned metadata layer.
@@ -121,15 +148,17 @@ The service worker/background worker is the sole owner of:
 - request queueing
 - rate-limit state
 - transport selection
-- durable metadata cache
 - in-flight request dedupe
+- metadata refresh/invalidation policy
 
-UI code should communicate with the worker through a small internal API instead of constructing TMDB requests itself.
+Dexie remains the durable metadata cache and local database. The worker/host layer owns the policy around when and how that cache is refreshed from TMDB.
+
+UI code should communicate with the worker/host layer through a small internal API instead of constructing TMDB requests itself.
 
 Benefits:
 
 - one place to enforce request policy
-- one cache shared across views/tabs
+- one orchestration layer shared across views/tabs
 - easier debugging
 - easier future switch to proxy transport
 
@@ -138,6 +167,8 @@ This is primarily an architecture benefit. It is not a true secret boundary for 
 ## Durable cache model
 
 Aggressive local caching is the main availability and rate-limit strategy.
+
+This durable cache lives in Dexie/IndexedDB.
 
 Store these caches durably:
 
