@@ -49,12 +49,27 @@ export interface SiblingSubtitleFile {
 
 export type FolderRescanAccessState = 'ready' | 'needs-user-gesture' | 'unavailable';
 
+export interface FileAccessOptions {
+  requestPermission?: boolean;
+}
+
+export class FileAccessPermissionError extends Error {
+  constructor(message = 'File access permission needed') {
+    super(message);
+    this.name = 'FileAccessPermissionError';
+  }
+}
+
+export function isFileAccessPermissionError(error: unknown): error is FileAccessPermissionError {
+  return error instanceof Error && error.name === 'FileAccessPermissionError';
+}
+
 export interface FolderProvider {
   readonly requiresPermissionGrant: boolean;
   getRescanAccessState(): Promise<FolderRescanAccessState>;
   hasLiveAccess(): boolean;
   pickFolder(): Promise<FolderResult>;
-  getFile(entry: LibraryEntry): Promise<File>;
+  getFile(entry: LibraryEntry, options?: FileAccessOptions): Promise<File>;
   listSiblingSubtitleFiles(entry: LibraryEntry): Promise<SiblingSubtitleFile[]>;
   rescan(directoryId?: number): Promise<FolderResult>;
 }
@@ -84,12 +99,27 @@ async function* walkDirectory(
   }
 }
 
-async function ensurePermission(handle: FileSystemDirectoryHandle): Promise<void> {
+async function ensurePermission(
+  handle: FileSystemDirectoryHandle,
+  options: FileAccessOptions = {},
+): Promise<void> {
   const status = await handle.queryPermission({ mode: 'read' });
   if (status === 'granted') return;
-  const requested = await handle.requestPermission({ mode: 'read' });
-  if (requested !== 'granted') {
-    throw new Error('Permission denied for directory');
+
+  if (!options.requestPermission) {
+    throw new FileAccessPermissionError();
+  }
+
+  try {
+    const requested = await handle.requestPermission({ mode: 'read' });
+    if (requested !== 'granted') {
+      throw new FileAccessPermissionError('Permission denied for directory');
+    }
+  } catch (error) {
+    if (error instanceof Error) {
+      throw new FileAccessPermissionError(error.message);
+    }
+    throw error;
   }
 }
 
@@ -143,10 +173,10 @@ class FsAccessProvider implements FolderProvider {
     return { directoryId: directoryId as number, name: handle.name, files };
   }
 
-  async getFile(entry: LibraryEntry): Promise<File> {
+  async getFile(entry: LibraryEntry, options: FileAccessOptions = {}): Promise<File> {
     const dir = await db.directories.get(entry.directoryId);
     if (!dir?.handle) throw new Error('No directory available');
-    await ensurePermission(dir.handle);
+    await ensurePermission(dir.handle, options);
     const parts = entry.path.split('/');
     let current: FileSystemDirectoryHandle = dir.handle;
     for (let i = 0; i < parts.length - 1; i++) {
@@ -162,7 +192,14 @@ class FsAccessProvider implements FolderProvider {
       return [];
     }
 
-    await ensurePermission(dir.handle);
+    try {
+      await ensurePermission(dir.handle);
+    } catch (error) {
+      if (isFileAccessPermissionError(error)) {
+        return [];
+      }
+      throw error;
+    }
     const parts = entry.path.split('/');
     let current: FileSystemDirectoryHandle = dir.handle;
     for (let index = 0; index < parts.length - 1; index += 1) {

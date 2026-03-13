@@ -4,7 +4,7 @@ import type { LibraryEntry } from '../db';
 import { db } from '../db';
 import { useSetting } from './useSetting.js';
 import { getFile, setFolder } from '../scan.js';
-import { folderProvider } from '../folder-provider.js';
+import { folderProvider, isFileAccessPermissionError } from '../folder-provider.js';
 import { scheduleSyncIfLoggedIn } from '../firebase.js';
 import {
   EMBEDDED_SUBTITLE_POLICY_KEY,
@@ -350,7 +350,7 @@ export function useEngine(source: EngineSource | null): UseEngineResult {
         setStatus('Getting file access...');
         setNeedsPermission(false);
         pushDiagnosticEvent(diagnosticsRef, 'file-access:start');
-        const resolved = await getFile(entry!);
+        const resolved = await getFile(entry!, { requestPermission: false });
         pushDiagnosticEvent(
           diagnosticsRef,
           'file-access:ready',
@@ -359,10 +359,7 @@ export function useEngine(source: EngineSource | null): UseEngineResult {
         engine.loadFile(resolved);
       } catch (err: unknown) {
         const message = err instanceof Error ? err.message : String(err);
-        if (
-          message.includes('User activation is required') ||
-          message.includes('not available')
-        ) {
+        if (isFileAccessPermissionError(err) || message.includes('not available')) {
           setStatus(
             folderProvider.requiresPermissionGrant
               ? 'File access permission needed'
@@ -404,6 +401,22 @@ export function useEngine(source: EngineSource | null): UseEngineResult {
       } catch (err: unknown) {
         if (err instanceof DOMException && err.name === 'AbortError') return;
         console.error('Failed to select folder:', err);
+        return;
+      }
+    } else if (entryRef.current) {
+      try {
+        await getFile(entryRef.current, { requestPermission: true });
+      } catch (err: unknown) {
+        const message = err instanceof Error ? err.message : String(err);
+        if (isFileAccessPermissionError(err)) {
+          setStatus('File access permission needed');
+          setNeedsPermission(true);
+          pushDiagnosticEvent(diagnosticsRef, 'file-access:permission-required', message);
+          return;
+        }
+        setStatus(`Error: ${message}`);
+        setPhase('error');
+        pushDiagnosticEvent(diagnosticsRef, 'file-access:error', message);
         return;
       }
     }

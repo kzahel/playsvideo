@@ -1,5 +1,9 @@
 import { db, type LibraryEntry } from './db.js';
-import { folderProvider, type ScannedFile } from './folder-provider.js';
+import {
+  folderProvider,
+  type FileAccessOptions,
+  type ScannedFile,
+} from './folder-provider.js';
 import { parseMediaMetadata } from './media-metadata.js';
 import { refreshLibraryMetadata } from './metadata/client.js';
 
@@ -28,8 +32,8 @@ export async function removeFolder(directoryId: number): Promise<void> {
   await db.directories.delete(directoryId);
 }
 
-export async function getFile(entry: LibraryEntry): Promise<File> {
-  return folderProvider.getFile(entry);
+export async function getFile(entry: LibraryEntry, options?: FileAccessOptions): Promise<File> {
+  return folderProvider.getFile(entry, options);
 }
 
 async function syncToLibrary(directoryId: number, files: ScannedFile[]): Promise<void> {
