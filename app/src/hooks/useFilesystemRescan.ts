@@ -78,11 +78,14 @@ export function useFilesystemRescan(
     setError(null);
 
     try {
+      const shouldRequestPermission =
+        nextMode === 'manual' && accessState === 'needs-user-gesture';
       if (multiFolder) {
-        await rescanAllFolders();
+        await rescanAllFolders({ requestPermission: shouldRequestPermission });
       } else {
-        await rescanFolder();
+        await rescanFolder(undefined, { requestPermission: shouldRequestPermission });
       }
+      setAccessState('ready');
     } catch (err) {
       console.error('Failed to rescan:', err);
       const message = err instanceof Error ? err.message : 'Failed to rescan files.';
@@ -93,6 +96,9 @@ export function useFilesystemRescan(
             ? 'Grant file access to refresh files.'
             : 'Select the folder again to refresh files.',
         );
+      } else if (folderProvider.requiresPermissionGrant && message.includes('Permission')) {
+        setAccessState('needs-user-gesture');
+        setError('Grant file access to refresh files.');
       } else {
         setError(message);
       }

@@ -53,6 +53,10 @@ export interface FileAccessOptions {
   requestPermission?: boolean;
 }
 
+export interface FolderRescanOptions {
+  requestPermission?: boolean;
+}
+
 export class FileAccessPermissionError extends Error {
   constructor(message = 'File access permission needed') {
     super(message);
@@ -71,7 +75,7 @@ export interface FolderProvider {
   pickFolder(): Promise<FolderResult>;
   getFile(entry: LibraryEntry, options?: FileAccessOptions): Promise<File>;
   listSiblingSubtitleFiles(entry: LibraryEntry): Promise<SiblingSubtitleFile[]>;
-  rescan(directoryId?: number): Promise<FolderResult>;
+  rescan(directoryId?: number, options?: FolderRescanOptions): Promise<FolderResult>;
 }
 
 // --- File System Access API provider (Chromium) ---
@@ -228,12 +232,12 @@ class FsAccessProvider implements FolderProvider {
     return siblings;
   }
 
-  async rescan(directoryId?: number): Promise<FolderResult> {
+  async rescan(directoryId?: number, options: FolderRescanOptions = {}): Promise<FolderResult> {
     const dir = directoryId
       ? await db.directories.get(directoryId)
       : await db.directories.toCollection().first();
     if (!dir?.handle) throw new Error('No directory to rescan');
-    await ensurePermission(dir.handle);
+    await ensurePermission(dir.handle, options);
     const files = await collectFiles(dir.handle);
     return { directoryId: dir.id, name: dir.name, files };
   }

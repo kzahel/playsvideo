@@ -2,6 +2,7 @@ import { db, type LibraryEntry } from './db.js';
 import {
   folderProvider,
   type FileAccessOptions,
+  type FolderRescanOptions,
   type ScannedFile,
 } from './folder-provider.js';
 import { parseMediaMetadata } from './media-metadata.js';
@@ -15,15 +16,18 @@ export async function setFolder(): Promise<void> {
   await syncToLibrary(result.directoryId, result.files);
 }
 
-export async function rescanFolder(directoryId?: number): Promise<void> {
-  const result = await folderProvider.rescan(directoryId);
+export async function rescanFolder(
+  directoryId?: number,
+  options?: FolderRescanOptions,
+): Promise<void> {
+  const result = await folderProvider.rescan(directoryId, options);
   await syncToLibrary(result.directoryId, result.files);
 }
 
-export async function rescanAllFolders(): Promise<void> {
+export async function rescanAllFolders(options?: FolderRescanOptions): Promise<void> {
   const dirs = await db.directories.toArray();
   for (const dir of dirs) {
-    await rescanFolder(dir.id);
+    await rescanFolder(dir.id, options);
   }
 }
 
