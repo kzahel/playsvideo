@@ -4,6 +4,11 @@ All notable changes to playsvideo are documented here.
 
 ## [Unreleased]
 
+## [0.4.7] - 2026-03-14
+
+### Fixed
+- Call `source._dispose()` in `destroy()` and `reset()` to release consumer resources (e.g. streaming file locks)
+
 ## [0.4.6] - 2026-03-11
 
 ### Changed
