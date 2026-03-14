@@ -8,7 +8,7 @@ describe('parseMediaMetadata', () => {
       parsedTitle: 'Sample Show',
       seasonNumber: 1,
       episodeNumber: 7,
-      seriesMetadataKey: 'tv:sample-show:',
+      seriesMetadataKey: 'tv:sample show:',
     });
   });
 
