@@ -453,6 +453,7 @@ export class PlaysVideoEngine extends EventTarget {
     if (this._source && isAbortableSource(this._source)) {
       this._source.setCurrentSignal(null);
     }
+    this._source?._dispose();
     this._source = null;
     this._sourceDemux?.dispose();
     this._sourceDemux = null;
@@ -547,6 +548,17 @@ export class PlaysVideoEngine extends EventTarget {
       this.video.load();
     }
     this.removeSubtitleTracks();
+    if (this._sourceSegmentAbort) {
+      this._sourceSegmentAbort.abort();
+      this._sourceSegmentAbort = null;
+    }
+    if (this._source && isAbortableSource(this._source)) {
+      this._source.setCurrentSignal(null);
+    }
+    this._source?._dispose();
+    this._source = null;
+    this._sourceDemux?.dispose();
+    this._sourceDemux = null;
     this.pendingSegments.clear();
     this.segmentRequestTimes.clear();
     this.subtitleRequestTimes.clear();
