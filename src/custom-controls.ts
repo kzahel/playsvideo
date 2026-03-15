@@ -64,7 +64,7 @@ const CONTROLS_CSS = `
 .pv-video-container:fullscreen video, .pv-video-container.pv-pip video { width: 100%; height: 100%; object-fit: contain; }
 .pv-video-container.pv-pip { width: 100vw; height: 100vh; }
 
-/* Overlay wrapper */
+/* Overlay wrapper — will-change promotes to compositor layer so it renders above hardware-decoded video */
 .pv-overlay {
   position: absolute;
   inset: 0;
@@ -73,8 +73,9 @@ const CONTROLS_CSS = `
   justify-content: flex-end;
   opacity: 1;
   transition: opacity 0.3s;
-  z-index: 10;
+  z-index: 2147483647;
   pointer-events: none;
+  will-change: opacity;
 }
 .pv-overlay.pv-hidden {
   opacity: 0;
@@ -641,7 +642,13 @@ export function createCustomControls(options: CustomControlsOptions): CustomCont
   };
   fsBtn.addEventListener('click', onFsClick);
 
-  const onFullscreenChange = () => updateFullscreenBtn();
+  const onFullscreenChange = () => {
+    updateFullscreenBtn();
+    // Show controls briefly when entering fullscreen so user sees them
+    if (document.fullscreenElement) {
+      resetHideTimer();
+    }
+  };
   document.addEventListener('fullscreenchange', onFullscreenChange);
 
   // Overflow menu
