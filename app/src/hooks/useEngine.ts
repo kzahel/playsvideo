@@ -191,6 +191,7 @@ export function useEngine(source: EngineSource | null): UseEngineResult {
     if (!source || !videoRef.current) return;
 
     const video = videoRef.current;
+    video.currentTime = 0;
     const engine = new PlaysVideoEngine(video, {
       embeddedSubtitlePolicy,
     });
