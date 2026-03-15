@@ -917,6 +917,7 @@ body {
 }
 .pv-video-container:fullscreen {
   background: #000;
+  border-radius: 0;
 }
 .pv-video-container:fullscreen video {
   width: 100%;
