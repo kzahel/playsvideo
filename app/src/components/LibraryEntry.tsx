@@ -61,80 +61,69 @@ export function LibraryEntryCard({ entry, seriesMetadata, showMetadataDebug = fa
   const displayTitle = seriesMetadata?.name ?? entry.parsedTitle ?? entry.name;
   const episodeLabel = formatEpisodeLabel(entry);
   const posterUrl = seriesMetadata?.posterUrl ?? seriesMetadata?.backdropUrl;
-  const rawNameVisible = entry.parsedTitle != null && entry.parsedTitle !== entry.name;
   const artLabel = seriesMetadata?.name ?? entry.parsedTitle ?? entry.name;
 
   return (
     <Link to={`/play/${entry.id}`} className="library-entry">
-      <div className="library-entry-art">
+      <div className="library-entry-thumb">
         {posterUrl ? (
           <img src={posterUrl} alt={artLabel} loading="lazy" />
         ) : (
-          <div className="library-entry-art-fallback">{buildInitials(artLabel)}</div>
+          <div className="library-entry-thumb-fallback">{buildInitials(artLabel)}</div>
         )}
-        {!isInProgress ? (
-          <span className={`watch-badge ${entry.watchState} library-entry-badge`}>
-            {BADGE_LABEL[entry.watchState]}
-          </span>
-        ) : null}
       </div>
-      <div className="library-entry-body">
-        {episodeLabel ? <div className="library-entry-kicker">{episodeLabel}</div> : null}
-        {seriesMetadata?.logoUrl ? (
-          <img
-            className="library-entry-logo"
-            src={seriesMetadata.logoUrl}
-            alt={displayTitle}
-            loading="lazy"
-          />
-        ) : null}
-        <div className="name">{displayTitle}</div>
-        {rawNameVisible ? <div className="library-entry-filename">{entry.name}</div> : null}
-        {seriesMetadata?.overview ? <div className="library-entry-overview">{seriesMetadata.overview}</div> : null}
-        <div className="meta">
+      <div className="library-entry-info">
+        <div className="library-entry-title">
+          {episodeLabel ? <span className="library-entry-episode">{episodeLabel}</span> : null}
+          {displayTitle}
+        </div>
+        <div className="library-entry-meta">
           {formatSize(entry.size)}
           {entry.durationSec > 0 ? ` \u00b7 ${formatTime(entry.durationSec)}` : ''}
+          {isInProgress ? ` \u00b7 ${formatTime(entry.playbackPositionSec)}` : ''}
         </div>
-        {showMetadataDebug ? (
-          <div className="library-entry-debug">
-            <div>type: {entry.detectedMediaType}</div>
-            <div>parsed: {entry.parsedTitle ?? '(none)'}</div>
-            <div>
-              episode:{' '}
-              {entry.seasonNumber != null && entry.episodeNumber != null
-                ? `S${entry.seasonNumber}E${entry.episodeNumber}`
-                : '(none)'}
-            </div>
-            <div>metadata key: {entry.seriesMetadataKey ?? '(none)'}</div>
-            <div>match status: {formatMatchStatus(seriesMetadata)}</div>
-            {seriesMetadata?.query ? <div>query: {seriesMetadata.query}</div> : null}
-            {seriesMetadata?.debugSelectedScore != null ? (
-              <div>selected score: {seriesMetadata.debugSelectedScore}</div>
-            ) : null}
-            {seriesMetadata?.debugReason ? <div>reason: {seriesMetadata.debugReason}</div> : null}
-            {seriesMetadata?.debugError ? <div>error: {seriesMetadata.debugError}</div> : null}
-            {seriesMetadata?.debugSearchCandidates?.length ? (
-              <div>
-                candidates:{' '}
-                {seriesMetadata.debugSearchCandidates
-                  .map((candidate) => {
-                    const year = candidate.firstAirDate?.slice(0, 4);
-                    return `${candidate.name}${year ? ` (${year})` : ''} [${candidate.score}]`;
-                  })
-                  .join(' | ')}
-              </div>
-            ) : null}
-          </div>
-        ) : null}
       </div>
+      {!isInProgress && entry.watchState !== 'none' ? (
+        <span className={`watch-badge ${entry.watchState}`}>
+          {BADGE_LABEL[entry.watchState]}
+        </span>
+      ) : null}
       {isInProgress ? (
-        <div className="progress-row">
-          <div className="progress-bar">
-            <div className="progress-fill" style={{ width: `${progressPct}%` }} />
+        <div className="library-entry-progress">
+          <div className="library-entry-progress-bar">
+            <div className="library-entry-progress-fill" style={{ width: `${progressPct}%` }} />
           </div>
-          <span className="progress-time">
-            {formatTime(entry.playbackPositionSec)} / {formatTime(entry.durationSec)}
-          </span>
+        </div>
+      ) : null}
+      {showMetadataDebug ? (
+        <div className="library-entry-debug">
+          <div>type: {entry.detectedMediaType}</div>
+          <div>parsed: {entry.parsedTitle ?? '(none)'}</div>
+          <div>
+            episode:{' '}
+            {entry.seasonNumber != null && entry.episodeNumber != null
+              ? `S${entry.seasonNumber}E${entry.episodeNumber}`
+              : '(none)'}
+          </div>
+          <div>metadata key: {entry.seriesMetadataKey ?? '(none)'}</div>
+          <div>match status: {formatMatchStatus(seriesMetadata)}</div>
+          {seriesMetadata?.query ? <div>query: {seriesMetadata.query}</div> : null}
+          {seriesMetadata?.debugSelectedScore != null ? (
+            <div>selected score: {seriesMetadata.debugSelectedScore}</div>
+          ) : null}
+          {seriesMetadata?.debugReason ? <div>reason: {seriesMetadata.debugReason}</div> : null}
+          {seriesMetadata?.debugError ? <div>error: {seriesMetadata.debugError}</div> : null}
+          {seriesMetadata?.debugSearchCandidates?.length ? (
+            <div>
+              candidates:{' '}
+              {seriesMetadata.debugSearchCandidates
+                .map((candidate) => {
+                  const year = candidate.firstAirDate?.slice(0, 4);
+                  return `${candidate.name}${year ? ` (${year})` : ''} [${candidate.score}]`;
+                })
+                .join(' | ')}
+            </div>
+          ) : null}
         </div>
       ) : null}
     </Link>
