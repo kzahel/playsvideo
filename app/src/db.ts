@@ -65,6 +65,7 @@ export interface LibraryEntry {
   endingEpisodeNumber?: number;
   seriesMetadataKey?: string;
   movieMetadataKey?: string;
+  lastPlayedAt?: number;
 }
 
 export interface DirectoryEntry {
@@ -223,6 +224,18 @@ class PlaysVideoDB extends Dexie {
     this.version(5).stores({
       library:
         '++id, directoryId, path, name, watchState, addedAt, detectedMediaType, parsedTitle, seriesMetadataKey, movieMetadataKey',
+      directories: '++id, name',
+      playlists: '++id, name',
+      settings: 'key',
+      seriesMetadata: 'key, tmdbId, fetchedAt, query',
+      movieMetadata: 'key, tmdbId, fetchedAt, query',
+      metadataParseCache: 'key, path, lastModified, parsedAt',
+      metadataSeasonCache: 'key, seriesMetadataKey, tmdbSeriesId, seasonNumber, fetchedAt, status',
+      metadataTransportState: 'key, transport, credentialSlot, status, cooldownUntil, updatedAt',
+    });
+    this.version(6).stores({
+      library:
+        '++id, directoryId, path, name, watchState, addedAt, detectedMediaType, parsedTitle, seriesMetadataKey, movieMetadataKey, lastPlayedAt',
       directories: '++id, name',
       playlists: '++id, name',
       settings: 'key',

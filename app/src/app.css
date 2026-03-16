@@ -156,6 +156,53 @@ body {
   font-weight: 600;
 }
 
+.sidebar-now-playing {
+  margin-top: 1.5rem;
+  padding-top: 1rem;
+  border-top: 1px solid rgba(128, 128, 128, 0.2);
+}
+.sidebar-section-label {
+  font-size: 0.7rem;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  color: rgba(128, 128, 128, 0.7);
+  padding: 0 1rem;
+  margin-bottom: 0.5rem;
+}
+.sidebar-now-playing-link {
+  display: block;
+  padding: 0.75rem 1rem;
+  color: var(--fg);
+  text-decoration: none;
+  border-radius: 6px;
+}
+.sidebar-now-playing-link:hover {
+  background: rgba(128, 128, 128, 0.1);
+}
+.sidebar-now-playing-link.active {
+  background: rgba(128, 128, 128, 0.15);
+  font-weight: 600;
+}
+.sidebar-now-playing-name {
+  display: block;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: 0.9rem;
+}
+.sidebar-now-playing-progress {
+  margin-top: 0.4rem;
+  height: 3px;
+  background: rgba(128, 128, 128, 0.2);
+  border-radius: 2px;
+  overflow: hidden;
+}
+.sidebar-now-playing-progress-bar {
+  height: 100%;
+  background: var(--accent, #3b82f6);
+  border-radius: 2px;
+}
+
 /* Library grid */
 .library-header {
   display: flex;

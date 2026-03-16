@@ -239,7 +239,7 @@ export function useEngine(source: EngineSource | null): UseEngineResult {
             `currentTime=${entry.playbackPositionSec.toFixed(3)}`,
           );
         }
-        db.library.update(entry.id, { durationSec: e.detail.durationSec });
+        db.library.update(entry.id, { durationSec: e.detail.durationSec, lastPlayedAt: Date.now() });
       }
     }) as EventListener);
 
