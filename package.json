@@ -41,7 +41,9 @@
     "deploy:worker": "cd worker && npx wrangler deploy",
     "deploy:site": "pnpm run build:site && pnpm --filter app build && bash scripts/deploy.sh",
     "deploy": "pnpm run deploy:site && pnpm run deploy:worker",
-    "prepublishOnly": "pnpm run build:lib"
+    "prepublishOnly": "pnpm run build:lib",
+    "firebase:emulators": "JAVA_HOME=/opt/homebrew/opt/openjdk@21/libexec/openjdk.jdk/Contents/Home firebase emulators:start --only firestore,auth",
+    "test:sync": "FIRESTORE_EMULATOR_HOST=127.0.0.1:8080 FIREBASE_AUTH_EMULATOR_HOST=127.0.0.1:9099 vitest run tests/unit/sync"
   },
   "dependencies": {
     "hls.js": "^1.5.0",
@@ -56,6 +58,7 @@
     "@vitejs/plugin-react": "^4.0.0",
     "dexie": "^4.0.0",
     "dexie-react-hooks": "^1.1.0",
+    "firebase-tools": "^15.11.0",
     "react": "^19.0.0",
     "react-dom": "^19.0.0",
     "react-router-dom": "^7.0.0",

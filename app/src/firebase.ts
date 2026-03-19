@@ -1,7 +1,8 @@
 import { initializeApp } from 'firebase/app';
-import { getFirestore, doc, getDoc, setDoc } from 'firebase/firestore';
+import { getFirestore, connectFirestoreEmulator, doc, getDoc, setDoc, getDocs, collection } from 'firebase/firestore';
 import {
   getAuth,
+  connectAuthEmulator,
   GoogleAuthProvider,
   signInWithPopup,
   signInWithCredential,
@@ -25,6 +26,18 @@ const firebaseConfig = {
 const app = initializeApp(firebaseConfig);
 const auth = getAuth(app);
 const firestore = getFirestore(app);
+
+if (typeof import.meta !== 'undefined' && import.meta.env?.DEV) {
+  const firestoreHost = import.meta.env.VITE_FIRESTORE_EMULATOR_HOST;
+  const authHost = import.meta.env.VITE_FIREBASE_AUTH_EMULATOR_HOST;
+  if (firestoreHost) {
+    const [host, port] = firestoreHost.split(':');
+    connectFirestoreEmulator(firestore, host, Number(port));
+  }
+  if (authHost) {
+    connectAuthEmulator(auth, `http://${authHost}`, { disableWarnings: true });
+  }
+}
 
 export { auth };
 
