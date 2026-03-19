@@ -137,6 +137,9 @@ async function collectFiles(handle: FileSystemDirectoryHandle): Promise<ScannedF
 
 class FsAccessProvider implements FolderProvider {
   readonly requiresPermissionGrant = true;
+  // Cache granted handles in memory to avoid re-deserializing from IDB,
+  // which can lose permission state within the same page session.
+  private grantedHandles = new Map<number, FileSystemDirectoryHandle>();
 
   async getRescanAccessState(): Promise<FolderRescanAccessState> {
     const directories = await db.directories.toArray();
@@ -149,7 +152,8 @@ class FsAccessProvider implements FolderProvider {
         return 'unavailable';
       }
 
-      const status = await directory.handle.queryPermission({ mode: 'read' });
+      const handle = this.grantedHandles.get(directory.id) ?? directory.handle;
+      const status = await handle.queryPermission({ mode: 'read' });
       if (status !== 'granted') {
         return 'needs-user-gesture';
       }
@@ -166,6 +170,7 @@ class FsAccessProvider implements FolderProvider {
     const handle = await window.showDirectoryPicker({ mode: 'read' });
     if (!isExtension()) {
       await db.directories.clear();
+      this.grantedHandles.clear();
     }
     const directoryId = await db.directories.add({
       handle,
@@ -173,16 +178,25 @@ class FsAccessProvider implements FolderProvider {
       addedAt: Date.now(),
       lastScannedAt: Date.now(),
     } as Parameters<typeof db.directories.add>[0]);
+    this.grantedHandles.set(directoryId as number, handle);
     const files = await collectFiles(handle);
     return { directoryId: directoryId as number, name: handle.name, files };
   }
 
-  async getFile(entry: LibraryEntry, options: FileAccessOptions = {}): Promise<File> {
-    const dir = await db.directories.get(entry.directoryId);
+  private async resolveHandle(directoryId: number): Promise<FileSystemDirectoryHandle> {
+    const cached = this.grantedHandles.get(directoryId);
+    if (cached) return cached;
+    const dir = await db.directories.get(directoryId);
     if (!dir?.handle) throw new Error('No directory available');
-    await ensurePermission(dir.handle, options);
+    return dir.handle;
+  }
+
+  async getFile(entry: LibraryEntry, options: FileAccessOptions = {}): Promise<File> {
+    const handle = await this.resolveHandle(entry.directoryId);
+    await ensurePermission(handle, options);
+    this.grantedHandles.set(entry.directoryId, handle);
     const parts = entry.path.split('/');
-    let current: FileSystemDirectoryHandle = dir.handle;
+    let current: FileSystemDirectoryHandle = handle;
     for (let i = 0; i < parts.length - 1; i++) {
       current = await current.getDirectoryHandle(parts[i]);
     }
@@ -191,21 +205,24 @@ class FsAccessProvider implements FolderProvider {
   }
 
   async listSiblingSubtitleFiles(entry: LibraryEntry): Promise<SiblingSubtitleFile[]> {
-    const dir = await db.directories.get(entry.directoryId);
-    if (!dir?.handle) {
+    let handle: FileSystemDirectoryHandle;
+    try {
+      handle = await this.resolveHandle(entry.directoryId);
+    } catch {
       return [];
     }
 
     try {
-      await ensurePermission(dir.handle);
+      await ensurePermission(handle);
     } catch (error) {
       if (isFileAccessPermissionError(error)) {
         return [];
       }
       throw error;
     }
+    this.grantedHandles.set(entry.directoryId, handle);
     const parts = entry.path.split('/');
-    let current: FileSystemDirectoryHandle = dir.handle;
+    let current: FileSystemDirectoryHandle = handle;
     for (let index = 0; index < parts.length - 1; index += 1) {
       current = await current.getDirectoryHandle(parts[index]);
     }
@@ -237,8 +254,10 @@ class FsAccessProvider implements FolderProvider {
       ? await db.directories.get(directoryId)
       : await db.directories.toCollection().first();
     if (!dir?.handle) throw new Error('No directory to rescan');
-    await ensurePermission(dir.handle, options);
-    const files = await collectFiles(dir.handle);
+    const handle = this.grantedHandles.get(dir.id) ?? dir.handle;
+    await ensurePermission(handle, options);
+    this.grantedHandles.set(dir.id, handle);
+    const files = await collectFiles(handle);
     return { directoryId: dir.id, name: dir.name, files };
   }
 }
