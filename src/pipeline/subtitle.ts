@@ -133,16 +133,19 @@ export function parseSubtitleFile(text: string, filename: string): SubtitleData 
 
 // --- Internal helpers ---
 
-/** Strip tx3g 2-byte length prefix, filter empty gap cues. */
+/** Strip tx3g 2-byte length prefix and trailing style boxes, filter empty gap cues. */
 function cleanCues(raw: SubtitleCue[], codec: string): SubtitleCueEntry[] {
   const cleaned: SubtitleCueEntry[] = [];
 
   for (const cue of raw) {
     let text = cue.text;
 
-    // tx3g samples have a 2-byte big-endian length prefix
+    // tx3g samples: 2-byte big-endian text byte-length, then UTF-8 text, then
+    // optional style boxes (styl, hlit, hclr…). mediabunny decodes the entire
+    // sample as UTF-8, so we re-encode to recover byte offsets and extract only
+    // the text portion.
     if (codec === 'tx3g' && text.length >= 2) {
-      text = text.slice(2);
+      text = extractTx3gText(text);
     }
 
     text = text.trim();
@@ -157,6 +160,20 @@ function cleanCues(raw: SubtitleCue[], codec: string): SubtitleCueEntry[] {
   }
 
   return cleaned;
+}
+
+/**
+ * Extract just the text from a tx3g sample that was decoded as UTF-8 by mediabunny.
+ * tx3g format: [2-byte big-endian text byte length] [UTF-8 text] [optional style boxes].
+ * We re-encode to bytes to correctly interpret the length prefix, then decode
+ * only the text portion.
+ */
+function extractTx3gText(decoded: string): string {
+  const bytes = new TextEncoder().encode(decoded);
+  if (bytes.length < 2) return decoded;
+  const textByteLen = (bytes[0] << 8) | bytes[1];
+  const textBytes = bytes.slice(2, 2 + textByteLen);
+  return new TextDecoder('utf-8').decode(textBytes);
 }
 
 /** Strip ASS/SSA override tags like {\b1}, {\pos(x,y)}, {\an8} → plain text. */

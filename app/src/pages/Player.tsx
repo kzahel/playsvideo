@@ -133,6 +133,7 @@ export function Player() {
     navigate(`/play/${nextEpisode.id}`);
   }, [autoplayNextEpisode, hasEnded, navigate, nextEpisode]);
 
+  const siblingSubtitleKey = entry ? `${entry.directoryId}:${entry.path}` : null;
   useEffect(() => {
     if (!entry || phase !== 'ready') {
       setSiblingSubtitles([]);
@@ -170,7 +171,8 @@ export function Player() {
     return () => {
       cancelled = true;
     };
-  }, [entry, phase]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [siblingSubtitleKey, phase]);
 
   if (entry === undefined) {
     return <div className="player-page">Loading...</div>;
