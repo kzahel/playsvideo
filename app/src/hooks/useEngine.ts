@@ -134,6 +134,7 @@ export function useEngine(source: EngineSource | null): UseEngineResult {
       playbackPositionSec: currentTime,
       durationSec: duration,
       watchState,
+      lastPlayedAt: Date.now(),
     });
   }, []);
 
