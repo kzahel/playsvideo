@@ -66,6 +66,10 @@ export interface LibraryEntry {
   seriesMetadataKey?: string;
   movieMetadataKey?: string;
   lastPlayedAt?: number;
+  contentHash?: string;
+  torrentInfoHash?: string;
+  torrentFileIndex?: number;
+  torrentMagnetUrl?: string;
 }
 
 export interface DirectoryEntry {
@@ -236,6 +240,18 @@ class PlaysVideoDB extends Dexie {
     this.version(6).stores({
       library:
         '++id, directoryId, path, name, watchState, addedAt, detectedMediaType, parsedTitle, seriesMetadataKey, movieMetadataKey, lastPlayedAt',
+      directories: '++id, name',
+      playlists: '++id, name',
+      settings: 'key',
+      seriesMetadata: 'key, tmdbId, fetchedAt, query',
+      movieMetadata: 'key, tmdbId, fetchedAt, query',
+      metadataParseCache: 'key, path, lastModified, parsedAt',
+      metadataSeasonCache: 'key, seriesMetadataKey, tmdbSeriesId, seasonNumber, fetchedAt, status',
+      metadataTransportState: 'key, transport, credentialSlot, status, cooldownUntil, updatedAt',
+    });
+    this.version(7).stores({
+      library:
+        '++id, directoryId, path, name, watchState, addedAt, detectedMediaType, parsedTitle, seriesMetadataKey, movieMetadataKey, lastPlayedAt, contentHash, torrentInfoHash',
       directories: '++id, name',
       playlists: '++id, name',
       settings: 'key',
