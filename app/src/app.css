@@ -1302,9 +1302,17 @@ body {
   align-items: center;
   gap: 0.5rem;
   padding: 0.4rem 1rem;
+  color: var(--fg);
+  text-decoration: none;
 }
 .device-entry:hover {
   background: rgba(128, 128, 128, 0.06);
+}
+a.device-entry {
+  cursor: pointer;
+}
+a.device-entry:hover .device-entry-title {
+  color: var(--accent, #3b82f6);
 }
 .device-entry-compact {
   padding: 0.25rem 0;

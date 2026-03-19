@@ -170,6 +170,20 @@ function entryTitle(entry: LibraryEntry): string {
   return entry.parsedTitle ?? entry.name;
 }
 
+export async function buildLocalSyncKeyIndex(): Promise<Map<string, number>> {
+  const [entries, seriesMetadata, movieMetadata] = await Promise.all([
+    db.library.toArray(),
+    db.seriesMetadata.toArray(),
+    db.movieMetadata.toArray(),
+  ]);
+  const keyMap = buildSyncKeyMap(entries, seriesMetadata, movieMetadata);
+  const syncKeyToEntryId = new Map<string, number>();
+  for (const [entryId, syncKey] of keyMap) {
+    syncKeyToEntryId.set(syncKey, entryId);
+  }
+  return syncKeyToEntryId;
+}
+
 // --- Firestore I/O ---
 
 async function pushDeviceDoc(uid: string, deviceId: string, deviceDoc: DeviceSyncDoc): Promise<void> {
@@ -222,17 +236,18 @@ export async function buildDeviceDoc(): Promise<DeviceSyncDoc> {
     if (entry.durationSec <= 0) continue;
     const key = keyMap.get(entry.id);
     if (!key) continue;
-    syncEntries[key] = {
+    const syncEntry: SyncEntry = {
       position: entry.playbackPositionSec,
       watchState: entry.watchState,
       durationSec: entry.durationSec,
       watchedAt: entry.lastPlayedAt ?? Date.now(),
       title: entryTitle(entry),
-      contentHash: entry.contentHash,
-      torrentInfoHash: entry.torrentInfoHash,
-      torrentFileIndex: entry.torrentFileIndex,
-      torrentMagnetUrl: entry.torrentMagnetUrl,
     };
+    if (entry.contentHash) syncEntry.contentHash = entry.contentHash;
+    if (entry.torrentInfoHash) syncEntry.torrentInfoHash = entry.torrentInfoHash;
+    if (entry.torrentFileIndex != null) syncEntry.torrentFileIndex = entry.torrentFileIndex;
+    if (entry.torrentMagnetUrl) syncEntry.torrentMagnetUrl = entry.torrentMagnetUrl;
+    syncEntries[key] = syncEntry;
   }
   return {
     v: 2,

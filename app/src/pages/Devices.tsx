@@ -1,7 +1,9 @@
 import { useState, useEffect } from 'react';
+import { Link } from 'react-router-dom';
 import { useAuth } from '../hooks/useAuth.js';
 import {
   pullAllDeviceDocs,
+  buildLocalSyncKeyIndex,
   type RemoteDeviceState,
   type SyncEntry,
 } from '../firebase.js';
@@ -43,11 +45,13 @@ function DeviceCard({
   isCurrentDevice,
   expanded,
   onToggle,
+  localEntryBySyncKey,
 }: {
   device: RemoteDeviceState;
   isCurrentDevice: boolean;
   expanded: boolean;
   onToggle: () => void;
+  localEntryBySyncKey: Map<string, number>;
 }) {
   const entries = Object.entries(device.doc.entries).sort(
     ([, a], [, b]) => b.watchedAt - a.watchedAt,
@@ -73,7 +77,7 @@ function DeviceCard({
       {!expanded && inProgress.length > 0 && (
         <div className="device-card-preview">
           {inProgress.slice(0, 3).map(([key, entry]) => (
-            <DeviceEntryRow key={key} syncKey={key} entry={entry} compact />
+            <DeviceEntryRow key={key} syncKey={key} entry={entry} localEntryId={localEntryBySyncKey.get(key)} compact />
           ))}
           {inProgress.length > 3 && (
             <div className="device-card-more">+{inProgress.length - 3} more in progress</div>
@@ -87,7 +91,7 @@ function DeviceCard({
             <div className="device-entries-section">
               <div className="device-entries-section-label">In Progress ({inProgress.length})</div>
               {inProgress.map(([key, entry]) => (
-                <DeviceEntryRow key={key} syncKey={key} entry={entry} />
+                <DeviceEntryRow key={key} syncKey={key} entry={entry} localEntryId={localEntryBySyncKey.get(key)} />
               ))}
             </div>
           )}
@@ -95,7 +99,7 @@ function DeviceCard({
             <div className="device-entries-section">
               <div className="device-entries-section-label">Watched ({watched.length})</div>
               {watched.map(([key, entry]) => (
-                <DeviceEntryRow key={key} syncKey={key} entry={entry} />
+                <DeviceEntryRow key={key} syncKey={key} entry={entry} localEntryId={localEntryBySyncKey.get(key)} />
               ))}
             </div>
           )}
@@ -108,23 +112,42 @@ function DeviceCard({
   );
 }
 
+function formatEntryTitle(syncKey: string, entry: SyncEntry): string {
+  const base = entry.title ?? syncKey;
+  // Extract episode info from sync key like "tmdb:tv:73586:s01:e03"
+  const tvMatch = syncKey.match(/^tmdb:tv:\d+:s(\d+):e(\d+(?:-\d+)?)$/);
+  if (tvMatch) {
+    const season = Number(tvMatch[1]);
+    const episode = tvMatch[2];
+    return `${base} S${String(season).padStart(2, '0')}E${episode.includes('-') ? episode : String(Number(episode)).padStart(2, '0')}`;
+  }
+  // For file-based keys, show the filename
+  const fileMatch = syncKey.match(/^file:(.+)\|/);
+  if (fileMatch && !entry.title) {
+    return fileMatch[1];
+  }
+  return base;
+}
+
 function DeviceEntryRow({
   syncKey,
   entry,
   compact,
+  localEntryId,
 }: {
   syncKey: string;
   entry: SyncEntry;
   compact?: boolean;
+  localEntryId?: number;
 }) {
-  const title = entry.title ?? syncKey;
+  const title = formatEntryTitle(syncKey, entry);
   const progress =
     entry.durationSec > 0 ? (entry.position) / entry.durationSec : 0;
   const remaining =
     entry.durationSec > 0 ? entry.durationSec - (entry.position) : 0;
 
-  return (
-    <div className={`device-entry${compact ? ' device-entry-compact' : ''}`}>
+  const content = (
+    <>
       <div className="device-entry-info">
         <span className="device-entry-title">{title}</span>
         <span className="device-entry-meta">
@@ -153,14 +176,27 @@ function DeviceEntryRow({
           T
         </span>
       )}
-    </div>
+    </>
   );
+
+  const className = `device-entry${compact ? ' device-entry-compact' : ''}`;
+
+  if (localEntryId != null) {
+    return (
+      <Link to={`/play/${localEntryId}`} className={className}>
+        {content}
+      </Link>
+    );
+  }
+
+  return <div className={className}>{content}</div>;
 }
 
 export function Devices() {
   const { user } = useAuth();
   const [devices, setDevices] = useState<RemoteDeviceState[] | null>(null);
   const [currentDeviceId, setCurrentDeviceId] = useState<string | null>(null);
+  const [localEntryBySyncKey, setLocalEntryBySyncKey] = useState<Map<string, number>>(new Map());
   const [expandedDevice, setExpandedDevice] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -174,9 +210,10 @@ export function Devices() {
 
     async function load() {
       try {
-        const [devId, docs] = await Promise.all([getDeviceId(), pullAllDeviceDocs(user!.uid)]);
+        const [devId, docs, keyIndex] = await Promise.all([getDeviceId(), pullAllDeviceDocs(user!.uid), buildLocalSyncKeyIndex()]);
         if (cancelled) return;
         setCurrentDeviceId(devId);
+        setLocalEntryBySyncKey(keyIndex);
         // Sort: current device first, then by lastSyncedAt descending
         docs.sort((a, b) => {
           if (a.deviceId === devId) return -1;
@@ -244,6 +281,7 @@ export function Devices() {
             onToggle={() =>
               setExpandedDevice((prev) => (prev === device.deviceId ? null : device.deviceId))
             }
+            localEntryBySyncKey={localEntryBySyncKey}
           />
         ))}
       </div>
