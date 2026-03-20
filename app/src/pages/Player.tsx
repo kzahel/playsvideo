@@ -95,6 +95,7 @@ export function Player() {
   const localPlayback = useLiveQuery(
     () => (deviceId && playbackKey ? getLocalPlayback(deviceId, playbackKey) : Promise.resolve(null)),
     [deviceId, playbackKey],
+    null,
   );
   const {
     videoRef,
