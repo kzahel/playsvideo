@@ -208,8 +208,33 @@ body {
   display: flex;
   gap: 0.5rem;
   justify-content: center;
+  align-items: center;
   flex-wrap: wrap;
   padding: 1rem;
+}
+
+.catalog-directory-name {
+  font-size: 0.95rem;
+  color: var(--muted);
+  max-width: 300px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.scan-toast {
+  text-align: center;
+  padding: 0.5rem 1rem;
+  margin: 0 auto 0.5rem;
+  color: #b0ffb0;
+  font-size: 0.9rem;
+  animation: scan-toast-fade 5s ease-in-out;
+}
+
+@keyframes scan-toast-fade {
+  0% { opacity: 1; }
+  70% { opacity: 1; }
+  100% { opacity: 0; }
 }
 
 .metadata-settings {

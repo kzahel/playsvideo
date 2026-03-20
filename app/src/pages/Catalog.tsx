@@ -54,7 +54,12 @@ export function Catalog() {
   return (
     <div>
       <div className="catalog-header">
-        <FolderPicker />
+        {hasDirectories && !multiFolder && (
+          <span className="catalog-directory-name" title={directories[0].name}>
+            {directories[0].name}
+          </span>
+        )}
+        <FolderPicker label={hasDirectories && !multiFolder ? 'Choose New Directory' : undefined} />
         {filesystemRescan.showManualButton && (
           <button
             type="button"
@@ -66,6 +71,11 @@ export function Catalog() {
           </button>
         )}
       </div>
+      {filesystemRescan.toast && (
+        <div className="scan-toast" aria-live="polite">
+          {filesystemRescan.toast}
+        </div>
+      )}
       {filesystemRescan.statusMessage ? (
         <div className="page-toolbar-status" aria-live="polite">
           {filesystemRescan.statusMessage}

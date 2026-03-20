@@ -3,7 +3,7 @@ import { useLiveQuery } from 'dexie-react-hooks';
 import { db } from '../db.js';
 import { isExtension } from '../context.js';
 import { folderProvider, type FolderRescanAccessState } from '../folder-provider.js';
-import { rescanAllFolders, rescanFolder } from '../scan.js';
+import { rescanAllFolders, rescanFolder, type ScanResult } from '../scan.js';
 
 type RescanMode = 'idle' | 'auto' | 'manual';
 
@@ -23,6 +23,7 @@ export interface FilesystemRescanState {
   needsUserGesture: boolean;
   showManualButton: boolean;
   statusMessage: string | null;
+  toast: string | null;
   willAutoRescan: boolean;
   rescan(): Promise<void>;
 }
@@ -35,6 +36,8 @@ export function useFilesystemRescan(
   const [mode, setMode] = useState<RescanMode>('idle');
   const [error, setError] = useState<string | null>(null);
   const [accessState, setAccessState] = useState<FolderRescanAccessState>('unavailable');
+  const [toast, setToast] = useState<string | null>(null);
+  const toastTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const autoAttemptRef = useRef<string | null>(null);
   const multiFolder = isExtension();
   const directoriesReady = directories !== undefined;
@@ -73,19 +76,30 @@ export function useFilesystemRescan(
     };
   }, [directoriesReady, hasDirectories, directories?.map((directory) => directory.id).join(',')]);
 
+  const showToast = (message: string) => {
+    if (toastTimerRef.current) clearTimeout(toastTimerRef.current);
+    setToast(message);
+    toastTimerRef.current = setTimeout(() => setToast(null), 5000);
+  };
+
   const runRescan = async (nextMode: Exclude<RescanMode, 'idle'>) => {
     setMode(nextMode);
     setError(null);
+    setToast(null);
 
     try {
       const shouldRequestPermission =
         nextMode === 'manual' && accessState === 'needs-user-gesture';
+      const startTime = performance.now();
+      let result: ScanResult;
       if (multiFolder) {
-        await rescanAllFolders({ requestPermission: shouldRequestPermission });
+        result = await rescanAllFolders({ requestPermission: shouldRequestPermission });
       } else {
-        await rescanFolder(undefined, { requestPermission: shouldRequestPermission });
+        result = await rescanFolder(undefined, { requestPermission: shouldRequestPermission });
       }
+      const elapsed = ((performance.now() - startTime) / 1000).toFixed(1);
       setAccessState('ready');
+      showToast(`Scanned ${result.fileCount} file${result.fileCount === 1 ? '' : 's'} in ${elapsed}s`);
     } catch (err) {
       console.error('Failed to rescan:', err);
       const message = err instanceof Error ? err.message : 'Failed to rescan files.';
@@ -152,6 +166,7 @@ export function useFilesystemRescan(
     needsUserGesture,
     showManualButton,
     statusMessage,
+    toast,
     willAutoRescan,
     rescan: () => runRescan('manual'),
   };

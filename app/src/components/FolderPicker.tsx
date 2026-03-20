@@ -1,7 +1,11 @@
 import { setFolder } from '../scan.js';
 import { isExtension } from '../context.js';
 
-export function FolderPicker() {
+interface FolderPickerProps {
+  label?: string;
+}
+
+export function FolderPicker({ label }: FolderPickerProps) {
   const handlePick = async () => {
     try {
       await setFolder();
@@ -13,7 +17,7 @@ export function FolderPicker() {
 
   return (
     <button type="button" className="btn btn-primary" onClick={handlePick}>
-      {isExtension() ? 'Add Folder' : 'Select Folder'}
+      {label ?? (isExtension() ? 'Add Folder' : 'Select Folder')}
     </button>
   );
 }

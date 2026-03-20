@@ -31,24 +31,33 @@ function isVideoFileName(name: string): boolean {
   return VIDEO_EXTENSIONS.has(name.slice(dot).toLowerCase());
 }
 
-export async function setFolder(): Promise<void> {
+export interface ScanResult {
+  fileCount: number;
+}
+
+export async function setFolder(): Promise<ScanResult> {
   const result = await folderProvider.pickFolder();
   await syncCatalog(result.directoryId, result.files, result.manifests);
+  return { fileCount: result.files.length };
 }
 
 export async function rescanFolder(
   directoryId?: number,
   options?: FolderRescanOptions,
-): Promise<void> {
+): Promise<ScanResult> {
   const result = await folderProvider.rescan(directoryId, options);
   await syncCatalog(result.directoryId, result.files, result.manifests);
+  return { fileCount: result.files.length };
 }
 
-export async function rescanAllFolders(options?: FolderRescanOptions): Promise<void> {
+export async function rescanAllFolders(options?: FolderRescanOptions): Promise<ScanResult> {
   const dirs = await db.directories.toArray();
+  let fileCount = 0;
   for (const dir of dirs) {
-    await rescanFolder(dir.id, options);
+    const result = await rescanFolder(dir.id, options);
+    fileCount += result.fileCount;
   }
+  return { fileCount };
 }
 
 export async function removeFolder(directoryId: number): Promise<void> {
