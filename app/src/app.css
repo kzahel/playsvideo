@@ -281,6 +281,12 @@ body {
   white-space: nowrap;
   font-size: 0.9rem;
 }
+.sidebar-now-playing-episode {
+  display: block;
+  font-size: 0.75rem;
+  color: rgba(255, 255, 255, 0.5);
+  margin-top: 0.15rem;
+}
 .sidebar-now-playing-progress {
   margin-top: 0.4rem;
   height: 3px;

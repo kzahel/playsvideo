@@ -10,6 +10,8 @@ export interface CatalogPlaybackView extends CatalogEntry {
 export interface NowPlayingView {
   id: number;
   name: string;
+  seasonNumber?: number;
+  episodeNumber?: number;
   watchState: WatchState;
   durationSec: number;
   playbackPositionSec: number;
@@ -68,6 +70,8 @@ export function getNowPlayingView(input: {
   return {
     id,
     name: catalogEntry?.parsedTitle ?? catalogEntry?.name ?? playback.playbackKey,
+    seasonNumber: catalogEntry?.seasonNumber,
+    episodeNumber: catalogEntry?.episodeNumber,
     watchState: playback.watchState,
     durationSec: playback.durationSec,
     playbackPositionSec: playback.positionSec,

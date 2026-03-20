@@ -52,6 +52,12 @@ export function Sidebar({ open, onClose }: SidebarProps) {
             <div className="sidebar-section-label">Now Playing</div>
             <NavLink to={`/play/${nowPlaying.id}`} onClick={onClose} className="sidebar-now-playing-link">
               <span className="sidebar-now-playing-name">{nowPlaying.name}</span>
+              {(nowPlaying.seasonNumber != null || nowPlaying.episodeNumber != null) && (
+                <span className="sidebar-now-playing-episode">
+                  {nowPlaying.seasonNumber != null && `S${nowPlaying.seasonNumber}`}
+                  {nowPlaying.episodeNumber != null && `E${nowPlaying.episodeNumber}`}
+                </span>
+              )}
               {nowPlaying.watchState === 'in-progress' && nowPlaying.durationSec > 0 && (
                 <div className="sidebar-now-playing-progress">
                   <div
