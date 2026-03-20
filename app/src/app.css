@@ -921,17 +921,81 @@ body {
   border-radius: 2px;
 }
 
-.catalog-entry-debug {
-  width: 100%;
-  margin-top: 0.3rem;
-  padding: 0.5rem 0.6rem;
-  border-radius: 6px;
-  background: rgba(128, 128, 128, 0.08);
+.catalog-entry-debug-btn {
+  flex-shrink: 0;
+  width: 22px;
+  height: 22px;
+  border-radius: 50%;
+  border: 1px solid rgba(128, 128, 128, 0.3);
+  background: transparent;
   color: var(--muted);
-  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
   font-size: 0.7rem;
-  line-height: 1.4;
+  font-style: italic;
+  font-weight: 600;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.catalog-entry-debug-btn:hover {
+  background: rgba(128, 128, 128, 0.15);
+  color: #fff;
+}
+
+.debug-modal {
+  border: none;
+  border-radius: 10px;
+  background: #1e1e1e;
+  color: #e0e0e0;
+  padding: 0;
+  max-width: 560px;
+  width: calc(100% - 2rem);
+}
+
+.debug-modal::backdrop {
+  background: rgba(0, 0, 0, 0.6);
+}
+
+.debug-modal-content {
+  padding: 1.25rem;
+}
+
+.debug-modal-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 1rem;
+}
+
+.debug-modal-header h3 {
+  margin: 0;
+  font-size: 1rem;
+}
+
+.debug-modal-close {
+  background: none;
+  border: none;
+  color: var(--muted);
+  font-size: 1.4rem;
+  cursor: pointer;
+  padding: 0 0.25rem;
+  line-height: 1;
+}
+
+.debug-modal-close:hover {
+  color: #fff;
+}
+
+.debug-modal-body {
+  font-size: 0.85rem;
+  line-height: 1.7;
   word-break: break-word;
+}
+
+.debug-modal-body strong {
+  color: var(--muted);
+  font-weight: 500;
 }
 
 .watch-badge {
