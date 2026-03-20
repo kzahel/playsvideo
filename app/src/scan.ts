@@ -1,4 +1,12 @@
-import { db, type LibraryEntry } from './db.js';
+import {
+  db,
+  type CatalogEntry,
+  type DetectedMediaType,
+  type LibraryEntry,
+  type MovieMetadataEntry,
+  type SeriesMetadataEntry,
+} from './db.js';
+import { matchScannedCatalogItems, type ScannedCatalogItem } from './catalog-match.js';
 import {
   folderProvider,
   type FileAccessOptions,
@@ -8,6 +16,7 @@ import {
 } from './folder-provider.js';
 import { parseMediaMetadata } from './media-metadata.js';
 import { refreshLibraryMetadata } from './metadata/client.js';
+import { buildPlaybackKeyCandidates } from './playback-key.js';
 
 export { type ScannedFile } from './folder-provider.js';
 export { refreshLibraryMetadata } from './metadata/client.js';
@@ -44,8 +53,17 @@ export async function rescanAllFolders(options?: FolderRescanOptions): Promise<v
 }
 
 export async function removeFolder(directoryId: number): Promise<void> {
-  await db.library.where('directoryId').equals(directoryId).delete();
-  await db.directories.delete(directoryId);
+  const updatedAt = Date.now();
+  await db.transaction('rw', db.catalog, db.library, db.directories, async () => {
+    const catalogEntries = await db.catalog.where('directoryId').equals(directoryId).toArray();
+    if (catalogEntries.length > 0) {
+      await db.catalog.bulkPut(
+        catalogEntries.map((entry) => buildMissingCatalogEntry(entry, updatedAt)),
+      );
+    }
+    await db.library.where('directoryId').equals(directoryId).delete();
+    await db.directories.delete(directoryId);
+  });
 }
 
 export async function getFile(entry: LibraryEntry, options?: FileAccessOptions): Promise<File> {
@@ -57,58 +75,92 @@ function manifestDir(manifestPath: string): string {
   return slash === -1 ? '' : manifestPath.slice(0, slash);
 }
 
-async function syncToLibrary(
-  directoryId: number,
-  files: ScannedFile[],
-  manifests: ScannedManifest[],
-): Promise<void> {
-  // Snapshot ALL entries for watch state + ID preservation (cross-directory matching)
-  const allEntries = await db.library.toArray();
-  const oldByIdentity = new Map<string, LibraryEntry>();
-  const oldByTorrentKey = new Map<string, LibraryEntry>();
-  for (const e of allEntries) {
-    oldByIdentity.set(`${e.name}|${e.size}|${e.lastModified}`, e);
-    if (e.torrentInfoHash != null && e.torrentFileIndex != null) {
-      oldByTorrentKey.set(`${e.torrentInfoHash}:${e.torrentFileIndex}`, e);
+interface ScannedCatalogRecord extends ScannedCatalogItem {
+  directoryId: number;
+  hasLocalFile: boolean;
+  detectedMediaType: DetectedMediaType;
+  parsedTitle?: string;
+  parsedYear?: number;
+  seasonNumber?: number;
+  episodeNumber?: number;
+  endingEpisodeNumber?: number;
+  seriesMetadataKey?: string;
+  movieMetadataKey?: string;
+  torrentMagnetUrl?: string;
+  torrentComplete?: boolean;
+}
+
+function identityKey(entry: Pick<LibraryEntry, 'name' | 'size' | 'lastModified'>): string {
+  return `${entry.name}|${entry.size}|${entry.lastModified}`;
+}
+
+function torrentKey(entry: {
+  torrentInfoHash?: string;
+  torrentFileIndex?: number;
+}): string | null {
+  return entry.torrentInfoHash != null && entry.torrentFileIndex != null
+    ? `${entry.torrentInfoHash}:${entry.torrentFileIndex}`
+    : null;
+}
+
+function mergeDetectedMediaType(
+  nextType: DetectedMediaType,
+  existingType?: DetectedMediaType,
+): DetectedMediaType {
+  return nextType !== 'unknown' ? nextType : existingType ?? 'unknown';
+}
+
+function chooseCatalogPlaybackKey(
+  entry: CatalogEntry,
+  seriesMetadataByKey: Map<string, SeriesMetadataEntry>,
+  movieMetadataByKey: Map<string, MovieMetadataEntry>,
+): string {
+  const candidates = buildPlaybackKeyCandidates(
+    {
+      name: entry.name,
+      size: entry.size,
+      detectedMediaType: entry.detectedMediaType,
+      seriesMetadataKey: entry.seriesMetadataKey,
+      movieMetadataKey: entry.movieMetadataKey,
+      seasonNumber: entry.seasonNumber,
+      episodeNumber: entry.episodeNumber,
+      endingEpisodeNumber: entry.endingEpisodeNumber,
+      contentHash: entry.contentHash,
+      torrentInfoHash: entry.torrentInfoHash,
+      torrentFileIndex: entry.torrentFileIndex,
+    },
+    {
+      seriesMetadataByKey,
+      movieMetadataByKey,
+    },
+  );
+
+  if (entry.canonicalPlaybackKey) {
+    const existing = candidates.find((candidate) => candidate.key === entry.canonicalPlaybackKey);
+    if (existing) {
+      return existing.key;
     }
   }
 
-  // Clean up orphaned entries whose directory no longer exists
-  const dirIds = new Set((await db.directories.toArray()).map((d) => d.id));
-  dirIds.add(directoryId);
-  const orphanIds = allEntries
-    .filter((e) => !dirIds.has(e.directoryId))
-    .map((e) => e.id);
-  if (orphanIds.length) await db.library.bulkDelete(orphanIds);
+  return candidates[0].key;
+}
 
-  // Delete current directory's entries (they'll be re-added below)
-  await db.library.where('directoryId').equals(directoryId).delete();
+function buildScannedCatalogRecords(
+  directoryId: number,
+  files: ScannedFile[],
+  manifests: ScannedManifest[],
+): ScannedCatalogRecord[] {
+  const records: ScannedCatalogRecord[] = files.map((file) => ({
+    directoryId,
+    name: file.name,
+    path: file.path,
+    size: file.size,
+    lastModified: file.lastModified,
+    hasLocalFile: true,
+    ...parseMediaMetadata(file.path),
+  }));
 
-  const nextEntries: LibraryEntry[] = [];
-  const localFilePaths = new Set<string>();
-
-  for (const file of files) {
-    const identity = `${file.name}|${file.size}|${file.lastModified}`;
-    const old = oldByIdentity.get(identity);
-    const parsed = parseMediaMetadata(file.path);
-    localFilePaths.add(file.path);
-    nextEntries.push({
-      ...(old?.id != null ? { id: old.id } : {}),
-      directoryId,
-      name: file.name,
-      path: file.path,
-      size: file.size,
-      lastModified: file.lastModified,
-      watchState: old?.watchState ?? 'unwatched',
-      playbackPositionSec: old?.playbackPositionSec ?? 0,
-      durationSec: old?.durationSec ?? 0,
-      addedAt: old?.addedAt ?? Date.now(),
-      hasLocalFile: true,
-      ...parsed,
-    } as LibraryEntry);
-  }
-
-  // Process manifest files: enrich local entries + create virtual entries
+  const recordByPath = new Map(records.map((record) => [record.path, record]));
   for (const manifest of manifests) {
     const dir = manifestDir(manifest.path);
     for (const [fileName, fileData] of Object.entries(manifest.data.files)) {
@@ -122,38 +174,184 @@ async function syncToLibrary(
         torrentComplete: fileData.complete,
       };
 
-      // Check if we have a local file for this manifest entry
-      const localEntry = nextEntries.find((e) => e.path === filePath);
-      if (localEntry) {
-        Object.assign(localEntry, torrentFields);
+      const localRecord = recordByPath.get(filePath);
+      if (localRecord) {
+        Object.assign(localRecord, torrentFields);
         continue;
       }
 
-      // Create virtual entry — use manifest dir as path context for metadata parsing
-      const torrentKey = `${manifest.data.infohash}:${fileData.index}`;
-      const old = oldByTorrentKey.get(torrentKey);
-      const parsed = parseMediaMetadata(filePath);
-      nextEntries.push({
-        ...(old?.id != null ? { id: old.id } : {}),
+      const virtualRecord: ScannedCatalogRecord = {
         directoryId,
         name: fileName,
         path: filePath,
         size: 0,
         lastModified: 0,
-        watchState: old?.watchState ?? 'unwatched',
-        playbackPositionSec: old?.playbackPositionSec ?? 0,
-        durationSec: old?.durationSec ?? 0,
-        addedAt: old?.addedAt ?? Date.now(),
         hasLocalFile: false,
         ...torrentFields,
-        ...parsed,
-      } as LibraryEntry);
+        ...parseMediaMetadata(filePath),
+      };
+      records.push(virtualRecord);
+      recordByPath.set(filePath, virtualRecord);
     }
   }
 
-  if (nextEntries.length > 0) {
-    await db.library.bulkPut(nextEntries);
+  return records;
+}
+
+function buildCatalogEntry(
+  record: ScannedCatalogRecord,
+  existing: CatalogEntry | null,
+  scannedAt: number,
+  seriesMetadataByKey: Map<string, SeriesMetadataEntry>,
+  movieMetadataByKey: Map<string, MovieMetadataEntry>,
+): CatalogEntry {
+  const nextEntry: CatalogEntry = {
+    ...(existing?.id != null ? { id: existing.id } : {}),
+    createdAt: existing?.createdAt ?? scannedAt,
+    updatedAt: scannedAt,
+    name: record.name,
+    path: record.path,
+    directoryId: record.directoryId,
+    size: record.size,
+    lastModified: record.lastModified,
+    availability: 'present',
+    lastSeenAt: scannedAt,
+    firstMissingAt: undefined,
+    detectedMediaType: mergeDetectedMediaType(record.detectedMediaType, existing?.detectedMediaType),
+    parsedTitle: record.parsedTitle ?? existing?.parsedTitle,
+    parsedYear: record.parsedYear ?? existing?.parsedYear,
+    seasonNumber: record.seasonNumber ?? existing?.seasonNumber,
+    episodeNumber: record.episodeNumber ?? existing?.episodeNumber,
+    endingEpisodeNumber: record.endingEpisodeNumber ?? existing?.endingEpisodeNumber,
+    seriesMetadataKey: record.seriesMetadataKey ?? existing?.seriesMetadataKey,
+    movieMetadataKey: record.movieMetadataKey ?? existing?.movieMetadataKey,
+    contentHash: existing?.contentHash,
+    torrentInfoHash: record.torrentInfoHash ?? existing?.torrentInfoHash,
+    torrentFileIndex: record.torrentFileIndex ?? existing?.torrentFileIndex,
+    torrentMagnetUrl: record.torrentMagnetUrl ?? existing?.torrentMagnetUrl,
+    torrentComplete: record.torrentComplete ?? existing?.torrentComplete,
+    canonicalPlaybackKey: existing?.canonicalPlaybackKey,
+  };
+
+  nextEntry.canonicalPlaybackKey = chooseCatalogPlaybackKey(
+    nextEntry,
+    seriesMetadataByKey,
+    movieMetadataByKey,
+  );
+
+  return nextEntry;
+}
+
+function buildMissingCatalogEntry(existing: CatalogEntry, scannedAt: number): CatalogEntry {
+  return {
+    ...existing,
+    availability: 'missing',
+    updatedAt: scannedAt,
+    firstMissingAt: existing.firstMissingAt ?? scannedAt,
+  };
+}
+
+function buildLegacyLibraryProjection(
+  records: ScannedCatalogRecord[],
+  previousEntries: LibraryEntry[],
+): LibraryEntry[] {
+  const oldByIdentity = new Map<string, LibraryEntry>();
+  const oldByTorrentKey = new Map<string, LibraryEntry>();
+  for (const entry of previousEntries) {
+    oldByIdentity.set(identityKey(entry), entry);
+    const key = torrentKey(entry);
+    if (key) {
+      oldByTorrentKey.set(key, entry);
+    }
   }
-  await db.directories.update(directoryId, { lastScannedAt: Date.now() });
-  await refreshLibraryMetadata({ entries: nextEntries });
+
+  const projected: LibraryEntry[] = [];
+  for (const record of records) {
+    const key = torrentKey(record);
+    const old =
+      (key ? oldByTorrentKey.get(key) : undefined) ??
+      oldByIdentity.get(identityKey(record));
+    projected.push({
+      ...(old?.id != null ? { id: old.id } : {}),
+      directoryId: record.directoryId,
+      name: record.name,
+      path: record.path,
+      size: record.size,
+      lastModified: record.lastModified,
+      watchState: old?.watchState ?? 'unwatched',
+      playbackPositionSec: old?.playbackPositionSec ?? 0,
+      durationSec: old?.durationSec ?? 0,
+      addedAt: old?.addedAt ?? Date.now(),
+      lastPlayedAt: old?.lastPlayedAt,
+      detectedMediaType: record.detectedMediaType,
+      parsedTitle: record.parsedTitle,
+      parsedYear: record.parsedYear,
+      seasonNumber: record.seasonNumber,
+      episodeNumber: record.episodeNumber,
+      endingEpisodeNumber: record.endingEpisodeNumber,
+      seriesMetadataKey: record.seriesMetadataKey,
+      movieMetadataKey: record.movieMetadataKey,
+      contentHash: old?.contentHash,
+      torrentInfoHash: record.torrentInfoHash,
+      torrentFileIndex: record.torrentFileIndex,
+      torrentMagnetUrl: record.torrentMagnetUrl,
+      torrentComplete: record.torrentComplete,
+      hasLocalFile: record.hasLocalFile,
+    });
+  }
+
+  return projected;
+}
+
+async function syncToLibrary(
+  directoryId: number,
+  files: ScannedFile[],
+  manifests: ScannedManifest[],
+): Promise<void> {
+  const scannedAt = Date.now();
+  const scannedRecords = buildScannedCatalogRecords(directoryId, files, manifests);
+  const [allCatalogEntries, allLibraryEntries, seriesMetadata, movieMetadata] = await Promise.all([
+    db.catalog.toArray(),
+    db.library.toArray(),
+    db.seriesMetadata.toArray(),
+    db.movieMetadata.toArray(),
+  ]);
+  const seriesMetadataByKey = new Map(seriesMetadata.map((entry) => [entry.key, entry]));
+  const movieMetadataByKey = new Map(movieMetadata.map((entry) => [entry.key, entry]));
+  const { matches } = matchScannedCatalogItems(allCatalogEntries, scannedRecords);
+  const matchedCatalogIds = new Set(
+    matches.flatMap((match) => (match.existing ? [match.existing.id] : [])),
+  );
+  const missingCatalogEntries = allCatalogEntries
+    .filter((entry) => entry.directoryId === directoryId)
+    .filter((entry) => !matchedCatalogIds.has(entry.id))
+    .map((entry) => buildMissingCatalogEntry(entry, scannedAt));
+  const nextCatalogEntries = matches.map((match) =>
+    buildCatalogEntry(
+      match.scanned as ScannedCatalogRecord,
+      match.existing,
+      scannedAt,
+      seriesMetadataByKey,
+      movieMetadataByKey,
+    ),
+  );
+  const nextLibraryEntries = buildLegacyLibraryProjection(scannedRecords, allLibraryEntries);
+
+  await db.transaction('rw', db.catalog, db.library, db.directories, async () => {
+    if (nextCatalogEntries.length > 0) {
+      await db.catalog.bulkPut(nextCatalogEntries);
+    }
+    if (missingCatalogEntries.length > 0) {
+      await db.catalog.bulkPut(missingCatalogEntries);
+    }
+
+    await db.library.where('directoryId').equals(directoryId).delete();
+    if (nextLibraryEntries.length > 0) {
+      await db.library.bulkPut(nextLibraryEntries);
+    }
+
+    await db.directories.update(directoryId, { lastScannedAt: scannedAt });
+  });
+
+  await refreshLibraryMetadata({ entries: nextLibraryEntries });
 }
