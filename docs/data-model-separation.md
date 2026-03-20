@@ -26,6 +26,27 @@ The catalog should outlive any one scan result.
 
 We do not need backwards compatibility for this phase. It is acceptable to reset IndexedDB and rebuild on a cleaner schema.
 
+## Implemented So Far
+
+Phases 1 through 6 are now implemented in the codebase.
+
+What exists today:
+
+- `catalog` is the durable media table
+- scan reconciles into `catalog` and marks unseen items as `missing`
+- `playback` stores local per-device playback state
+- `remotePlayback` caches playback facts pulled from other devices
+- sync pushes local `playback` facts and no longer merges remote state into local media rows
+- player resume/save behavior uses `catalogId -> canonicalPlaybackKey -> playback`
+- sidebar, library, movie, and TV pages derive local progress from `catalog + playback`
+
+What still exists temporarily:
+
+- `library` is still present as a compatibility projection for currently present items
+- some grouping, navigation, and file-access code still reads `library`
+
+That compatibility layer was useful for the transition, but it is not part of the target design.
+
 ## Problem With The Current Model
 
 Today one `LibraryEntry` row tries to serve too many roles at once:
@@ -135,6 +156,7 @@ Important properties:
 - scan updates rows in place when it can match them
 - rows are not removed during ordinary rescans
 - metadata and hashes remain attached even after files are missing
+- this is the long-term replacement for `library`
 
 ### `playback`
 
@@ -177,6 +199,16 @@ Suggested fields:
 | `updatedAt` | when cache was refreshed |
 
 This is read-only from the app's perspective except for sync refreshes.
+
+### `library` status
+
+`library` is now a temporary compatibility table only.
+
+It is scheduled for removal.
+
+It should not gain new responsibilities.
+It should not be treated as durable truth.
+It should remain, at most, a short-lived projection while the remaining read paths move to `catalog`.
 
 ### Optional: `catalogAliases`
 
@@ -421,6 +453,22 @@ Examples:
 - devices page: grouped `remotePlayback`
 - player links: always local `catalogId`
 
+### Phase 7: Remove `library`
+
+After the compatibility reads are gone:
+
+1. move grouping and browse pages fully to `catalog`
+2. move file access helpers to accept `CatalogEntry` or a narrower file-source type
+3. remove legacy playback fields from `LibraryEntry`
+4. delete the `library` table entirely
+
+The desired end state is:
+
+- `catalog` is the only durable media table
+- `playback` is the only local playback table
+- `remotePlayback` is the only remote playback cache
+- “present locally” is derived from `catalog.availability`, not from a second media table
+
 ## Test Strategy
 
 The implementation should be built from pure logic tests upward.
@@ -498,6 +546,7 @@ These should mostly be joins over plain rows.
 4. Keep cross-device playback identity separate from local identity
 5. Persist identity decisions instead of recomputing them everywhere
 6. Build the new system by testing pure functions before Dexie integration
+7. Remove `library` rather than letting it harden into a second source of truth
 
 ## Proposed First Slice
 
