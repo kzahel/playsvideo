@@ -241,7 +241,7 @@ export async function buildDeviceDoc(): Promise<DeviceSyncDoc> {
       position: entry.playbackPositionSec,
       watchState: entry.watchState,
       durationSec: entry.durationSec,
-      watchedAt: entry.lastPlayedAt ?? Date.now(),
+      watchedAt: entry.lastPlayedAt ?? entry.addedAt ?? 0,
       title: entryTitle(entry),
     };
     if (entry.contentHash) syncEntry.contentHash = entry.contentHash;
