@@ -7,10 +7,26 @@ import { useFilesystemRescan } from '../hooks/useFilesystemRescan.js';
 import { removeFolder } from '../scan.js';
 import { folderProvider } from '../folder-provider.js';
 import { isExtension } from '../context.js';
+import { getDeviceId } from '../device.js';
+import { applyLocalPlaybackToLibraryEntries } from '../local-playback-views.js';
 import { SHOW_METADATA_DEBUG_KEY } from '../metadata/settings.js';
 
 export function Library() {
-  const entries = useLiveQuery(() => db.library.orderBy('name').toArray());
+  const deviceId = useLiveQuery(() => getDeviceId(), []);
+  const entries = useLiveQuery(async () => {
+    const [libraryEntries, catalogEntries, playbackEntries] = await Promise.all([
+      db.library.orderBy('name').toArray(),
+      db.catalog.toArray(),
+      deviceId
+        ? db.playback.where('deviceId').equals(deviceId).toArray()
+        : Promise.resolve([]),
+    ]);
+    return applyLocalPlaybackToLibraryEntries({
+      libraryEntries,
+      catalogEntries,
+      playbackEntries,
+    });
+  }, [deviceId]);
   const directories = useLiveQuery(() => db.directories.toArray());
   const seriesMetadata = useLiveQuery(() => db.seriesMetadata.toArray());
   const [showMetadataDebug] = useSetting<boolean>(SHOW_METADATA_DEBUG_KEY, false);
@@ -24,7 +40,7 @@ export function Library() {
     }
   };
 
-  if (entries === undefined || directories === undefined || seriesMetadata === undefined) {
+  if (entries === undefined || directories === undefined || seriesMetadata === undefined || deviceId === undefined) {
     return <div className="empty-state">Loading...</div>;
   }
 

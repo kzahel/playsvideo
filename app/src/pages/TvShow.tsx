@@ -2,9 +2,11 @@ import { useEffect, useState } from 'react';
 import { Link, useParams } from 'react-router-dom';
 import { useLiveQuery } from 'dexie-react-hooks';
 import { db, type LibraryEntry } from '../db.js';
+import { getDeviceId } from '../device.js';
 import { useSetting } from '../hooks/useSetting.js';
 import { useFilesystemRescan } from '../hooks/useFilesystemRescan.js';
 import { groupTvShows } from '../library-groups.js';
+import { applyLocalPlaybackToLibraryEntries } from '../local-playback-views.js';
 import {
   invalidateMetadata,
   refreshLibraryMetadata,
@@ -69,7 +71,21 @@ function watchLabel(entry: LibraryEntry): string {
 export function TvShow() {
   const { showId } = useParams<{ showId: string }>();
   const decodedId = decodeURIComponent(showId ?? '');
-  const entries = useLiveQuery(() => db.library.toArray());
+  const deviceId = useLiveQuery(() => getDeviceId(), []);
+  const entries = useLiveQuery(async () => {
+    const [libraryEntries, catalogEntries, playbackEntries] = await Promise.all([
+      db.library.toArray(),
+      db.catalog.toArray(),
+      deviceId
+        ? db.playback.where('deviceId').equals(deviceId).toArray()
+        : Promise.resolve([]),
+    ]);
+    return applyLocalPlaybackToLibraryEntries({
+      libraryEntries,
+      catalogEntries,
+      playbackEntries,
+    });
+  }, [deviceId]);
   const seriesMetadata = useLiveQuery(() => db.seriesMetadata.toArray());
   const seasonCacheEntries = useLiveQuery(() => db.metadataSeasonCache.toArray());
   const [autoRescanDetailPages] = useSetting<boolean>(AUTO_RESCAN_DETAIL_PAGES_KEY, true);
@@ -186,6 +202,7 @@ export function TvShow() {
     entries === undefined ||
     seriesMetadata === undefined ||
     seasonCacheEntries === undefined ||
+    deviceId === undefined ||
     !filesystemRescan.directoriesReady
   ) {
     return <div className="empty-state">Loading...</div>;

@@ -1,6 +1,8 @@
 import { NavLink } from 'react-router-dom';
 import { useLiveQuery } from 'dexie-react-hooks';
 import { db } from '../db';
+import { getDeviceId } from '../device.js';
+import { getNowPlayingView } from '../local-playback-views.js';
 
 interface SidebarProps {
   open: boolean;
@@ -8,14 +10,22 @@ interface SidebarProps {
 }
 
 export function Sidebar({ open, onClose }: SidebarProps) {
+  const deviceId = useLiveQuery(() => getDeviceId(), []);
   const nowPlaying = useLiveQuery(
-    () =>
-      db.library
-        .where('lastPlayedAt')
-        .above(0)
-        .reverse()
-        .sortBy('lastPlayedAt')
-        .then((entries) => entries[0] ?? null),
+    async () => {
+      if (!deviceId) return null;
+      const [catalogEntries, libraryEntries, playbackEntries] = await Promise.all([
+        db.catalog.toArray(),
+        db.library.toArray(),
+        db.playback.where('deviceId').equals(deviceId).toArray(),
+      ]);
+      return getNowPlayingView({
+        catalogEntries,
+        libraryEntries,
+        playbackEntries,
+      });
+    },
+    [deviceId],
   );
 
   return (
