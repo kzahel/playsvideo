@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react';
 import type { MetadataTransportStateEntry } from '../db.js';
 import { useSetting } from '../hooks/useSetting.js';
-import { refreshLibraryMetadata } from '../scan.js';
+import { refreshCatalogMetadata } from '../scan.js';
 import { getMetadataTransportState } from '../metadata/client.js';
 import type { MetadataRequestTier } from '../metadata/types.js';
 import {
@@ -70,7 +70,7 @@ export function MetadataSettings({ hasEntries, requestsEnabled }: MetadataSettin
     setRefreshing(true);
     setStatus('');
     try {
-      await refreshLibraryMetadata({ force: true });
+      await refreshCatalogMetadata({ force: true });
       setStatus('Metadata refreshed.');
       setTransportState(await getMetadataTransportState());
     } catch (error) {

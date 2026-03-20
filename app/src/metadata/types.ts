@@ -1,6 +1,6 @@
 import type { CatalogEntry, MetadataTransportStateEntry } from '../db.js';
 
-export interface RefreshLibraryMetadataOptions {
+export interface RefreshCatalogMetadataOptions {
   entries?: CatalogEntry[];
   force?: boolean;
 }
@@ -18,7 +18,7 @@ export function buildSeasonMetadataCacheKey(seriesKey: string, seasonNumber: num
 }
 
 export interface MetadataClient {
-  refreshLibraryMetadata(options?: RefreshLibraryMetadataOptions): Promise<void>;
+  refreshCatalogMetadata(options?: RefreshCatalogMetadataOptions): Promise<void>;
   refreshSeriesSeasons(options: RefreshSeriesSeasonsOptions): Promise<void>;
   invalidateMetadata(keys?: string[]): Promise<void>;
   getTransportState(): Promise<MetadataTransportStateEntry[]>;

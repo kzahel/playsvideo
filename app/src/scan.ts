@@ -14,11 +14,11 @@ import {
   type ScannedManifest,
 } from './folder-provider.js';
 import { parseMediaMetadata } from './media-metadata.js';
-import { refreshLibraryMetadata } from './metadata/client.js';
+import { refreshCatalogMetadata } from './metadata/client.js';
 import { buildPlaybackKeyCandidates } from './playback-key.js';
 
 export { type ScannedFile } from './folder-provider.js';
-export { refreshLibraryMetadata } from './metadata/client.js';
+export { refreshCatalogMetadata } from './metadata/client.js';
 
 const VIDEO_EXTENSIONS = new Set([
   '.mp4', '.mkv', '.avi', '.webm', '.mov', '.m4v',
@@ -290,5 +290,5 @@ async function syncCatalog(
     await db.directories.update(directoryId, { lastScannedAt: scannedAt });
   });
 
-  await refreshLibraryMetadata({ entries: nextCatalogEntries });
+  await refreshCatalogMetadata({ entries: nextCatalogEntries });
 }

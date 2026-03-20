@@ -203,8 +203,8 @@ body {
   border-radius: 2px;
 }
 
-/* Library grid */
-.library-header {
+/* Catalog grid */
+.catalog-header {
   display: flex;
   gap: 0.5rem;
   justify-content: center;
@@ -405,7 +405,7 @@ body {
   border-color: var(--fg);
 }
 
-.library-grid {
+.catalog-grid {
   display: flex;
   flex-direction: column;
   gap: 2px;
@@ -693,7 +693,7 @@ body {
   color: var(--muted);
 }
 
-.library-entry-virtual {
+.catalog-entry-virtual {
   opacity: 0.6;
 }
 
@@ -809,7 +809,7 @@ body {
   }
 }
 
-.library-entry {
+.catalog-entry {
   display: flex;
   align-items: center;
   gap: 0.75rem;
@@ -820,11 +820,11 @@ body {
   color: var(--fg);
   transition: background 0.1s;
 }
-.library-entry:hover {
+.catalog-entry:hover {
   background: rgba(128, 128, 128, 0.1);
 }
 
-.library-entry-thumb {
+.catalog-entry-thumb {
   flex-shrink: 0;
   width: 48px;
   height: 32px;
@@ -833,14 +833,14 @@ body {
   background: rgba(128, 128, 128, 0.08);
 }
 
-.library-entry-thumb img {
+.catalog-entry-thumb img {
   width: 100%;
   height: 100%;
   display: block;
   object-fit: cover;
 }
 
-.library-entry-thumb-fallback {
+.catalog-entry-thumb-fallback {
   width: 100%;
   height: 100%;
   display: flex;
@@ -852,12 +852,12 @@ body {
   color: var(--muted);
 }
 
-.library-entry-info {
+.catalog-entry-info {
   flex: 1;
   min-width: 0;
 }
 
-.library-entry-title {
+.catalog-entry-title {
   font-size: 0.88rem;
   font-weight: 500;
   white-space: nowrap;
@@ -865,38 +865,38 @@ body {
   text-overflow: ellipsis;
 }
 
-.library-entry-episode {
+.catalog-entry-episode {
   color: var(--accent);
   font-size: 0.75rem;
   font-weight: 700;
   margin-right: 0.5rem;
 }
 
-.library-entry-meta {
+.catalog-entry-meta {
   font-size: 0.75rem;
   color: var(--muted);
   margin-top: 1px;
 }
 
-.library-entry-progress {
+.catalog-entry-progress {
   flex-shrink: 0;
   width: 48px;
 }
 
-.library-entry-progress-bar {
+.catalog-entry-progress-bar {
   height: 3px;
   background: rgba(128, 128, 128, 0.25);
   border-radius: 2px;
   overflow: hidden;
 }
 
-.library-entry-progress-fill {
+.catalog-entry-progress-fill {
   height: 100%;
   background: #f59e0b;
   border-radius: 2px;
 }
 
-.library-entry-debug {
+.catalog-entry-debug {
   width: 100%;
   margin-top: 0.3rem;
   padding: 0.5rem 0.6rem;

@@ -33,12 +33,12 @@ export async function handleMetadataRequest(
         },
       };
 
-    case 'metadata:refresh-library':
-      await directTmdbMetadataClient.refreshLibraryMetadata(message.options);
+    case 'metadata:refresh-catalog':
+      await directTmdbMetadataClient.refreshCatalogMetadata(message.options);
       return {
         id,
         message: {
-          type: 'metadata:refresh-library:success',
+          type: 'metadata:refresh-catalog:success',
         },
       };
 

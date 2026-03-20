@@ -1,6 +1,6 @@
 import { useLiveQuery } from 'dexie-react-hooks';
 import { db } from '../db.js';
-import { LibraryEntryCard } from '../components/LibraryEntry.js';
+import { CatalogEntryCard } from '../components/CatalogEntry.js';
 import { FolderPicker } from '../components/FolderPicker.js';
 import { useSetting } from '../hooks/useSetting.js';
 import { useFilesystemRescan } from '../hooks/useFilesystemRescan.js';
@@ -11,7 +11,7 @@ import { getDeviceId } from '../device.js';
 import { applyLocalPlaybackToCatalogEntries } from '../local-playback-views.js';
 import { SHOW_METADATA_DEBUG_KEY } from '../metadata/settings.js';
 
-export function Library() {
+export function Catalog() {
   const deviceId = useLiveQuery(() => getDeviceId(), []);
   const entries = useLiveQuery(async () => {
     const [catalogEntries, playbackEntries] = await Promise.all([
@@ -53,7 +53,7 @@ export function Library() {
 
   return (
     <div>
-      <div className="library-header">
+      <div className="catalog-header">
         <FolderPicker />
         {filesystemRescan.showManualButton && (
           <button
@@ -110,9 +110,9 @@ export function Library() {
       )}
 
       {entries.length > 0 && (
-        <div className="library-grid">
+        <div className="catalog-grid">
           {entries.map((entry) => (
-            <LibraryEntryCard
+            <CatalogEntryCard
               key={entry.id}
               entry={entry}
               seriesMetadata={entry.seriesMetadataKey ? metadataByKey.get(entry.seriesMetadataKey) : undefined}

@@ -2,21 +2,21 @@ import { TMDB_READ_ACCESS_TOKEN_KEY } from './settings.js';
 import { sendMetadataRequest } from './host.js';
 import type {
   MetadataClient,
-  RefreshLibraryMetadataOptions,
+  RefreshCatalogMetadataOptions,
   RefreshSeriesSeasonsOptions,
 } from './types.js';
 import type {
   MetadataGetTransportStateSuccess,
   MetadataInvalidateSuccess,
-  MetadataRefreshLibrarySuccess,
+  MetadataRefreshCatalogSuccess,
   MetadataRefreshSeriesSeasonsSuccess,
 } from './protocol.js';
 import type { MetadataTransportStateEntry } from '../db.js';
 
 export const metadataClient: MetadataClient = {
-  refreshLibraryMetadata(options?: RefreshLibraryMetadataOptions): Promise<void> {
-    return sendMetadataRequest<MetadataRefreshLibrarySuccess>({
-      type: 'metadata:refresh-library',
+  refreshCatalogMetadata(options?: RefreshCatalogMetadataOptions): Promise<void> {
+    return sendMetadataRequest<MetadataRefreshCatalogSuccess>({
+      type: 'metadata:refresh-catalog',
       options,
     }).then(() => undefined);
   },
@@ -41,10 +41,10 @@ export const metadataClient: MetadataClient = {
 };
 
 export { TMDB_READ_ACCESS_TOKEN_KEY };
-export type { MetadataClient, RefreshLibraryMetadataOptions, RefreshSeriesSeasonsOptions };
+export type { MetadataClient, RefreshCatalogMetadataOptions, RefreshSeriesSeasonsOptions };
 
-export function refreshLibraryMetadata(options?: RefreshLibraryMetadataOptions): Promise<void> {
-  return metadataClient.refreshLibraryMetadata(options);
+export function refreshCatalogMetadata(options?: RefreshCatalogMetadataOptions): Promise<void> {
+  return metadataClient.refreshCatalogMetadata(options);
 }
 
 export function refreshSeriesSeasons(options: RefreshSeriesSeasonsOptions): Promise<void> {

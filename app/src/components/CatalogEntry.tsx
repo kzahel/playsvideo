@@ -53,7 +53,7 @@ function formatMatchStatus(seriesMetadata?: SeriesMetadataEntry): string {
   return 'error';
 }
 
-export function LibraryEntryCard({ entry, seriesMetadata, showMetadataDebug = false }: Props) {
+export function CatalogEntryCard({ entry, seriesMetadata, showMetadataDebug = false }: Props) {
   const isInProgress =
     entry.watchState === 'in-progress' && entry.durationSec > 0;
   const progressPct = isInProgress
@@ -67,20 +67,20 @@ export function LibraryEntryCard({ entry, seriesMetadata, showMetadataDebug = fa
   const isVirtual = entry.hasLocalFile === false;
 
   return (
-    <Link to={`/play/${entry.id}`} className={`library-entry${isVirtual ? ' library-entry-virtual' : ''}`}>
-      <div className="library-entry-thumb">
+    <Link to={`/play/${entry.id}`} className={`catalog-entry${isVirtual ? ' catalog-entry-virtual' : ''}`}>
+      <div className="catalog-entry-thumb">
         {posterUrl ? (
           <img src={posterUrl} alt={artLabel} loading="lazy" />
         ) : (
-          <div className="library-entry-thumb-fallback">{buildInitials(artLabel)}</div>
+          <div className="catalog-entry-thumb-fallback">{buildInitials(artLabel)}</div>
         )}
       </div>
-      <div className="library-entry-info">
-        <div className="library-entry-title">
-          {episodeLabel ? <span className="library-entry-episode">{episodeLabel}</span> : null}
+      <div className="catalog-entry-info">
+        <div className="catalog-entry-title">
+          {episodeLabel ? <span className="catalog-entry-episode">{episodeLabel}</span> : null}
           {displayTitle}
         </div>
-        <div className="library-entry-meta">
+        <div className="catalog-entry-meta">
           {isVirtual
             ? (entry.torrentComplete ? 'Available via torrent' : 'Not downloaded')
             : <>
@@ -97,14 +97,14 @@ export function LibraryEntryCard({ entry, seriesMetadata, showMetadataDebug = fa
         </span>
       ) : null}
       {isInProgress ? (
-        <div className="library-entry-progress">
-          <div className="library-entry-progress-bar">
-            <div className="library-entry-progress-fill" style={{ width: `${progressPct}%` }} />
+        <div className="catalog-entry-progress">
+          <div className="catalog-entry-progress-bar">
+            <div className="catalog-entry-progress-fill" style={{ width: `${progressPct}%` }} />
           </div>
         </div>
       ) : null}
       {showMetadataDebug ? (
-        <div className="library-entry-debug">
+        <div className="catalog-entry-debug">
           <div>type: {entry.detectedMediaType}</div>
           <div>parsed: {entry.parsedTitle ?? '(none)'}</div>
           <div>

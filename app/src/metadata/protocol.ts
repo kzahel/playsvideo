@@ -8,7 +8,7 @@ import type {
 } from '../db.js';
 import type { ParsedMediaMetadata } from '../media-metadata.js';
 import type {
-  RefreshLibraryMetadataOptions,
+  RefreshCatalogMetadataOptions,
   RefreshSeriesSeasonsOptions,
 } from './types.js';
 
@@ -24,9 +24,9 @@ export interface MetadataParseFilenameRequest {
   path: string;
 }
 
-export interface MetadataRefreshLibraryRequest {
-  type: 'metadata:refresh-library';
-  options?: RefreshLibraryMetadataOptions;
+export interface MetadataRefreshCatalogRequest {
+  type: 'metadata:refresh-catalog';
+  options?: RefreshCatalogMetadataOptions;
 }
 
 export interface MetadataRefreshSeriesSeasonsRequest {
@@ -72,7 +72,7 @@ export interface MetadataInvalidateRequest {
 
 export type MetadataRequestMessage =
   | MetadataParseFilenameRequest
-  | MetadataRefreshLibraryRequest
+  | MetadataRefreshCatalogRequest
   | MetadataRefreshSeriesSeasonsRequest
   | MetadataMatchTvRequest
   | MetadataMatchMovieRequest
@@ -89,8 +89,8 @@ export interface MetadataParseFilenameSuccess {
   parsed: ParsedMediaMetadata;
 }
 
-export interface MetadataRefreshLibrarySuccess {
-  type: 'metadata:refresh-library:success';
+export interface MetadataRefreshCatalogSuccess {
+  type: 'metadata:refresh-catalog:success';
 }
 
 export interface MetadataRefreshSeriesSeasonsSuccess {
@@ -146,7 +146,7 @@ export interface MetadataErrorResponse {
 
 export type MetadataResponseMessage =
   | MetadataParseFilenameSuccess
-  | MetadataRefreshLibrarySuccess
+  | MetadataRefreshCatalogSuccess
   | MetadataRefreshSeriesSeasonsSuccess
   | MetadataMatchTvSuccess
   | MetadataMatchMovieSuccess

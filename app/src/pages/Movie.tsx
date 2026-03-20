@@ -4,10 +4,10 @@ import { useLiveQuery } from 'dexie-react-hooks';
 import { db } from '../db.js';
 import { useSetting } from '../hooks/useSetting.js';
 import { useFilesystemRescan } from '../hooks/useFilesystemRescan.js';
-import { groupMovies } from '../library-groups.js';
+import { groupMovies } from '../catalog-groups.js';
 import { getDeviceId } from '../device.js';
 import { applyLocalPlaybackToCatalogEntries } from '../local-playback-views.js';
-import { invalidateMetadata, refreshLibraryMetadata } from '../metadata/client.js';
+import { invalidateMetadata, refreshCatalogMetadata } from '../metadata/client.js';
 import { TMDB_REQUESTS_ENABLED_KEY } from '../metadata/settings.js';
 import { AUTO_RESCAN_DETAIL_PAGES_KEY } from '../settings.js';
 
@@ -95,7 +95,7 @@ export function Movie() {
       if (metadataKeys.length > 0) {
         await invalidateMetadata(metadataKeys);
       }
-      await refreshLibraryMetadata({ entries: movie.entries, force: true });
+      await refreshCatalogMetadata({ entries: movie.entries, force: true });
       setMetadataStatusMessage('Metadata refreshed.');
     } catch (error) {
       setMetadataStatusMessage(error instanceof Error ? error.message : 'Metadata refresh failed.');

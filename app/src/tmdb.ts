@@ -1,6 +1,6 @@
 export {
   TMDB_READ_ACCESS_TOKEN_KEY,
   directTmdbMetadataClient,
-  refreshLibraryMetadata,
+  refreshCatalogMetadata,
   refreshSeriesSeasons,
 } from './metadata/direct-tmdb.js';

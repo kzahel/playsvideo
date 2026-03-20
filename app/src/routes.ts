@@ -1,6 +1,6 @@
 import { createBrowserRouter } from 'react-router-dom';
 import { App } from './App';
-import { Library } from './pages/Library';
+import { Catalog } from './pages/Catalog';
 import { Player } from './pages/Player';
 import { FilePlayer } from './pages/FilePlayer';
 import { MediaBrowser, MoviesBrowser, ShowsBrowser } from './pages/MediaBrowser';
@@ -15,7 +15,7 @@ export const router = createBrowserRouter(
       path: '/',
       Component: App,
       children: [
-        { index: true, Component: Library },
+        { index: true, Component: Catalog },
         { path: 'media', Component: MediaBrowser },
         { path: 'shows', Component: ShowsBrowser },
         { path: 'movies', Component: MoviesBrowser },

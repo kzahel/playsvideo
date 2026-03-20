@@ -5,14 +5,14 @@ import { db } from '../db.js';
 import { getDeviceId } from '../device.js';
 import { useSetting } from '../hooks/useSetting.js';
 import { useFilesystemRescan } from '../hooks/useFilesystemRescan.js';
-import { groupTvShows } from '../library-groups.js';
+import { groupTvShows } from '../catalog-groups.js';
 import {
   applyLocalPlaybackToCatalogEntries,
   type CatalogPlaybackView,
 } from '../local-playback-views.js';
 import {
   invalidateMetadata,
-  refreshLibraryMetadata,
+  refreshCatalogMetadata,
   refreshSeriesSeasons,
 } from '../metadata/client.js';
 import {
@@ -256,7 +256,7 @@ export function TvShow() {
       if (metadataKeys.length > 0) {
         await invalidateMetadata(metadataKeys);
       }
-      await refreshLibraryMetadata({ entries: show.entries, force: true });
+      await refreshCatalogMetadata({ entries: show.entries, force: true });
       if (shouldAutoFetchSeasonMetadata) {
         await Promise.all(
           metadataKeys.map((seriesKey) =>

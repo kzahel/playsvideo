@@ -220,7 +220,7 @@ export function Player() {
     return (
       <div className="player-page">
         <Link to="/" className="player-back">
-          &larr; Back to Library
+          &larr; Back to Catalog
         </Link>
         <p>Video not found.</p>
       </div>
@@ -231,7 +231,7 @@ export function Player() {
     return (
       <div className="player-page">
         <Link to="/" className="player-back">
-          &larr; Back to Library
+          &larr; Back to Catalog
         </Link>
         <h2 className="player-filename">{entry.name}</h2>
         <div className="player-virtual-notice">
@@ -268,7 +268,7 @@ export function Player() {
   return (
     <div className="player-page">
       <Link to="/" className="player-back">
-        &larr; Back to Library
+        &larr; Back to Catalog
       </Link>
       <h2 className="player-filename">{entry.name}</h2>
       <input

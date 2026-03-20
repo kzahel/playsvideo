@@ -32,7 +32,7 @@ export function Sidebar({ open, onClose }: SidebarProps) {
       <aside className={`sidebar${open ? ' open' : ''}`}>
         <nav>
           <NavLink to="/" end onClick={onClose}>
-            Library
+            Catalog
           </NavLink>
           <NavLink to="/shows" onClick={onClose}>
             Shows

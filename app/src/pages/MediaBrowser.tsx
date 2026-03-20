@@ -1,7 +1,7 @@
 import { Link } from 'react-router-dom';
 import { useLiveQuery } from 'dexie-react-hooks';
 import { db } from '../db.js';
-import { groupMovies, groupTvShows } from '../library-groups.js';
+import { groupMovies, groupTvShows } from '../catalog-groups.js';
 
 function buildFallbackLabel(value: string): string {
   return value

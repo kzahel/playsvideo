@@ -72,7 +72,7 @@ export function FilePlayer() {
   return (
     <div className="player-page">
       <Link to="/" className="player-back">
-        &larr; Back to Library
+        &larr; Back to Catalog
       </Link>
       {!file && (
         <div className="empty-state">

@@ -16,7 +16,7 @@ import { metadataCoordinator } from './coordinator.js';
 import { metadataRepository } from './repository.js';
 import type {
   MetadataClient,
-  RefreshLibraryMetadataOptions,
+  RefreshCatalogMetadataOptions,
   RefreshSeriesSeasonsOptions,
 } from './types.js';
 import { buildSeasonMetadataCacheKey } from './types.js';
@@ -123,7 +123,7 @@ interface MovieLookupCandidate {
 }
 
 export const directTmdbMetadataClient: MetadataClient = {
-  refreshLibraryMetadata,
+  refreshCatalogMetadata,
   refreshSeriesSeasons,
   getTransportState() {
     return metadataRepository.listTransportState({ transport: 'direct' });
@@ -135,8 +135,8 @@ export const directTmdbMetadataClient: MetadataClient = {
 
 export { TMDB_READ_ACCESS_TOKEN_KEY } from './settings.js';
 
-export async function refreshLibraryMetadata(
-  options?: RefreshLibraryMetadataOptions,
+export async function refreshCatalogMetadata(
+  options?: RefreshCatalogMetadataOptions,
 ): Promise<void> {
   const entries = await metadataRepository.hydrateParsedCatalogEntries(options?.entries);
   if (!(await metadataRepository.areTmdbRequestsEnabled())) return;
