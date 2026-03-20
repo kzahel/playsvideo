@@ -1,5 +1,5 @@
 import { initializeApp } from 'firebase/app';
-import { getFirestore, connectFirestoreEmulator, doc, getDoc, setDoc, getDocs, collection } from 'firebase/firestore';
+import { getFirestore, connectFirestoreEmulator, doc, setDoc, getDocs, collection } from 'firebase/firestore';
 import {
   getAuth,
   connectAuthEmulator,
@@ -11,9 +11,28 @@ import {
   onAuthStateChanged,
   type User,
 } from 'firebase/auth';
-import { db, type LibraryEntry, type MovieMetadataEntry, type SeriesMetadataEntry, type WatchState } from './db.js';
+import {
+  db,
+  type CatalogEntry,
+  type LibraryEntry,
+  type MovieMetadataEntry,
+  type PlaybackEntry,
+  type RemotePlaybackEntry,
+  type SeriesMetadataEntry,
+  type WatchState,
+} from './db.js';
 import { isExtension } from './context.js';
 import { getDeviceId, getDeviceLabel } from './device.js';
+import { buildPlaybackKeyCandidates } from './playback-key.js';
+import {
+  buildDeviceSyncDoc,
+  flattenRemoteDeviceDocs,
+  mergeRemoteDeviceDocs,
+  type DeviceSyncDoc,
+  type DeviceSyncEntry,
+  type PlaybackSyncMetadata,
+  type RemoteDeviceState,
+} from './sync-device-doc.js';
 
 const firebaseConfig = {
   apiKey: 'AIzaSyDz7vblhBTeObWFFDUNM4MwkjiRl4PudxE',
@@ -83,30 +102,8 @@ export function onAuthChange(callback: (user: User | null) => void): () => void 
 
 // --- Sync (per-device) ---
 
-export interface SyncEntry {
-  position: number;
-  watchState: WatchState;
-  durationSec: number;
-  watchedAt: number;
-  title?: string;
-  contentHash?: string;
-  torrentInfoHash?: string;
-  torrentFileIndex?: number;
-  torrentMagnetUrl?: string;
-  torrentComplete?: boolean;
-}
-
-export interface DeviceSyncDoc {
-  v: 2;
-  label: string;
-  lastSyncedAt: number;
-  entries: Record<string, SyncEntry>;
-}
-
-export interface RemoteDeviceState {
-  deviceId: string;
-  doc: DeviceSyncDoc;
-}
+export type SyncEntry = DeviceSyncEntry;
+export type { DeviceSyncDoc, RemoteDeviceState };
 
 // --- Sync key builders ---
 
@@ -115,72 +112,75 @@ export function buildSyncKey(
   seriesMetadataByKey: Map<string, SeriesMetadataEntry>,
   movieMetadataByKey: Map<string, MovieMetadataEntry>,
 ): string {
-  // Priority 1: torrent identity (works even for incomplete files)
-  if (entry.torrentInfoHash != null && entry.torrentFileIndex != null) {
-    return `torrent:${entry.torrentInfoHash}:${entry.torrentFileIndex}`;
-  }
-
-  // Priority 2: content hash (stable across renames)
-  if (entry.contentHash) {
-    return `hash:${entry.contentHash}`;
-  }
-
-  // Priority 3: TMDB identity (cross-device without file access)
-  if (
-    entry.detectedMediaType === 'tv' &&
-    entry.seriesMetadataKey &&
-    entry.seasonNumber != null &&
-    entry.episodeNumber != null
-  ) {
-    const seriesMetadata = seriesMetadataByKey.get(entry.seriesMetadataKey);
-    if (seriesMetadata?.status === 'resolved' && seriesMetadata.tmdbId != null) {
-      const episodeKey =
-        entry.endingEpisodeNumber != null
-          ? `${String(entry.episodeNumber).padStart(2, '0')}-${String(entry.endingEpisodeNumber).padStart(2, '0')}`
-          : String(entry.episodeNumber).padStart(2, '0');
-      return `tmdb:tv:${seriesMetadata.tmdbId}:s${String(entry.seasonNumber).padStart(2, '0')}:e${episodeKey}`;
-    }
-  }
-
-  if (entry.detectedMediaType === 'movie' && entry.movieMetadataKey) {
-    const movieMetadata = movieMetadataByKey.get(entry.movieMetadataKey);
-    if (movieMetadata?.status === 'resolved' && movieMetadata.tmdbId != null) {
-      return `tmdb:movie:${movieMetadata.tmdbId}`;
-    }
-  }
-
-  // Priority 4: file-based fallback
-  return `file:${entry.name}|${entry.size}|${entry.durationSec}`;
+  const [candidate] = buildPlaybackKeyCandidates(
+    {
+      name: entry.name,
+      size: entry.size,
+      detectedMediaType: entry.detectedMediaType,
+      seriesMetadataKey: entry.seriesMetadataKey,
+      movieMetadataKey: entry.movieMetadataKey,
+      seasonNumber: entry.seasonNumber,
+      episodeNumber: entry.episodeNumber,
+      endingEpisodeNumber: entry.endingEpisodeNumber,
+      contentHash: entry.contentHash,
+      torrentInfoHash: entry.torrentInfoHash,
+      torrentFileIndex: entry.torrentFileIndex,
+    },
+    {
+      seriesMetadataByKey,
+      movieMetadataByKey,
+    },
+  );
+  return candidate.key;
 }
 
-function buildSyncKeyMap(
-  entries: LibraryEntry[],
-  seriesMetadata: SeriesMetadataEntry[],
-  movieMetadata: MovieMetadataEntry[],
-): Map<number, string> {
-  const seriesMetadataByKey = new Map(seriesMetadata.map((e) => [e.key, e]));
-  const movieMetadataByKey = new Map(movieMetadata.map((e) => [e.key, e]));
-  const keyByEntryId = new Map<number, string>();
-  for (const entry of entries) {
-    keyByEntryId.set(entry.id, buildSyncKey(entry, seriesMetadataByKey, movieMetadataByKey));
-  }
-  return keyByEntryId;
-}
-
-function entryTitle(entry: LibraryEntry): string {
+function catalogEntryTitle(entry: CatalogEntry): string {
   return entry.parsedTitle ?? entry.name;
 }
 
+function chooseMetadataEntry(
+  current: CatalogEntry | undefined,
+  next: CatalogEntry,
+): CatalogEntry {
+  if (!current) return next;
+  if (current.availability !== 'present' && next.availability === 'present') return next;
+  if ((next.updatedAt ?? 0) > (current.updatedAt ?? 0)) return next;
+  return current;
+}
+
+async function buildCatalogPlaybackMetadata(): Promise<Map<string, PlaybackSyncMetadata>> {
+  const entries = await db.catalog.toArray();
+  const chosenByKey = new Map<string, CatalogEntry>();
+  for (const entry of entries) {
+    if (!entry.canonicalPlaybackKey) continue;
+    chosenByKey.set(
+      entry.canonicalPlaybackKey,
+      chooseMetadataEntry(chosenByKey.get(entry.canonicalPlaybackKey), entry),
+    );
+  }
+
+  return new Map(
+    Array.from(chosenByKey.entries()).map(([playbackKey, entry]) => [
+      playbackKey,
+      {
+        title: catalogEntryTitle(entry),
+        contentHash: entry.contentHash,
+        torrentInfoHash: entry.torrentInfoHash,
+        torrentFileIndex: entry.torrentFileIndex,
+        torrentMagnetUrl: entry.torrentMagnetUrl,
+        torrentComplete: entry.torrentComplete,
+      },
+    ]),
+  );
+}
+
 export async function buildLocalSyncKeyIndex(): Promise<Map<string, number>> {
-  const [entries, seriesMetadata, movieMetadata] = await Promise.all([
-    db.library.toArray(),
-    db.seriesMetadata.toArray(),
-    db.movieMetadata.toArray(),
-  ]);
-  const keyMap = buildSyncKeyMap(entries, seriesMetadata, movieMetadata);
+  const entries = await db.catalog.toArray();
   const syncKeyToEntryId = new Map<string, number>();
-  for (const [entryId, syncKey] of keyMap) {
-    syncKeyToEntryId.set(syncKey, entryId);
+  for (const entry of entries) {
+    if (entry.canonicalPlaybackKey) {
+      syncKeyToEntryId.set(entry.canonicalPlaybackKey, entry.id);
+    }
   }
   return syncKeyToEntryId;
 }
@@ -200,105 +200,45 @@ async function pullAllDeviceDocs(uid: string): Promise<RemoteDeviceState[]> {
   return results;
 }
 
-// --- Merge logic (pure) ---
-
-export interface MergedEntry extends SyncEntry {
-  sourceDeviceId: string;
-  sourceDeviceLabel: string;
-}
-
 export function mergeDeviceDocs(
   devices: RemoteDeviceState[],
-): Map<string, MergedEntry> {
-  const merged = new Map<string, MergedEntry>();
-  for (const { deviceId, doc: deviceDoc } of devices) {
-    for (const [key, entry] of Object.entries(deviceDoc.entries)) {
-      const existing = merged.get(key);
-      if (!existing || entry.watchedAt > existing.watchedAt) {
-        merged.set(key, { ...entry, sourceDeviceId: deviceId, sourceDeviceLabel: deviceDoc.label });
-      }
-    }
-  }
-  return merged;
+): ReturnType<typeof mergeRemoteDeviceDocs> {
+  return mergeRemoteDeviceDocs(devices);
 }
 
 // --- Main sync operations ---
 
 export async function buildDeviceDoc(): Promise<DeviceSyncDoc> {
-  const [entries, seriesMetadata, movieMetadata, label] = await Promise.all([
-    db.library.toArray(),
-    db.seriesMetadata.toArray(),
-    db.movieMetadata.toArray(),
+  const [playback, metadataByPlaybackKey, label] = await Promise.all([
+    db.playback.toArray(),
+    buildCatalogPlaybackMetadata(),
     getDeviceLabel(),
   ]);
-  const keyMap = buildSyncKeyMap(entries, seriesMetadata, movieMetadata);
-  const syncEntries: Record<string, SyncEntry> = {};
-  for (const entry of entries) {
-    if (entry.durationSec <= 0) continue;
-    const key = keyMap.get(entry.id);
-    if (!key) continue;
-    const syncEntry: SyncEntry = {
-      position: entry.playbackPositionSec,
-      watchState: entry.watchState,
-      durationSec: entry.durationSec,
-      watchedAt: entry.lastPlayedAt ?? entry.addedAt ?? 0,
-      title: entryTitle(entry),
-    };
-    if (entry.contentHash) syncEntry.contentHash = entry.contentHash;
-    if (entry.torrentInfoHash) syncEntry.torrentInfoHash = entry.torrentInfoHash;
-    if (entry.torrentFileIndex != null) syncEntry.torrentFileIndex = entry.torrentFileIndex;
-    if (entry.torrentMagnetUrl) syncEntry.torrentMagnetUrl = entry.torrentMagnetUrl;
-    if (entry.torrentComplete != null) syncEntry.torrentComplete = entry.torrentComplete;
-    syncEntries[key] = syncEntry;
-  }
-  return {
-    v: 2,
+  return buildDeviceSyncDoc({
     label,
     lastSyncedAt: Date.now(),
-    entries: syncEntries,
-  };
+    playback,
+    metadataByPlaybackKey,
+  });
 }
 
 export async function mergeAndSync(uid: string): Promise<void> {
-  const [deviceId, entries, seriesMetadata, movieMetadata, allDeviceDocs] = await Promise.all([
+  const [deviceId, allDeviceDocs] = await Promise.all([
     getDeviceId(),
-    db.library.toArray(),
-    db.seriesMetadata.toArray(),
-    db.movieMetadata.toArray(),
     pullAllDeviceDocs(uid),
   ]);
+  const remotePlaybackRows = flattenRemoteDeviceDocs(allDeviceDocs, {
+    excludeDeviceId: deviceId,
+    updatedAt: Date.now(),
+  });
 
-  const keyMap = buildSyncKeyMap(entries, seriesMetadata, movieMetadata);
-
-  // Build reverse lookup: syncKey -> entryId
-  const entryIdByKey = new Map<number, string>();
-  const entryByKey = new Map<string, LibraryEntry>();
-  for (const entry of entries) {
-    const key = keyMap.get(entry.id);
-    if (key) {
-      entryIdByKey.set(entry.id, key);
-      entryByKey.set(key, entry);
+  await db.transaction('rw', db.remotePlayback, async () => {
+    await db.remotePlayback.clear();
+    if (remotePlaybackRows.length > 0) {
+      await db.remotePlayback.bulkPut(remotePlaybackRows);
     }
-  }
+  });
 
-  // Merge all remote devices (excluding self) to find best remote state per key
-  const otherDevices = allDeviceDocs.filter((d) => d.deviceId !== deviceId);
-  const remoteMerged = mergeDeviceDocs(otherDevices);
-
-  // Apply remote winners to local IDB where remote is newer
-  for (const [key, remoteEntry] of remoteMerged) {
-    const localEntry = entryByKey.get(key);
-    if (!localEntry) continue;
-    const localWatchedAt = localEntry.lastPlayedAt ?? 0;
-    if (remoteEntry.watchedAt > localWatchedAt) {
-      await db.library.update(localEntry.id, {
-        playbackPositionSec: remoteEntry.position,
-        watchState: remoteEntry.watchState,
-      });
-    }
-  }
-
-  // Push this device's doc
   const deviceDoc = await buildDeviceDoc();
   await pushDeviceDoc(uid, deviceId, deviceDoc);
 }

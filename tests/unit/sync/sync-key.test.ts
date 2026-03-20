@@ -83,9 +83,9 @@ describe('buildSyncKey', () => {
     expect(buildSyncKey(entry, noSeries, movieMap)).toBe('tmdb:movie:27205');
   });
 
-  it('falls back to file-based key', () => {
+  it('falls back to a stable file-based key without duration', () => {
     const entry = makeLibraryEntry({ name: 'video.mkv', size: 999, durationSec: 120.5 });
-    expect(buildSyncKey(entry, noSeries, noMovies)).toBe('file:video.mkv|999|120.5');
+    expect(buildSyncKey(entry, noSeries, noMovies)).toBe('file:video.mkv|999');
   });
 
   it('torrent key with fileIndex 0 is valid', () => {

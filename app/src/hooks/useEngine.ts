@@ -5,6 +5,7 @@ import { useSetting } from './useSetting.js';
 import { getFile, setFolder } from '../scan.js';
 import { folderProvider, isFileAccessPermissionError } from '../folder-provider.js';
 import { putLocalPlayback } from '../local-playback.js';
+import { scheduleSyncIfLoggedIn } from '../firebase.js';
 import {
   EMBEDDED_SUBTITLE_POLICY_KEY,
   type EmbeddedSubtitlePolicy,
@@ -330,14 +331,14 @@ export function useEngine(source: EngineSource | null): UseEngineResult {
     const onPause = () => {
       logVideoEvent('video:pause');
       if (entry) {
-        void savePosition();
+        savePosition().then(() => scheduleSyncIfLoggedIn());
       }
     };
     const onEnded = () => {
       logVideoEvent('video:ended');
       setHasEnded(true);
       if (entry) {
-        void savePosition();
+        savePosition().then(() => scheduleSyncIfLoggedIn());
       }
     };
     const onPlay = () => setHasEnded(false);
@@ -397,7 +398,7 @@ export function useEngine(source: EngineSource | null): UseEngineResult {
 
     return () => {
       if (entry) {
-        void savePosition();
+        savePosition().then(() => scheduleSyncIfLoggedIn());
       }
       if (interval) clearInterval(interval);
       video.removeEventListener('playing', onPlaying);
