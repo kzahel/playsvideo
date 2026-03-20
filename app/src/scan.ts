@@ -254,14 +254,23 @@ function buildMissingCatalogEntry(existing: CatalogEntry, scannedAt: number): Ca
 function buildLegacyLibraryProjection(
   records: ScannedCatalogRecord[],
   previousEntries: LibraryEntry[],
+  catalogEntries: CatalogEntry[],
 ): LibraryEntry[] {
   const oldByIdentity = new Map<string, LibraryEntry>();
   const oldByTorrentKey = new Map<string, LibraryEntry>();
+  const catalogIdByPath = new Map(catalogEntries.map((entry) => [entry.path, entry.id]));
+  const catalogIdByTorrentKey = new Map<string, number>();
   for (const entry of previousEntries) {
     oldByIdentity.set(identityKey(entry), entry);
     const key = torrentKey(entry);
     if (key) {
       oldByTorrentKey.set(key, entry);
+    }
+  }
+  for (const entry of catalogEntries) {
+    const key = torrentKey(entry);
+    if (key) {
+      catalogIdByTorrentKey.set(key, entry.id);
     }
   }
 
@@ -271,8 +280,11 @@ function buildLegacyLibraryProjection(
     const old =
       (key ? oldByTorrentKey.get(key) : undefined) ??
       oldByIdentity.get(identityKey(record));
+    const catalogId =
+      (key ? catalogIdByTorrentKey.get(key) : undefined) ??
+      catalogIdByPath.get(record.path);
     projected.push({
-      ...(old?.id != null ? { id: old.id } : {}),
+      ...(catalogId != null ? { id: catalogId } : old?.id != null ? { id: old.id } : {}),
       directoryId: record.directoryId,
       name: record.name,
       path: record.path,
@@ -335,7 +347,11 @@ async function syncToLibrary(
       movieMetadataByKey,
     ),
   );
-  const nextLibraryEntries = buildLegacyLibraryProjection(scannedRecords, allLibraryEntries);
+  const nextLibraryEntries = buildLegacyLibraryProjection(
+    scannedRecords,
+    allLibraryEntries,
+    nextCatalogEntries,
+  );
 
   await db.transaction('rw', db.catalog, db.library, db.directories, async () => {
     if (nextCatalogEntries.length > 0) {

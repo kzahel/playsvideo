@@ -1,18 +1,23 @@
 import { useRef, useState, useEffect, useCallback, type MutableRefObject } from 'react';
 import { PlaysVideoEngine } from 'playsvideo';
-import type { LibraryEntry } from '../db';
-import { db } from '../db';
+import type { LibraryEntry, PlaybackEntry } from '../db';
 import { useSetting } from './useSetting.js';
 import { getFile, setFolder } from '../scan.js';
 import { folderProvider, isFileAccessPermissionError } from '../folder-provider.js';
-import { scheduleSyncIfLoggedIn } from '../firebase.js';
+import { putLocalPlayback } from '../local-playback.js';
 import {
   EMBEDDED_SUBTITLE_POLICY_KEY,
   type EmbeddedSubtitlePolicy,
 } from '../settings.js';
 
 export type EngineSource =
-  | { kind: 'entry'; entry: LibraryEntry }
+  | {
+      kind: 'entry';
+      entry: LibraryEntry;
+      deviceId: string;
+      playbackKey: string;
+      playback: PlaybackEntry | null;
+    }
   | { kind: 'file'; file: File };
 
 const MAX_DIAGNOSTIC_EVENTS = 60;
@@ -86,10 +91,15 @@ async function writeClipboard(text: string): Promise<void> {
 
 export function useEngine(source: EngineSource | null): UseEngineResult {
   const entry = source?.kind === 'entry' ? source.entry : null;
+  const playback = source?.kind === 'entry' ? source.playback : null;
+  const playbackTarget =
+    source?.kind === 'entry'
+      ? { deviceId: source.deviceId, playbackKey: source.playbackKey }
+      : null;
   const file = source?.kind === 'file' ? source.file : null;
   const sourceKey = source
     ? source.kind === 'entry'
-      ? `entry-${source.entry.id}`
+      ? `entry-${source.entry.id}-${source.deviceId}-${source.playbackKey}`
       : `file-${source.file.name}-${source.file.size}-${source.file.lastModified}`
     : null;
 
@@ -97,6 +107,10 @@ export function useEngine(source: EngineSource | null): UseEngineResult {
   const engineRef = useRef<PlaysVideoEngine | null>(null);
   const entryRef = useRef(entry);
   entryRef.current = entry;
+  const playbackRef = useRef(playback);
+  playbackRef.current = playback;
+  const playbackTargetRef = useRef(playbackTarget);
+  playbackTargetRef.current = playbackTarget;
   const diagnosticsRef = useRef<DiagnosticEvent[]>([]);
   const playbackDecisionRef = useRef<unknown>(null);
   const workerStatesRef = useRef<unknown>(null);
@@ -116,7 +130,8 @@ export function useEngine(source: EngineSource | null): UseEngineResult {
 
   const savePosition = useCallback(async () => {
     const currentEntry = entryRef.current;
-    if (!currentEntry || !videoRef.current) return;
+    const currentPlaybackTarget = playbackTargetRef.current;
+    if (!currentEntry || !currentPlaybackTarget || !videoRef.current) return;
     const video = videoRef.current;
     const currentTime = video.currentTime;
     const duration = video.duration;
@@ -124,18 +139,21 @@ export function useEngine(source: EngineSource | null): UseEngineResult {
     if (Number.isNaN(duration) || duration <= 0) return;
 
     const nearEnd = duration - currentTime < 30;
+    const previousWatchState = playbackRef.current?.watchState ?? 'unwatched';
     const watchState = nearEnd
       ? ('watched' as const)
       : currentTime > 10
         ? ('in-progress' as const)
-        : currentEntry.watchState;
-
-    await db.library.update(currentEntry.id, {
-      playbackPositionSec: currentTime,
+        : previousWatchState;
+    const nextPlayback = await putLocalPlayback({
+      deviceId: currentPlaybackTarget.deviceId,
+      playbackKey: currentPlaybackTarget.playbackKey,
+      positionSec: currentTime,
       durationSec: duration,
       watchState,
       lastPlayedAt: Date.now(),
     });
+    playbackRef.current = nextPlayback;
   }, []);
 
   const copyDiagnostics = useCallback(async () => {
@@ -232,15 +250,15 @@ export function useEngine(source: EngineSource | null): UseEngineResult {
       );
 
       if (entry) {
-        if (entry.playbackPositionSec > 0 && entry.watchState === 'in-progress') {
-          video.currentTime = entry.playbackPositionSec;
+        const resumePlayback = playbackRef.current;
+        if (resumePlayback?.positionSec > 0 && resumePlayback.watchState === 'in-progress') {
+          video.currentTime = resumePlayback.positionSec;
           pushDiagnosticEvent(
             diagnosticsRef,
             'video:resume-position',
-            `currentTime=${entry.playbackPositionSec.toFixed(3)}`,
+            `currentTime=${resumePlayback.positionSec.toFixed(3)}`,
           );
         }
-        db.library.update(entry.id, { durationSec: e.detail.durationSec, lastPlayedAt: Date.now() });
       }
     }) as EventListener);
 
@@ -312,14 +330,14 @@ export function useEngine(source: EngineSource | null): UseEngineResult {
     const onPause = () => {
       logVideoEvent('video:pause');
       if (entry) {
-        savePosition().then(() => scheduleSyncIfLoggedIn());
+        void savePosition();
       }
     };
     const onEnded = () => {
       logVideoEvent('video:ended');
       setHasEnded(true);
       if (entry) {
-        savePosition().then(() => scheduleSyncIfLoggedIn());
+        void savePosition();
       }
     };
     const onPlay = () => setHasEnded(false);
@@ -379,7 +397,7 @@ export function useEngine(source: EngineSource | null): UseEngineResult {
 
     return () => {
       if (entry) {
-        savePosition().then(() => scheduleSyncIfLoggedIn());
+        void savePosition();
       }
       if (interval) clearInterval(interval);
       video.removeEventListener('playing', onPlaying);

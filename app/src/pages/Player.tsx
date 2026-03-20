@@ -1,12 +1,14 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { useParams, Link, useNavigate } from 'react-router-dom';
 import { useLiveQuery } from 'dexie-react-hooks';
-import { db, type LibraryEntry } from '../db';
+import { db, type CatalogEntry, type LibraryEntry } from '../db';
+import { getDeviceId } from '../device.js';
 import { useEngine } from '../hooks/useEngine';
 import { folderProvider, type SiblingSubtitleFile } from '../folder-provider.js';
 import { useSetting } from '../hooks/useSetting';
 import { useCustomControls } from '../hooks/useCustomControls';
 import { useFullscreen } from '../hooks/useFullscreen';
+import { getLocalPlayback } from '../local-playback.js';
 import { AUTOPLAY_NEXT_EPISODE_KEY, PLAYER_CONTROLS_TYPE_KEY } from '../settings.js';
 
 function buildSeriesIdentity(entry: LibraryEntry): string | null {
@@ -61,6 +63,16 @@ function formatEpisodeCode(entry: LibraryEntry): string {
   return prefix;
 }
 
+function missingMessage(entry: CatalogEntry): string {
+  if (entry.torrentComplete === false) {
+    return 'Download is incomplete in JSTorrent.';
+  }
+  if (entry.torrentMagnetUrl) {
+    return 'This item is in your catalog but is not currently available locally.';
+  }
+  return 'This item is in your catalog but the local file is currently missing.';
+}
+
 export function Player() {
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
@@ -76,8 +88,37 @@ export function Player() {
   );
   const [autoplayNextEpisode] = useSetting<boolean>(AUTOPLAY_NEXT_EPISODE_KEY, false);
 
-  const entry = useLiveQuery(() => db.library.get(entryId), [entryId]);
+  const catalogEntry = useLiveQuery(async () => {
+    const direct = await db.catalog.get(entryId);
+    if (direct) return direct;
+
+    const legacyEntry = await db.library.get(entryId);
+    if (!legacyEntry) return null;
+
+    return (
+      (await db.catalog.where('[directoryId+path]').equals([legacyEntry.directoryId, legacyEntry.path]).first()) ??
+      null
+    );
+  }, [entryId]);
+  const entry = useLiveQuery(async () => {
+    const direct = await db.library.get(entryId);
+    if (direct) return direct;
+
+    const catalog = await db.catalog.get(entryId);
+    if (!catalog || catalog.directoryId == null) return null;
+
+    return (
+      (await db.library.where('[directoryId+path]').equals([catalog.directoryId, catalog.path]).first()) ??
+      null
+    );
+  }, [entryId]);
   const entries = useLiveQuery(() => db.library.toArray());
+  const deviceId = useLiveQuery(() => getDeviceId(), []);
+  const playbackKey = catalogEntry?.canonicalPlaybackKey ?? null;
+  const localPlayback = useLiveQuery(
+    () => (deviceId && playbackKey ? getLocalPlayback(deviceId, playbackKey) : Promise.resolve(null)),
+    [deviceId, playbackKey],
+  );
   const {
     videoRef,
     status,
@@ -91,7 +132,21 @@ export function Player() {
     copyDiagnostics,
     diagnosticsStatus,
   } =
-    useEngine(entry && entry.hasLocalFile !== false ? { kind: 'entry', entry } : null);
+    useEngine(
+      entry &&
+        entry.hasLocalFile !== false &&
+        deviceId &&
+        playbackKey &&
+        localPlayback !== undefined
+        ? {
+            kind: 'entry',
+            entry,
+            deviceId,
+            playbackKey,
+            playback: localPlayback ?? null,
+          }
+        : null,
+    );
   useCustomControls(videoRef, containerEl, controlsType === 'custom');
   useFullscreen(videoRef, containerEl);
 
@@ -174,17 +229,50 @@ export function Player() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [siblingSubtitleKey, phase]);
 
-  if (entry === undefined) {
+  if (
+    entry === undefined ||
+    catalogEntry === undefined ||
+    deviceId === undefined ||
+    (playbackKey !== null && localPlayback === undefined)
+  ) {
     return <div className="player-page">Loading...</div>;
   }
 
-  if (!entry) {
+  if (!entry && !catalogEntry) {
     return (
       <div className="player-page">
         <Link to="/" className="player-back">
           &larr; Back to Library
         </Link>
         <p>Video not found.</p>
+      </div>
+    );
+  }
+
+  if (!entry && catalogEntry) {
+    return (
+      <div className="player-page">
+        <Link to="/" className="player-back">
+          &larr; Back to Library
+        </Link>
+        <h2 className="player-filename">{catalogEntry.name}</h2>
+        <div className="player-virtual-notice">
+          <p>{missingMessage(catalogEntry)}</p>
+          {catalogEntry.torrentMagnetUrl ? (
+            <div className="player-virtual-magnet">
+              <a href={catalogEntry.torrentMagnetUrl}>Open Magnet Link</a>
+              <button
+                type="button"
+                className="btn btn-secondary"
+                onClick={() => {
+                  void navigator.clipboard.writeText(catalogEntry.torrentMagnetUrl!);
+                }}
+              >
+                Copy Magnet
+              </button>
+            </div>
+          ) : null}
+        </div>
       </div>
     );
   }
