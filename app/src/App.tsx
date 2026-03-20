@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react';
 import { Link, Outlet } from 'react-router-dom';
 import { Sidebar } from './components/Sidebar';
 import { AuthButton } from './components/AuthButton.js';
+import { FolderStatus } from './components/FolderStatus.js';
 import { useSetting } from './hooks/useSetting.js';
 import {
   getStoredThemePreference,
@@ -83,6 +84,7 @@ export function App() {
           </svg>
         </Link>
         <div className="header-actions">
+          <FolderStatus />
           <a
             href="https://github.com/kzahel/playsvideo"
             className="github-link"

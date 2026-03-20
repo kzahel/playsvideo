@@ -111,6 +111,89 @@ body {
   min-height: 100vh;
 }
 
+/* Folder status (header) */
+.folder-status-wrapper {
+  position: relative;
+}
+.folder-status-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+  background: none;
+  border: 1px solid rgba(128, 128, 128, 0.3);
+  border-radius: 6px;
+  color: var(--fg);
+  font-size: 0.8rem;
+  padding: 0.3rem 0.6rem;
+  cursor: pointer;
+  max-width: 160px;
+  white-space: nowrap;
+}
+.folder-status-btn:hover {
+  border-color: var(--fg);
+}
+.folder-status-name {
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.folder-status-empty {
+  opacity: 0.6;
+}
+.folder-status-empty:hover {
+  opacity: 1;
+}
+.folder-status-needs-grant {
+  border-color: #f59e0b;
+}
+.folder-status-dot {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: #f59e0b;
+  flex-shrink: 0;
+}
+.folder-status-dropdown {
+  position: absolute;
+  top: calc(100% + 0.5rem);
+  right: 0;
+  background: var(--bg);
+  border: 1px solid rgba(128, 128, 128, 0.3);
+  border-radius: 10px;
+  padding: 0.85rem 1rem;
+  min-width: 220px;
+  z-index: 300;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.2);
+}
+.folder-status-dropdown-header {
+  font-weight: 600;
+  font-size: 0.9rem;
+  margin-bottom: 0.5rem;
+  word-break: break-all;
+}
+.folder-status-dropdown-details {
+  display: flex;
+  flex-direction: column;
+  gap: 0.2rem;
+  font-size: 0.8rem;
+  color: var(--muted);
+  margin-bottom: 0.65rem;
+}
+.folder-status-access-label.ok {
+  color: #22c55e;
+}
+.folder-status-access-label.warning {
+  color: #f59e0b;
+}
+.folder-status-dropdown-actions {
+  display: flex;
+  flex-direction: column;
+  gap: 0.4rem;
+}
+.btn-sm {
+  padding: 0.4rem 0.8rem;
+  font-size: 0.8rem;
+}
+
 /* Sidebar */
 .sidebar-overlay {
   position: fixed;
