@@ -35,10 +35,22 @@ export interface ScannedFile {
   lastModified: number;
 }
 
+export interface JSTorrentManifest {
+  infohash: string;
+  magnet: string;
+  files: Record<string, { index: number; complete: boolean }>;
+}
+
+export interface ScannedManifest {
+  path: string;
+  data: JSTorrentManifest;
+}
+
 export interface FolderResult {
   directoryId: number;
   name: string;
   files: ScannedFile[];
+  manifests: ScannedManifest[];
 }
 
 export interface SiblingSubtitleFile {
@@ -135,6 +147,35 @@ async function collectFiles(handle: FileSystemDirectoryHandle): Promise<ScannedF
   return files;
 }
 
+const MANIFEST_PATTERN = /^\.[0-9a-f]{40}\.jstorrent\.json$/i;
+
+async function collectManifests(
+  handle: FileSystemDirectoryHandle,
+  pathPrefix = '',
+): Promise<ScannedManifest[]> {
+  const manifests: ScannedManifest[] = [];
+  for await (const entry of handle.values()) {
+    const entryPath = pathPrefix ? `${pathPrefix}/${entry.name}` : entry.name;
+    if (entry.kind === 'file' && MANIFEST_PATTERN.test(entry.name)) {
+      try {
+        const fileHandle = entry as FileSystemFileHandle;
+        const file = await fileHandle.getFile();
+        const text = await file.text();
+        const data = JSON.parse(text) as JSTorrentManifest;
+        if (data.infohash && data.files) {
+          manifests.push({ path: entryPath, data });
+        }
+      } catch {
+        // Skip unparseable manifests
+      }
+    } else if (entry.kind === 'directory') {
+      const sub = await collectManifests(entry as FileSystemDirectoryHandle, entryPath);
+      manifests.push(...sub);
+    }
+  }
+  return manifests;
+}
+
 class FsAccessProvider implements FolderProvider {
   readonly requiresPermissionGrant = true;
   // Cache granted handles in memory to avoid re-deserializing from IDB,
@@ -179,8 +220,8 @@ class FsAccessProvider implements FolderProvider {
       lastScannedAt: Date.now(),
     } as Parameters<typeof db.directories.add>[0]);
     this.grantedHandles.set(directoryId as number, handle);
-    const files = await collectFiles(handle);
-    return { directoryId: directoryId as number, name: handle.name, files };
+    const [files, manifests] = await Promise.all([collectFiles(handle), collectManifests(handle)]);
+    return { directoryId: directoryId as number, name: handle.name, files, manifests };
   }
 
   private async resolveHandle(directoryId: number): Promise<FileSystemDirectoryHandle> {
@@ -257,8 +298,8 @@ class FsAccessProvider implements FolderProvider {
     const handle = this.grantedHandles.get(dir.id) ?? dir.handle;
     await ensurePermission(handle, options);
     this.grantedHandles.set(dir.id, handle);
-    const files = await collectFiles(handle);
-    return { directoryId: dir.id, name: dir.name, files };
+    const [files, manifests] = await Promise.all([collectFiles(handle), collectManifests(handle)]);
+    return { directoryId: dir.id, name: dir.name, files, manifests };
   }
 }
 
@@ -354,6 +395,7 @@ class WebkitDirectoryProvider implements FolderProvider {
     this.fileMap.clear();
     this.pathFileMap.clear();
     const files: ScannedFile[] = [];
+    const manifestFiles: File[] = [];
     let folderName = '';
 
     for (const file of rawFiles) {
@@ -367,15 +409,33 @@ class WebkitDirectoryProvider implements FolderProvider {
       // Strip the root folder name to get the relative path
       const path = relPath.split('/').slice(1).join('/');
       this.pathFileMap.set(path, file);
-      if (!isVideoFile(file.name)) continue;
 
-      files.push({
-        name: file.name,
-        path,
-        size: file.size,
-        lastModified: file.lastModified,
-      });
-      this.fileMap.set(fileKey(file.name, file.size, file.lastModified), file);
+      if (MANIFEST_PATTERN.test(file.name)) {
+        manifestFiles.push(file);
+      } else if (isVideoFile(file.name)) {
+        files.push({
+          name: file.name,
+          path,
+          size: file.size,
+          lastModified: file.lastModified,
+        });
+        this.fileMap.set(fileKey(file.name, file.size, file.lastModified), file);
+      }
+    }
+
+    const manifests: ScannedManifest[] = [];
+    for (const file of manifestFiles) {
+      try {
+        const text = await file.text();
+        const data = JSON.parse(text) as JSTorrentManifest;
+        if (data.infohash && data.files) {
+          const relPath = (file as File & { webkitRelativePath: string }).webkitRelativePath;
+          const path = relPath.split('/').slice(1).join('/');
+          manifests.push({ path, data });
+        }
+      } catch {
+        // Skip unparseable manifests
+      }
     }
 
     // Store directory entry (no handle)
@@ -386,7 +446,7 @@ class WebkitDirectoryProvider implements FolderProvider {
       lastScannedAt: Date.now(),
     } as Parameters<typeof db.directories.add>[0]);
 
-    return { directoryId: directoryId as number, name: folderName || 'Unknown', files };
+    return { directoryId: directoryId as number, name: folderName || 'Unknown', files, manifests };
   }
 }
 

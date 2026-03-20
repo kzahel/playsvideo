@@ -63,8 +63,10 @@ export function LibraryEntryCard({ entry, seriesMetadata, showMetadataDebug = fa
   const posterUrl = seriesMetadata?.posterUrl ?? seriesMetadata?.backdropUrl;
   const artLabel = seriesMetadata?.name ?? entry.parsedTitle ?? entry.name;
 
+  const isVirtual = entry.hasLocalFile === false;
+
   return (
-    <Link to={`/play/${entry.id}`} className="library-entry">
+    <Link to={`/play/${entry.id}`} className={`library-entry${isVirtual ? ' library-entry-virtual' : ''}`}>
       <div className="library-entry-thumb">
         {posterUrl ? (
           <img src={posterUrl} alt={artLabel} loading="lazy" />
@@ -78,9 +80,14 @@ export function LibraryEntryCard({ entry, seriesMetadata, showMetadataDebug = fa
           {displayTitle}
         </div>
         <div className="library-entry-meta">
-          {formatSize(entry.size)}
-          {entry.durationSec > 0 ? ` \u00b7 ${formatTime(entry.durationSec)}` : ''}
-          {isInProgress ? ` \u00b7 ${formatTime(entry.playbackPositionSec)}` : ''}
+          {isVirtual
+            ? (entry.torrentComplete ? 'Available via torrent' : 'Not downloaded')
+            : <>
+                {formatSize(entry.size)}
+                {entry.durationSec > 0 ? ` \u00b7 ${formatTime(entry.durationSec)}` : ''}
+                {isInProgress ? ` \u00b7 ${formatTime(entry.playbackPositionSec)}` : ''}
+              </>
+          }
         </div>
       </div>
       {!isInProgress && entry.watchState !== 'none' ? (

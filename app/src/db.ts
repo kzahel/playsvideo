@@ -70,6 +70,8 @@ export interface LibraryEntry {
   torrentInfoHash?: string;
   torrentFileIndex?: number;
   torrentMagnetUrl?: string;
+  torrentComplete?: boolean;
+  hasLocalFile?: boolean;
 }
 
 export interface DirectoryEntry {
@@ -261,6 +263,20 @@ class PlaysVideoDB extends Dexie {
       metadataSeasonCache: 'key, seriesMetadataKey, tmdbSeriesId, seasonNumber, fetchedAt, status',
       metadataTransportState: 'key, transport, credentialSlot, status, cooldownUntil, updatedAt',
     });
+    this.version(8)
+      .stores({
+        library:
+          '++id, directoryId, path, name, watchState, addedAt, detectedMediaType, parsedTitle, seriesMetadataKey, movieMetadataKey, lastPlayedAt, contentHash, torrentInfoHash, hasLocalFile',
+        directories: '++id, name',
+        playlists: '++id, name',
+        settings: 'key',
+        seriesMetadata: 'key, tmdbId, fetchedAt, query',
+        movieMetadata: 'key, tmdbId, fetchedAt, query',
+        metadataParseCache: 'key, path, lastModified, parsedAt',
+        metadataSeasonCache: 'key, seriesMetadataKey, tmdbSeriesId, seasonNumber, fetchedAt, status',
+        metadataTransportState: 'key, transport, credentialSlot, status, cooldownUntil, updatedAt',
+      })
+      .upgrade((tx) => tx.table('library').toCollection().modify({ hasLocalFile: true }));
   }
 }
 

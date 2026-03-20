@@ -93,6 +93,7 @@ export interface SyncEntry {
   torrentInfoHash?: string;
   torrentFileIndex?: number;
   torrentMagnetUrl?: string;
+  torrentComplete?: boolean;
 }
 
 export interface DeviceSyncDoc {
@@ -247,6 +248,7 @@ export async function buildDeviceDoc(): Promise<DeviceSyncDoc> {
     if (entry.torrentInfoHash) syncEntry.torrentInfoHash = entry.torrentInfoHash;
     if (entry.torrentFileIndex != null) syncEntry.torrentFileIndex = entry.torrentFileIndex;
     if (entry.torrentMagnetUrl) syncEntry.torrentMagnetUrl = entry.torrentMagnetUrl;
+    if (entry.torrentComplete != null) syncEntry.torrentComplete = entry.torrentComplete;
     syncEntries[key] = syncEntry;
   }
   return {

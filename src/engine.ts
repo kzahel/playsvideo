@@ -1540,7 +1540,13 @@ export class PlaysVideoEngine extends EventTarget {
       queueMicrotask(() => this.showTextTrack(track));
     } else {
       // Explicitly disable — browsers may auto-enable tracks matching the user's language preference
-      track.addEventListener('load', () => { track.track.mode = 'disabled'; }, { once: true });
+      track.addEventListener(
+        'load',
+        () => {
+          track.track.mode = 'disabled';
+        },
+        { once: true },
+      );
     }
     mlog(
       `subtitle track ${trackIndex ?? 'external'} attached as <track kind=${track.kind} lang=${track.srclang}>`,

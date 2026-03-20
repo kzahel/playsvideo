@@ -91,7 +91,7 @@ export function Player() {
     copyDiagnostics,
     diagnosticsStatus,
   } =
-    useEngine(entry ? { kind: 'entry', entry } : null);
+    useEngine(entry && entry.hasLocalFile !== false ? { kind: 'entry', entry } : null);
   useCustomControls(videoRef, containerEl, controlsType === 'custom');
   useFullscreen(videoRef, containerEl);
 
@@ -185,6 +185,49 @@ export function Player() {
           &larr; Back to Library
         </Link>
         <p>Video not found.</p>
+      </div>
+    );
+  }
+
+  if (entry.hasLocalFile === false) {
+    return (
+      <div className="player-page">
+        <Link to="/" className="player-back">
+          &larr; Back to Library
+        </Link>
+        <h2 className="player-filename">{entry.name}</h2>
+        <div className="player-virtual-notice">
+          <p>This file is not available locally.</p>
+          {entry.torrentComplete === false ? (
+            <p>Download is incomplete in JSTorrent.</p>
+          ) : entry.torrentComplete === true ? (
+            <p>Downloaded via torrent but file not found on disk.</p>
+          ) : null}
+          {entry.torrentMagnetUrl ? (
+            <div className="player-virtual-magnet">
+              <a href={entry.torrentMagnetUrl}>Open Magnet Link</a>
+              <button
+                type="button"
+                className="btn btn-secondary"
+                onClick={() => {
+                  void navigator.clipboard.writeText(entry.torrentMagnetUrl!);
+                }}
+              >
+                Copy Magnet
+              </button>
+            </div>
+          ) : null}
+        </div>
+        {previousEpisode || nextEpisode ? (
+          <div className="player-episode-nav">
+            {previousEpisode ? (
+              <Link to={`/play/${previousEpisode.id}`}>&larr; Previous</Link>
+            ) : null}
+            {nextEpisode ? (
+              <Link to={`/play/${nextEpisode.id}`}>Next &rarr;</Link>
+            ) : null}
+          </div>
+        ) : null}
       </div>
     );
   }

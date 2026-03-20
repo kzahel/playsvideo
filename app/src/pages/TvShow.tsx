@@ -478,6 +478,26 @@ export function TvShow() {
                     );
                   }
 
+                  if (fileEntry.hasLocalFile === false) {
+                    return (
+                      <Link
+                        key={`${season.seasonNumber}-${episode.episodeNumber}`}
+                        to={`/play/${fileEntry.id}`}
+                        className="episode-row episode-row-virtual"
+                      >
+                        <span className="episode-code">
+                          {metadataEpisodeLabel(season.seasonNumber, episode.episodeNumber)}
+                        </span>
+                        <span className="episode-body">
+                          <span className="episode-name">{episode.name}</span>
+                          <span className="episode-file-state">
+                            {fileEntry.torrentComplete ? 'Available via torrent' : 'Not downloaded'}
+                          </span>
+                        </span>
+                      </Link>
+                    );
+                  }
+
                   return (
                     <Link key={`${season.seasonNumber}-${episode.episodeNumber}`} to={`/play/${fileEntry.id}`} className="episode-row">
                       <span className="episode-code">

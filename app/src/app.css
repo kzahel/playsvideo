@@ -684,6 +684,45 @@ body {
   color: var(--muted);
 }
 
+.episode-row-virtual {
+  background: rgba(128, 128, 128, 0.03);
+  opacity: 0.6;
+}
+
+.episode-row-virtual .episode-code {
+  color: var(--muted);
+}
+
+.library-entry-virtual {
+  opacity: 0.6;
+}
+
+.player-virtual-notice {
+  margin: 2rem 0;
+  padding: 1.5rem;
+  border-radius: 8px;
+  background: rgba(128, 128, 128, 0.08);
+  text-align: center;
+}
+
+.player-virtual-notice p {
+  margin: 0.5rem 0;
+}
+
+.player-virtual-magnet {
+  display: flex;
+  gap: 0.75rem;
+  justify-content: center;
+  align-items: center;
+  margin-top: 1rem;
+}
+
+.player-episode-nav {
+  display: flex;
+  justify-content: space-between;
+  margin-top: 1rem;
+}
+
 .episode-code {
   color: var(--accent);
   font-weight: 600;

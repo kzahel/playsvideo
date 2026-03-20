@@ -70,19 +70,28 @@ Dialogue: 0,0:00:01.00,0:00:02.00,Default,,0,0,0,,Hello`;
  */
 function buildTx3gSample(text: string, styleBox = true): string {
   const textBytes = new TextEncoder().encode(text);
-  const parts: number[] = [
-    (textBytes.length >> 8) & 0xff,
-    textBytes.length & 0xff,
-    ...textBytes,
-  ];
+  const parts: number[] = [(textBytes.length >> 8) & 0xff, textBytes.length & 0xff, ...textBytes];
   if (styleBox) {
     // Minimal 'styl' box: 4-byte size (18) + 'styl' + 2-byte count (1) + 8-byte record
     const stylBox = [
-      0x00, 0x00, 0x00, 0x12, // size = 18
-      0x73, 0x74, 0x79, 0x6c, // 'styl'
-      0x00, 0x01,             // entry count = 1
-      0x00, 0x00, 0x00, 0x00, // start/end char offset
-      0x00, 0x01, 0x00, 0x00, // font-id, style flags, font-size, color (partial)
+      0x00,
+      0x00,
+      0x00,
+      0x12, // size = 18
+      0x73,
+      0x74,
+      0x79,
+      0x6c, // 'styl'
+      0x00,
+      0x01, // entry count = 1
+      0x00,
+      0x00,
+      0x00,
+      0x00, // start/end char offset
+      0x00,
+      0x01,
+      0x00,
+      0x00, // font-id, style flags, font-size, color (partial)
     ];
     parts.push(...stylBox);
   }
@@ -137,11 +146,11 @@ describe('tx3g subtitle cleaning', () => {
   });
 
   it('handles tx3g samples with unicode text and style box', async () => {
-    const input = makeTx3gInput(['♩ But when I\'m with you']);
+    const input = makeTx3gInput(["♩ But when I'm with you"]);
     const data = await extractSubtitleData(input as any, 0);
 
     expect(data.cues).toHaveLength(1);
-    expect(data.cues[0].text).toBe('♩ But when I\'m with you');
+    expect(data.cues[0].text).toBe("♩ But when I'm with you");
     // Must not contain styl box remnants
     expect(data.cues[0].text).not.toContain('styl');
     expect(data.cues[0].text).not.toContain('\ufffd');
