@@ -140,12 +140,6 @@ export function FolderStatus() {
         {isReady && <span className="folder-status-dot folder-status-dot-ok" />}
       </button>
 
-      {toast && (
-        <div className="scan-toast" aria-live="polite">
-          {toast}
-        </div>
-      )}
-
       {dropdownOpen && (
         <div className="folder-status-dropdown">
           <div className="folder-status-dropdown-header">{directory?.name}</div>
@@ -173,6 +167,11 @@ export function FolderStatus() {
               Choose New Folder
             </button>
           </div>
+        </div>
+      )}
+      {toast && (
+        <div className="scan-toast-fixed" aria-live="polite">
+          {toast}
         </div>
       )}
     </div>
