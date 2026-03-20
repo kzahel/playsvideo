@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
-import { useParams, Link, useNavigate } from 'react-router-dom';
+import { useParams, Link, useNavigate, useLocation } from 'react-router-dom';
 import { useLiveQuery } from 'dexie-react-hooks';
 import { db, type CatalogEntry } from '../db';
 import { getDeviceId } from '../device.js';
@@ -10,6 +10,8 @@ import { useCustomControls } from '../hooks/useCustomControls';
 import { useFullscreen } from '../hooks/useFullscreen';
 import { getLocalPlayback } from '../local-playback.js';
 import { AUTOPLAY_NEXT_EPISODE_KEY, PLAYER_CONTROLS_TYPE_KEY } from '../settings.js';
+
+const PLAYER_QUERY_PENDING = Symbol('player-query-pending');
 
 function buildSeriesIdentity(entry: CatalogEntry): string | null {
   if (entry.detectedMediaType !== 'tv' || !entry.parsedTitle) {
@@ -75,6 +77,7 @@ function missingMessage(entry: CatalogEntry): string {
 
 export function Player() {
   const { id } = useParams<{ id: string }>();
+  const location = useLocation();
   const navigate = useNavigate();
   const entryId = Number(id);
   const subtitleInputRef = useRef<HTMLInputElement | null>(null);
@@ -87,14 +90,30 @@ export function Player() {
     'stock',
   );
   const [autoplayNextEpisode] = useSetting<boolean>(AUTOPLAY_NEXT_EPISODE_KEY, false);
+  const routeEntry =
+    location.state &&
+    typeof location.state === 'object' &&
+    'entry' in location.state &&
+    (location.state.entry as CatalogEntry | null)?.id === entryId
+      ? (location.state.entry as CatalogEntry)
+      : null;
 
-  const entry = useLiveQuery(() => db.catalog.get(entryId), [entryId]);
-  const entries = useLiveQuery(() => db.catalog.toArray());
-  const deviceId = useLiveQuery(() => getDeviceId(), []);
-  const playbackKey = entry?.canonicalPlaybackKey ?? null;
+  const entry = useLiveQuery(
+    async () => (await db.catalog.get(entryId)) ?? null,
+    [entryId],
+    PLAYER_QUERY_PENDING,
+  );
+  const entries = useLiveQuery(() => db.catalog.toArray(), [], []);
+  const deviceId = useLiveQuery(() => getDeviceId(), [], PLAYER_QUERY_PENDING);
+  const resolvedEntry = entry === PLAYER_QUERY_PENDING ? routeEntry : entry;
+  const resolvedDeviceId = deviceId === PLAYER_QUERY_PENDING ? null : deviceId;
+  const playbackKey = resolvedEntry?.canonicalPlaybackKey ?? null;
   const localPlayback = useLiveQuery(
-    () => (deviceId && playbackKey ? getLocalPlayback(deviceId, playbackKey) : Promise.resolve(null)),
-    [deviceId, playbackKey],
+    () =>
+      resolvedDeviceId && playbackKey
+        ? getLocalPlayback(resolvedDeviceId, playbackKey)
+        : Promise.resolve(null),
+    [resolvedDeviceId, playbackKey],
     null,
   );
   const {
@@ -111,17 +130,19 @@ export function Player() {
     diagnosticsStatus,
   } =
     useEngine(
-      entry &&
-        entry.hasLocalFile !== false &&
-        deviceId &&
-        playbackKey &&
-        localPlayback !== undefined
+      resolvedEntry &&
+        resolvedEntry.hasLocalFile !== false
         ? {
             kind: 'entry',
-            entry,
-            deviceId,
-            playbackKey,
+            entry: resolvedEntry,
             playback: localPlayback ?? null,
+            playbackTarget:
+              resolvedDeviceId && playbackKey
+                ? {
+                    deviceId: resolvedDeviceId,
+                    playbackKey,
+                  }
+                : null,
           }
         : null,
     );
@@ -129,26 +150,26 @@ export function Player() {
   useFullscreen(videoRef, containerEl);
 
   const { previousEpisode, nextEpisode } = useMemo(() => {
-    if (!entry || entries === undefined) {
+    if (!resolvedEntry || entries === undefined) {
       return { previousEpisode: null, nextEpisode: null };
     }
 
-    const seriesIdentity = buildSeriesIdentity(entry);
-    if (!seriesIdentity || entry.seasonNumber == null || entry.episodeNumber == null) {
+    const seriesIdentity = buildSeriesIdentity(resolvedEntry);
+    if (!seriesIdentity || resolvedEntry.seasonNumber == null || resolvedEntry.episodeNumber == null) {
       return { previousEpisode: null, nextEpisode: null };
     }
 
     const siblings = entries
-      .filter((candidate) => candidate.id !== entry.id)
+      .filter((candidate) => candidate.id !== resolvedEntry.id)
       .filter((candidate) => candidate.hasLocalFile !== false)
       .filter((candidate) => buildSeriesIdentity(candidate) === seriesIdentity)
       .filter(
         (candidate) => candidate.seasonNumber != null && candidate.episodeNumber != null,
       )
-      .concat(entry)
+      .concat(resolvedEntry)
       .sort(compareEpisodeEntries);
 
-    const currentIndex = siblings.findIndex((candidate) => candidate.id === entry.id);
+    const currentIndex = siblings.findIndex((candidate) => candidate.id === resolvedEntry.id);
     if (currentIndex === -1) {
       return { previousEpisode: null, nextEpisode: null };
     }
@@ -157,20 +178,22 @@ export function Player() {
       previousEpisode: siblings[currentIndex - 1] ?? null,
       nextEpisode: siblings[currentIndex + 1] ?? null,
     };
-  }, [entries, entry]);
+  }, [entries, resolvedEntry]);
 
   useEffect(() => {
     if (!hasEnded || !autoplayNextEpisode || !nextEpisode) {
       return;
     }
 
-    navigate(`/play/${nextEpisode.id}`);
+    navigate(`/play/${nextEpisode.id}`, { state: { entry: nextEpisode } });
   }, [autoplayNextEpisode, hasEnded, navigate, nextEpisode]);
 
   const siblingSubtitleKey =
-    entry && entry.hasLocalFile !== false ? `${entry.directoryId}:${entry.path}` : null;
+    resolvedEntry && resolvedEntry.hasLocalFile !== false
+      ? `${resolvedEntry.directoryId}:${resolvedEntry.path}`
+      : null;
   useEffect(() => {
-    if (!entry || entry.hasLocalFile === false || phase !== 'ready') {
+    if (!resolvedEntry || resolvedEntry.hasLocalFile === false || phase !== 'ready') {
       setSiblingSubtitles([]);
       setLoadingSiblingSubtitles(false);
       setSiblingSubtitleStatus('');
@@ -181,7 +204,7 @@ export function Player() {
     setLoadingSiblingSubtitles(true);
     setSiblingSubtitleStatus('');
     void folderProvider
-      .listSiblingSubtitleFiles(entry)
+      .listSiblingSubtitleFiles(resolvedEntry)
       .then((files) => {
         if (cancelled) {
           return;
@@ -207,17 +230,13 @@ export function Player() {
       cancelled = true;
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [siblingSubtitleKey, phase]);
+  }, [resolvedEntry, siblingSubtitleKey, phase]);
 
-  if (
-    entry === undefined ||
-    deviceId === undefined ||
-    (playbackKey !== null && localPlayback === undefined)
-  ) {
+  if (entry === PLAYER_QUERY_PENDING && !routeEntry) {
     return <div className="player-page">Loading...</div>;
   }
 
-  if (!entry) {
+  if (!resolvedEntry) {
     return (
       <div className="player-page">
         <Link to="/" className="player-back">
@@ -228,23 +247,23 @@ export function Player() {
     );
   }
 
-  if (entry.hasLocalFile === false) {
+  if (resolvedEntry.hasLocalFile === false) {
     return (
       <div className="player-page">
         <Link to="/" className="player-back">
           &larr; Back to Catalog
         </Link>
-        <h2 className="player-filename">{entry.name}</h2>
+        <h2 className="player-filename">{resolvedEntry.name}</h2>
         <div className="player-virtual-notice">
-          <p>{missingMessage(entry)}</p>
-          {entry.torrentMagnetUrl ? (
+          <p>{missingMessage(resolvedEntry)}</p>
+          {resolvedEntry.torrentMagnetUrl ? (
             <div className="player-virtual-magnet">
-              <a href={entry.torrentMagnetUrl}>Open Magnet Link</a>
+              <a href={resolvedEntry.torrentMagnetUrl}>Open Magnet Link</a>
               <button
                 type="button"
                 className="btn btn-secondary"
                 onClick={() => {
-                  void navigator.clipboard.writeText(entry.torrentMagnetUrl!);
+                  void navigator.clipboard.writeText(resolvedEntry.torrentMagnetUrl!);
                 }}
               >
                 Copy Magnet
@@ -255,10 +274,14 @@ export function Player() {
         {previousEpisode || nextEpisode ? (
           <div className="player-episode-nav">
             {previousEpisode ? (
-              <Link to={`/play/${previousEpisode.id}`}>&larr; Previous</Link>
+              <Link to={`/play/${previousEpisode.id}`} state={{ entry: previousEpisode }}>
+                &larr; Previous
+              </Link>
             ) : null}
             {nextEpisode ? (
-              <Link to={`/play/${nextEpisode.id}`}>Next &rarr;</Link>
+              <Link to={`/play/${nextEpisode.id}`} state={{ entry: nextEpisode }}>
+                Next &rarr;
+              </Link>
             ) : null}
           </div>
         ) : null}
@@ -271,7 +294,7 @@ export function Player() {
       <Link to="/" className="player-back">
         &larr; Back to Catalog
       </Link>
-      <h2 className="player-filename">{entry.name}</h2>
+      <h2 className="player-filename">{resolvedEntry.name}</h2>
       <input
         ref={subtitleInputRef}
         type="file"
@@ -298,18 +321,26 @@ export function Player() {
       )}
       {previousEpisode || nextEpisode ? (
         <div className="player-episode-nav">
-          {previousEpisode ? (
-            <Link to={`/play/${previousEpisode.id}`} className="btn btn-secondary">
-              Previous Episode: {formatEpisodeCode(previousEpisode)}
-            </Link>
-          ) : (
-            <span className="player-episode-nav-spacer" />
-          )}
-          {nextEpisode ? (
-            <Link to={`/play/${nextEpisode.id}`} className="btn btn-secondary">
-              Next Episode: {formatEpisodeCode(nextEpisode)}
-            </Link>
-          ) : null}
+        {previousEpisode ? (
+          <Link
+            to={`/play/${previousEpisode.id}`}
+            state={{ entry: previousEpisode }}
+            className="btn btn-secondary"
+          >
+            Previous Episode: {formatEpisodeCode(previousEpisode)}
+          </Link>
+        ) : (
+          <span className="player-episode-nav-spacer" />
+        )}
+        {nextEpisode ? (
+          <Link
+            to={`/play/${nextEpisode.id}`}
+            state={{ entry: nextEpisode }}
+            className="btn btn-secondary"
+          >
+            Next Episode: {formatEpisodeCode(nextEpisode)}
+          </Link>
+        ) : null}
         </div>
       ) : null}
       <div className="player-actions">
@@ -369,7 +400,7 @@ export function Player() {
       {!autoplayNextEpisode && hasEnded && nextEpisode ? (
         <div className="player-next-episode-banner">
           <span>Episode finished. Continue to {formatEpisodeCode(nextEpisode)}.</span>
-          <Link to={`/play/${nextEpisode.id}`} className="btn btn-primary">
+          <Link to={`/play/${nextEpisode.id}`} state={{ entry: nextEpisode }} className="btn btn-primary">
             Play Next Episode
           </Link>
         </div>

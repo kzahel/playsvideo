@@ -15,9 +15,11 @@ export type EngineSource =
   | {
       kind: 'entry';
       entry: CatalogEntry;
-      deviceId: string;
-      playbackKey: string;
       playback: PlaybackEntry | null;
+      playbackTarget: {
+        deviceId: string;
+        playbackKey: string;
+      } | null;
     }
   | { kind: 'file'; file: File };
 
@@ -93,14 +95,11 @@ async function writeClipboard(text: string): Promise<void> {
 export function useEngine(source: EngineSource | null): UseEngineResult {
   const entry = source?.kind === 'entry' ? source.entry : null;
   const playback = source?.kind === 'entry' ? source.playback : null;
-  const playbackTarget =
-    source?.kind === 'entry'
-      ? { deviceId: source.deviceId, playbackKey: source.playbackKey }
-      : null;
+  const playbackTarget = source?.kind === 'entry' ? source.playbackTarget : null;
   const file = source?.kind === 'file' ? source.file : null;
   const sourceKey = source
     ? source.kind === 'entry'
-      ? `entry-${source.entry.id}-${source.deviceId}-${source.playbackKey}`
+      ? `entry-${source.entry.id}`
       : `file-${source.file.name}-${source.file.size}-${source.file.lastModified}`
     : null;
 

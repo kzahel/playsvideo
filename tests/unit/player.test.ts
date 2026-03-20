@@ -5,17 +5,13 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 import type { CatalogEntry } from '../../app/src/db.js';
 import { Player } from '../../app/src/pages/Player.js';
 
-const {
-  useLiveQueryMock,
-  useEngineMock,
-  useSettingMock,
-  listSiblingSubtitleFilesMock,
-} = vi.hoisted(() => ({
-  useLiveQueryMock: vi.fn(),
-  useEngineMock: vi.fn(),
-  useSettingMock: vi.fn((_: string, defaultValue: unknown) => [defaultValue, vi.fn()]),
-  listSiblingSubtitleFilesMock: vi.fn().mockResolvedValue([]),
-}));
+const { useLiveQueryMock, useEngineMock, useSettingMock, listSiblingSubtitleFilesMock } =
+  vi.hoisted(() => ({
+    useLiveQueryMock: vi.fn(),
+    useEngineMock: vi.fn(),
+    useSettingMock: vi.fn((_: string, defaultValue: unknown) => [defaultValue, vi.fn()]),
+    listSiblingSubtitleFilesMock: vi.fn().mockResolvedValue([]),
+  }));
 
 vi.mock('dexie-react-hooks', () => ({
   useLiveQuery: useLiveQueryMock,
@@ -114,9 +110,72 @@ describe('Player', () => {
     expect(useEngineMock).toHaveBeenCalledWith({
       kind: 'entry',
       entry,
-      deviceId: 'device-1',
-      playbackKey: 'file:Episode.mkv|1000',
       playback: null,
+      playbackTarget: {
+        deviceId: 'device-1',
+        playbackKey: 'file:Episode.mkv|1000',
+      },
+    });
+  });
+
+  it('renders not found instead of staying on loading when the catalog row is missing', async () => {
+    useLiveQueryMock
+      .mockReturnValueOnce(null)
+      .mockReturnValueOnce([])
+      .mockReturnValueOnce('device-1')
+      .mockReturnValueOnce(null);
+
+    const html = renderToStaticMarkup(
+      createElement(
+        MemoryRouter,
+        { initialEntries: ['/play/6'] },
+        createElement(
+          Routes,
+          null,
+          createElement(Route, {
+            path: '/play/:id',
+            element: createElement(Player),
+          }),
+        ),
+      ),
+    );
+
+    expect(html).not.toContain('Loading...');
+    expect(html).toContain('Video not found.');
+    expect(useEngineMock).toHaveBeenCalledWith(null);
+  });
+
+  it('renders the player while device id is still pending', async () => {
+    const entry = makeCatalogEntry();
+
+    useLiveQueryMock
+      .mockReturnValueOnce(entry)
+      .mockReturnValueOnce([entry])
+      .mockReturnValueOnce(undefined)
+      .mockReturnValueOnce(null);
+
+    const html = renderToStaticMarkup(
+      createElement(
+        MemoryRouter,
+        { initialEntries: ['/play/1'] },
+        createElement(
+          Routes,
+          null,
+          createElement(Route, {
+            path: '/play/:id',
+            element: createElement(Player),
+          }),
+        ),
+      ),
+    );
+
+    expect(html).not.toContain('Loading...');
+    expect(html).toContain('<video');
+    expect(useEngineMock).toHaveBeenCalledWith({
+      kind: 'entry',
+      entry,
+      playback: null,
+      playbackTarget: null,
     });
   });
 });
