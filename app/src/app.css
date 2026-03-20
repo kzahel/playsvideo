@@ -313,13 +313,21 @@ body {
   white-space: nowrap;
 }
 
-.scan-toast {
-  text-align: center;
-  padding: 0.5rem 1rem;
-  margin: 0 auto 0.5rem;
+.scan-toast-fixed {
+  position: fixed;
+  top: calc(var(--header-height) + 0.5rem);
+  left: 50%;
+  transform: translateX(-50%);
+  background: #1a1a1a;
   color: #b0ffb0;
-  font-size: 0.9rem;
-  animation: scan-toast-fade 5s ease-in-out;
+  padding: 0.5rem 1.25rem;
+  border-radius: 8px;
+  font-size: 0.85rem;
+  z-index: 400;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.4);
+  white-space: nowrap;
+  pointer-events: none;
+  animation: scan-toast-fade 5s ease-in-out forwards;
 }
 
 @keyframes scan-toast-fade {
@@ -1032,6 +1040,147 @@ body {
 .catalog-entry-debug-btn:hover {
   background: rgba(128, 128, 128, 0.15);
   color: #fff;
+}
+
+/* ── View toggle ── */
+
+.catalog-view-toggle {
+  display: flex;
+  gap: 2px;
+  padding: 0.25rem 1rem;
+  justify-content: flex-end;
+}
+
+.view-toggle-btn {
+  background: transparent;
+  border: 1px solid rgba(128, 128, 128, 0.25);
+  color: var(--muted);
+  padding: 4px 6px;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 4px;
+  transition: background 0.1s, color 0.1s;
+}
+
+.view-toggle-btn:hover {
+  background: rgba(128, 128, 128, 0.1);
+}
+
+.view-toggle-btn.active {
+  background: rgba(128, 128, 128, 0.18);
+  color: var(--fg);
+  border-color: rgba(128, 128, 128, 0.4);
+}
+
+/* ── List view ── */
+
+.catalog-list {
+  padding: 0 1rem 0.5rem;
+  font-size: 0.82rem;
+}
+
+.catalog-list-header {
+  display: flex;
+  gap: 0;
+  border-bottom: 1px solid rgba(128, 128, 128, 0.2);
+  padding: 0.3rem 0.5rem;
+  position: sticky;
+  top: 0;
+  background: var(--bg);
+  z-index: 1;
+}
+
+.catalog-list-header .catalog-list-col {
+  background: none;
+  border: none;
+  color: var(--muted);
+  font-size: 0.72rem;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  cursor: pointer;
+  padding: 0.25rem 0.5rem;
+  text-align: left;
+  white-space: nowrap;
+  user-select: none;
+}
+
+.catalog-list-header .catalog-list-col:hover {
+  color: var(--fg);
+}
+
+.catalog-list-sort-arrow {
+  font-size: 0.55rem;
+  margin-left: 0.25rem;
+  vertical-align: middle;
+}
+
+.catalog-list-row {
+  display: flex;
+  gap: 0;
+  padding: 0.3rem 0.5rem;
+  border-radius: 4px;
+  text-decoration: none;
+  color: var(--fg);
+  transition: background 0.1s;
+}
+
+.catalog-list-row:hover {
+  background: rgba(128, 128, 128, 0.08);
+}
+
+.catalog-list-row .catalog-list-col {
+  padding: 0.15rem 0.5rem;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.col-name {
+  flex: 1;
+  min-width: 0;
+}
+
+.col-episode {
+  width: 80px;
+  flex-shrink: 0;
+  color: var(--accent);
+  font-weight: 600;
+  font-size: 0.78rem;
+}
+
+.col-size {
+  width: 80px;
+  flex-shrink: 0;
+  text-align: right;
+  color: var(--muted);
+}
+
+.col-duration {
+  width: 72px;
+  flex-shrink: 0;
+  text-align: right;
+  color: var(--muted);
+}
+
+.col-status {
+  width: 72px;
+  flex-shrink: 0;
+  text-align: right;
+}
+
+.col-status.status-unwatched {
+  color: var(--accent);
+}
+
+.col-status.status-watched {
+  color: var(--muted);
+}
+
+.col-status.status-in-progress {
+  color: #f59e0b;
 }
 
 .debug-modal {

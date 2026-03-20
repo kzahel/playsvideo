@@ -8,6 +8,8 @@ export const PLAYER_CONTROLS_TYPE_KEY = 'pv-controls-type';
 export const AUTOPLAY_NEXT_EPISODE_KEY = 'playback-autoplay-next-episode';
 export const AUTO_RESCAN_DETAIL_PAGES_KEY = 'scan-auto-rescan-detail-pages';
 export const EMBEDDED_SUBTITLE_POLICY_KEY = 'subtitle-embedded-policy';
+export const CATALOG_VIEW_MODE_KEY = 'catalog-view-mode';
+export type CatalogViewMode = 'card' | 'list';
 
 export function isThemePreference(value: unknown): value is ThemePreference {
   return value === 'system' || value === 'light' || value === 'dark';
