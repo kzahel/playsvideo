@@ -502,6 +502,7 @@ export function TvShow() {
                       <Link
                         key={`${season.seasonNumber}-${episode.episodeNumber}`}
                         to={`/play/${fileEntry.id}`}
+                        state={{ entry: fileEntry }}
                         className="episode-row episode-row-virtual"
                       >
                         <span className="episode-code">
@@ -518,7 +519,12 @@ export function TvShow() {
                   }
 
                   return (
-                    <Link key={`${season.seasonNumber}-${episode.episodeNumber}`} to={`/play/${fileEntry.id}`} className="episode-row">
+                    <Link
+                      key={`${season.seasonNumber}-${episode.episodeNumber}`}
+                      to={`/play/${fileEntry.id}`}
+                      state={{ entry: fileEntry }}
+                      className="episode-row"
+                    >
                       <span className="episode-code">
                         {metadataEpisodeLabel(season.seasonNumber, episode.episodeNumber)}
                       </span>
@@ -597,7 +603,7 @@ export function TvShow() {
             </div>
             <div className="episode-list">
               {otherEntries.map((entry) => (
-                <Link key={entry.id} to={`/play/${entry.id}`} className="episode-row">
+                <Link key={entry.id} to={`/play/${entry.id}`} state={{ entry }} className="episode-row">
                   <span className="episode-code">{localEpisodeLabel(entry)}</span>
                   <span className="episode-body">
                     <span className="episode-name">{entry.name}</span>

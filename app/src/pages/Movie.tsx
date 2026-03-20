@@ -181,7 +181,7 @@ export function Movie() {
         <h2>Files</h2>
         <div className="episode-list">
           {movie.entries.map((entry) => (
-            <Link key={entry.id} to={`/play/${entry.id}`} className="episode-row">
+            <Link key={entry.id} to={`/play/${entry.id}`} state={{ entry }} className="episode-row">
               <span className="episode-code">Play</span>
               <span className="episode-name">{entry.name}</span>
             </Link>

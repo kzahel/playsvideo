@@ -1,6 +1,9 @@
 import { describe, expect, it } from 'vitest';
 import type { MovieMetadataEntry, SeriesMetadataEntry } from '../../app/src/db.js';
-import { buildPlaybackKeyCandidates, chooseCanonicalPlaybackKey } from '../../app/src/playback-key.js';
+import {
+  buildPlaybackKeyCandidates,
+  chooseCanonicalPlaybackKey,
+} from '../../app/src/playback-key.js';
 
 describe('playback-key', () => {
   const noSeries = new Map<string, SeriesMetadataEntry>();
@@ -19,7 +22,17 @@ describe('playback-key', () => {
       },
       {
         movieMetadataByKey: new Map([
-          ['movie', { key: 'movie', query: '', normalizedQuery: '', fetchedAt: 0, status: 'resolved', tmdbId: 10 }],
+          [
+            'movie',
+            {
+              key: 'movie',
+              query: '',
+              normalizedQuery: '',
+              fetchedAt: 0,
+              status: 'resolved',
+              tmdbId: 10,
+            },
+          ],
         ]),
       },
     );
@@ -44,7 +57,17 @@ describe('playback-key', () => {
       },
       {
         seriesMetadataByKey: new Map<string, SeriesMetadataEntry>([
-          ['bb', { key: 'bb', query: '', normalizedQuery: '', fetchedAt: 0, status: 'resolved', tmdbId: 1396 }],
+          [
+            'bb',
+            {
+              key: 'bb',
+              query: '',
+              normalizedQuery: '',
+              fetchedAt: 0,
+              status: 'resolved',
+              tmdbId: 1396,
+            },
+          ],
         ]),
       },
     );
@@ -85,7 +108,17 @@ describe('playback-key', () => {
       },
       {
         movieMetadataByKey: new Map<string, SeriesMetadataEntry | MovieMetadataEntry>([
-          ['movie', { key: 'movie', query: '', normalizedQuery: '', fetchedAt: 0, status: 'resolved', tmdbId: 22 }],
+          [
+            'movie',
+            {
+              key: 'movie',
+              query: '',
+              normalizedQuery: '',
+              fetchedAt: 0,
+              status: 'resolved',
+              tmdbId: 22,
+            },
+          ],
         ]) as Map<string, MovieMetadataEntry>,
       },
     );
