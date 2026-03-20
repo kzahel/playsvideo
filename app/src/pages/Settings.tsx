@@ -21,7 +21,7 @@ import {
 } from '../settings.js';
 
 export function Settings() {
-  const entryCount = useLiveQuery(() => db.library.count());
+  const entryCount = useLiveQuery(() => db.catalog.count());
   const [themePreference, setThemePreference] = useSetting<ThemePreference>(
     THEME_PREFERENCE_KEY,
     getStoredThemePreference(),

@@ -2,7 +2,6 @@ import {
   db,
   type CatalogEntry,
   type DetectedMediaType,
-  type LibraryEntry,
   type MovieMetadataEntry,
   type SeriesMetadataEntry,
 } from './db.js';
@@ -34,7 +33,7 @@ function isVideoFileName(name: string): boolean {
 
 export async function setFolder(): Promise<void> {
   const result = await folderProvider.pickFolder();
-  await syncToLibrary(result.directoryId, result.files, result.manifests);
+  await syncCatalog(result.directoryId, result.files, result.manifests);
 }
 
 export async function rescanFolder(
@@ -42,7 +41,7 @@ export async function rescanFolder(
   options?: FolderRescanOptions,
 ): Promise<void> {
   const result = await folderProvider.rescan(directoryId, options);
-  await syncToLibrary(result.directoryId, result.files, result.manifests);
+  await syncCatalog(result.directoryId, result.files, result.manifests);
 }
 
 export async function rescanAllFolders(options?: FolderRescanOptions): Promise<void> {
@@ -54,19 +53,18 @@ export async function rescanAllFolders(options?: FolderRescanOptions): Promise<v
 
 export async function removeFolder(directoryId: number): Promise<void> {
   const updatedAt = Date.now();
-  await db.transaction('rw', db.catalog, db.library, db.directories, async () => {
+  await db.transaction('rw', db.catalog, db.directories, async () => {
     const catalogEntries = await db.catalog.where('directoryId').equals(directoryId).toArray();
     if (catalogEntries.length > 0) {
       await db.catalog.bulkPut(
         catalogEntries.map((entry) => buildMissingCatalogEntry(entry, updatedAt)),
       );
     }
-    await db.library.where('directoryId').equals(directoryId).delete();
     await db.directories.delete(directoryId);
   });
 }
 
-export async function getFile(entry: LibraryEntry, options?: FileAccessOptions): Promise<File> {
+export async function getFile(entry: CatalogEntry, options?: FileAccessOptions): Promise<File> {
   return folderProvider.getFile(entry, options);
 }
 
@@ -88,10 +86,6 @@ interface ScannedCatalogRecord extends ScannedCatalogItem {
   movieMetadataKey?: string;
   torrentMagnetUrl?: string;
   torrentComplete?: boolean;
-}
-
-function identityKey(entry: Pick<LibraryEntry, 'name' | 'size' | 'lastModified'>): string {
-  return `${entry.name}|${entry.size}|${entry.lastModified}`;
 }
 
 function torrentKey(entry: {
@@ -215,6 +209,7 @@ function buildCatalogEntry(
     size: record.size,
     lastModified: record.lastModified,
     availability: 'present',
+    hasLocalFile: record.hasLocalFile,
     lastSeenAt: scannedAt,
     firstMissingAt: undefined,
     detectedMediaType: mergeDetectedMediaType(record.detectedMediaType, existing?.detectedMediaType),
@@ -246,85 +241,21 @@ function buildMissingCatalogEntry(existing: CatalogEntry, scannedAt: number): Ca
   return {
     ...existing,
     availability: 'missing',
+    hasLocalFile: false,
     updatedAt: scannedAt,
     firstMissingAt: existing.firstMissingAt ?? scannedAt,
   };
 }
 
-function buildLegacyLibraryProjection(
-  records: ScannedCatalogRecord[],
-  previousEntries: LibraryEntry[],
-  catalogEntries: CatalogEntry[],
-): LibraryEntry[] {
-  const oldByIdentity = new Map<string, LibraryEntry>();
-  const oldByTorrentKey = new Map<string, LibraryEntry>();
-  const catalogIdByPath = new Map(catalogEntries.map((entry) => [entry.path, entry.id]));
-  const catalogIdByTorrentKey = new Map<string, number>();
-  for (const entry of previousEntries) {
-    oldByIdentity.set(identityKey(entry), entry);
-    const key = torrentKey(entry);
-    if (key) {
-      oldByTorrentKey.set(key, entry);
-    }
-  }
-  for (const entry of catalogEntries) {
-    const key = torrentKey(entry);
-    if (key) {
-      catalogIdByTorrentKey.set(key, entry.id);
-    }
-  }
-
-  const projected: LibraryEntry[] = [];
-  for (const record of records) {
-    const key = torrentKey(record);
-    const old =
-      (key ? oldByTorrentKey.get(key) : undefined) ??
-      oldByIdentity.get(identityKey(record));
-    const catalogId =
-      (key ? catalogIdByTorrentKey.get(key) : undefined) ??
-      catalogIdByPath.get(record.path);
-    projected.push({
-      ...(catalogId != null ? { id: catalogId } : old?.id != null ? { id: old.id } : {}),
-      directoryId: record.directoryId,
-      name: record.name,
-      path: record.path,
-      size: record.size,
-      lastModified: record.lastModified,
-      watchState: old?.watchState ?? 'unwatched',
-      playbackPositionSec: old?.playbackPositionSec ?? 0,
-      durationSec: old?.durationSec ?? 0,
-      addedAt: old?.addedAt ?? Date.now(),
-      lastPlayedAt: old?.lastPlayedAt,
-      detectedMediaType: record.detectedMediaType,
-      parsedTitle: record.parsedTitle,
-      parsedYear: record.parsedYear,
-      seasonNumber: record.seasonNumber,
-      episodeNumber: record.episodeNumber,
-      endingEpisodeNumber: record.endingEpisodeNumber,
-      seriesMetadataKey: record.seriesMetadataKey,
-      movieMetadataKey: record.movieMetadataKey,
-      contentHash: old?.contentHash,
-      torrentInfoHash: record.torrentInfoHash,
-      torrentFileIndex: record.torrentFileIndex,
-      torrentMagnetUrl: record.torrentMagnetUrl,
-      torrentComplete: record.torrentComplete,
-      hasLocalFile: record.hasLocalFile,
-    });
-  }
-
-  return projected;
-}
-
-async function syncToLibrary(
+async function syncCatalog(
   directoryId: number,
   files: ScannedFile[],
   manifests: ScannedManifest[],
 ): Promise<void> {
   const scannedAt = Date.now();
   const scannedRecords = buildScannedCatalogRecords(directoryId, files, manifests);
-  const [allCatalogEntries, allLibraryEntries, seriesMetadata, movieMetadata] = await Promise.all([
+  const [allCatalogEntries, seriesMetadata, movieMetadata] = await Promise.all([
     db.catalog.toArray(),
-    db.library.toArray(),
     db.seriesMetadata.toArray(),
     db.movieMetadata.toArray(),
   ]);
@@ -347,13 +278,8 @@ async function syncToLibrary(
       movieMetadataByKey,
     ),
   );
-  const nextLibraryEntries = buildLegacyLibraryProjection(
-    scannedRecords,
-    allLibraryEntries,
-    nextCatalogEntries,
-  );
 
-  await db.transaction('rw', db.catalog, db.library, db.directories, async () => {
+  await db.transaction('rw', db.catalog, db.directories, async () => {
     if (nextCatalogEntries.length > 0) {
       await db.catalog.bulkPut(nextCatalogEntries);
     }
@@ -361,13 +287,8 @@ async function syncToLibrary(
       await db.catalog.bulkPut(missingCatalogEntries);
     }
 
-    await db.library.where('directoryId').equals(directoryId).delete();
-    if (nextLibraryEntries.length > 0) {
-      await db.library.bulkPut(nextLibraryEntries);
-    }
-
     await db.directories.update(directoryId, { lastScannedAt: scannedAt });
   });
 
-  await refreshLibraryMetadata({ entries: nextLibraryEntries });
+  await refreshLibraryMetadata({ entries: nextCatalogEntries });
 }

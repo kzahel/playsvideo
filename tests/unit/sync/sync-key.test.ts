@@ -1,19 +1,18 @@
 import { describe, expect, it } from 'vitest';
 import { buildSyncKey } from '../../../app/src/firebase.js';
-import type { LibraryEntry, SeriesMetadataEntry, MovieMetadataEntry } from '../../../app/src/db.js';
+import type { CatalogEntry, SeriesMetadataEntry, MovieMetadataEntry } from '../../../app/src/db.js';
 
-function makeLibraryEntry(overrides: Partial<LibraryEntry> = {}): LibraryEntry {
+function makeCatalogEntry(overrides: Partial<CatalogEntry> = {}): CatalogEntry {
   return {
     id: 1,
-    directoryId: 1,
+    createdAt: 1,
+    updatedAt: 1,
     name: 'video.mkv',
     path: '/videos/video.mkv',
+    directoryId: 1,
     size: 1_000_000,
     lastModified: Date.now(),
-    watchState: 'unwatched',
-    playbackPositionSec: 0,
-    durationSec: 3600,
-    addedAt: Date.now(),
+    availability: 'present',
     detectedMediaType: 'unknown',
     ...overrides,
   };
@@ -24,7 +23,7 @@ describe('buildSyncKey', () => {
   const noMovies = new Map<string, MovieMetadataEntry>();
 
   it('prefers torrent key when infohash + fileIndex present', () => {
-    const entry = makeLibraryEntry({
+    const entry = makeCatalogEntry({
       torrentInfoHash: 'abc123def456',
       torrentFileIndex: 3,
       contentHash: 'somehash',
@@ -33,14 +32,14 @@ describe('buildSyncKey', () => {
   });
 
   it('uses content hash when no torrent data', () => {
-    const entry = makeLibraryEntry({ contentHash: 'deadbeef1234567890abcdef1234567890abcdef' });
+    const entry = makeCatalogEntry({ contentHash: 'deadbeef1234567890abcdef1234567890abcdef' });
     expect(buildSyncKey(entry, noSeries, noMovies)).toBe(
       'hash:deadbeef1234567890abcdef1234567890abcdef',
     );
   });
 
   it('uses TMDB TV key when available and no hash/torrent', () => {
-    const entry = makeLibraryEntry({
+    const entry = makeCatalogEntry({
       detectedMediaType: 'tv',
       seriesMetadataKey: 'breaking-bad',
       seasonNumber: 5,
@@ -63,7 +62,7 @@ describe('buildSyncKey', () => {
   });
 
   it('uses TMDB movie key when available and no hash/torrent', () => {
-    const entry = makeLibraryEntry({
+    const entry = makeCatalogEntry({
       detectedMediaType: 'movie',
       movieMetadataKey: 'inception',
     });
@@ -84,12 +83,12 @@ describe('buildSyncKey', () => {
   });
 
   it('falls back to a stable file-based key without duration', () => {
-    const entry = makeLibraryEntry({ name: 'video.mkv', size: 999, durationSec: 120.5 });
+    const entry = makeCatalogEntry({ name: 'video.mkv', size: 999 });
     expect(buildSyncKey(entry, noSeries, noMovies)).toBe('file:video.mkv|999');
   });
 
   it('torrent key with fileIndex 0 is valid', () => {
-    const entry = makeLibraryEntry({ torrentInfoHash: 'hash', torrentFileIndex: 0 });
+    const entry = makeCatalogEntry({ torrentInfoHash: 'hash', torrentFileIndex: 0 });
     expect(buildSyncKey(entry, noSeries, noMovies)).toBe('torrent:hash:0');
   });
 });

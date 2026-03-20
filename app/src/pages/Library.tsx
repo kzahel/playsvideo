@@ -8,21 +8,19 @@ import { removeFolder } from '../scan.js';
 import { folderProvider } from '../folder-provider.js';
 import { isExtension } from '../context.js';
 import { getDeviceId } from '../device.js';
-import { applyLocalPlaybackToLibraryEntries } from '../local-playback-views.js';
+import { applyLocalPlaybackToCatalogEntries } from '../local-playback-views.js';
 import { SHOW_METADATA_DEBUG_KEY } from '../metadata/settings.js';
 
 export function Library() {
   const deviceId = useLiveQuery(() => getDeviceId(), []);
   const entries = useLiveQuery(async () => {
-    const [libraryEntries, catalogEntries, playbackEntries] = await Promise.all([
-      db.library.orderBy('name').toArray(),
-      db.catalog.toArray(),
+    const [catalogEntries, playbackEntries] = await Promise.all([
+      db.catalog.orderBy('name').toArray(),
       deviceId
         ? db.playback.where('deviceId').equals(deviceId).toArray()
         : Promise.resolve([]),
     ]);
-    return applyLocalPlaybackToLibraryEntries({
-      libraryEntries,
+    return applyLocalPlaybackToCatalogEntries({
       catalogEntries,
       playbackEntries,
     });
@@ -46,7 +44,10 @@ export function Library() {
 
   const hasDirectories = directories.length > 0;
   const multiFolder = isExtension();
-  const stale = hasDirectories && entries.length > 0 && !folderProvider.hasLiveAccess();
+  const stale =
+    hasDirectories &&
+    entries.some((entry) => entry.hasLocalFile !== false) &&
+    !folderProvider.hasLiveAccess();
   const metadataByKey = new Map(seriesMetadata.map((entry) => [entry.key, entry]));
   const hasTmdbMetadata = seriesMetadata.some((entry) => entry.status === 'resolved');
 

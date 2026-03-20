@@ -1,7 +1,7 @@
-import type { LibraryEntry, MetadataTransportStateEntry } from '../db.js';
+import type { CatalogEntry, MetadataTransportStateEntry } from '../db.js';
 
 export interface RefreshLibraryMetadataOptions {
-  entries?: LibraryEntry[];
+  entries?: CatalogEntry[];
   force?: boolean;
 }
 

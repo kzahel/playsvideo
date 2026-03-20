@@ -1,13 +1,13 @@
 import { db } from '../db.js';
 import type {
-  LibraryEntry,
+  CatalogEntry,
   MetadataCredentialSlot,
   MetadataParseCacheEntry,
   MetadataSeasonCacheEntry,
   MetadataTransportStateEntry,
   MetadataTransportKind,
   MovieMetadataEntry,
-  ParsedLibraryFields,
+  ParsedCatalogFields,
   SeriesMetadataEntry,
 } from '../db.js';
 import { parseMediaMetadata } from '../media-metadata.js';
@@ -37,7 +37,7 @@ function buildParseCacheKey(path: string, lastModified: number): string {
   return `${path}|${lastModified}`;
 }
 
-function toParsedLibraryFields(entry: LibraryEntry): ParsedLibraryFields {
+function toParsedCatalogFields(entry: CatalogEntry): ParsedCatalogFields {
   return {
     detectedMediaType: entry.detectedMediaType,
     parsedTitle: entry.parsedTitle,
@@ -56,8 +56,8 @@ export const metadataRepository = {
     return configured?.value !== false;
   },
 
-  async hydrateParsedLibraryEntries(entries?: LibraryEntry[]): Promise<LibraryEntry[]> {
-    const source = entries ?? (await db.library.toArray());
+  async hydrateParsedCatalogEntries(entries?: CatalogEntry[]): Promise<CatalogEntry[]> {
+    const source = entries ?? (await db.catalog.toArray());
     if (source.length === 0) {
       return source;
     }
@@ -70,7 +70,7 @@ export const metadataRepository = {
         .map((entry) => [entry.key, entry]),
     );
 
-    const libraryUpdates: LibraryEntry[] = [];
+    const catalogUpdates: CatalogEntry[] = [];
     const parseCacheUpdates: MetadataParseCacheEntry[] = [];
     const hydrated = source.map((entry) => {
       const cacheKey = buildParseCacheKey(entry.path, entry.lastModified);
@@ -88,19 +88,19 @@ export const metadataRepository = {
             path: entry.path,
             lastModified: entry.lastModified,
             parsedAt: Date.now(),
-            parsed: toParsedLibraryFields(entry),
+            parsed: toParsedCatalogFields(entry),
           });
         }
         return entry;
       }
 
       const parsed = cached?.parsed ?? parseMediaMetadata(entry.path);
-      const next: LibraryEntry = {
+      const next: CatalogEntry = {
         ...entry,
         ...parsed,
       };
 
-      libraryUpdates.push(next);
+      catalogUpdates.push(next);
 
       if (!cached) {
         parseCacheUpdates.push({
@@ -115,8 +115,8 @@ export const metadataRepository = {
       return next;
     });
 
-    if (libraryUpdates.length > 0) {
-      await db.library.bulkPut(libraryUpdates);
+    if (catalogUpdates.length > 0) {
+      await db.catalog.bulkPut(catalogUpdates);
     }
 
     if (parseCacheUpdates.length > 0) {

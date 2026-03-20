@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { useParams, Link, useNavigate } from 'react-router-dom';
 import { useLiveQuery } from 'dexie-react-hooks';
-import { db, type CatalogEntry, type LibraryEntry } from '../db';
+import { db, type CatalogEntry } from '../db';
 import { getDeviceId } from '../device.js';
 import { useEngine } from '../hooks/useEngine';
 import { folderProvider, type SiblingSubtitleFile } from '../folder-provider.js';
@@ -11,7 +11,7 @@ import { useFullscreen } from '../hooks/useFullscreen';
 import { getLocalPlayback } from '../local-playback.js';
 import { AUTOPLAY_NEXT_EPISODE_KEY, PLAYER_CONTROLS_TYPE_KEY } from '../settings.js';
 
-function buildSeriesIdentity(entry: LibraryEntry): string | null {
+function buildSeriesIdentity(entry: CatalogEntry): string | null {
   if (entry.detectedMediaType !== 'tv' || !entry.parsedTitle) {
     return null;
   }
@@ -23,7 +23,7 @@ function buildSeriesIdentity(entry: LibraryEntry): string | null {
   return `tv-local:${entry.parsedTitle}:${entry.parsedYear ?? ''}`;
 }
 
-function compareEpisodeEntries(left: LibraryEntry, right: LibraryEntry): number {
+function compareEpisodeEntries(left: CatalogEntry, right: CatalogEntry): number {
   const leftSeason = left.seasonNumber ?? Number.MAX_SAFE_INTEGER;
   const rightSeason = right.seasonNumber ?? Number.MAX_SAFE_INTEGER;
   if (leftSeason !== rightSeason) {
@@ -45,7 +45,7 @@ function compareEpisodeEntries(left: LibraryEntry, right: LibraryEntry): number 
   return left.id - right.id;
 }
 
-function formatEpisodeCode(entry: LibraryEntry): string {
+function formatEpisodeCode(entry: CatalogEntry): string {
   if (entry.seasonNumber == null || entry.episodeNumber == null) {
     return entry.name;
   }
@@ -88,33 +88,10 @@ export function Player() {
   );
   const [autoplayNextEpisode] = useSetting<boolean>(AUTOPLAY_NEXT_EPISODE_KEY, false);
 
-  const catalogEntry = useLiveQuery(async () => {
-    const direct = await db.catalog.get(entryId);
-    if (direct) return direct;
-
-    const legacyEntry = await db.library.get(entryId);
-    if (!legacyEntry) return null;
-
-    return (
-      (await db.catalog.where('[directoryId+path]').equals([legacyEntry.directoryId, legacyEntry.path]).first()) ??
-      null
-    );
-  }, [entryId]);
-  const entry = useLiveQuery(async () => {
-    const direct = await db.library.get(entryId);
-    if (direct) return direct;
-
-    const catalog = await db.catalog.get(entryId);
-    if (!catalog || catalog.directoryId == null) return null;
-
-    return (
-      (await db.library.where('[directoryId+path]').equals([catalog.directoryId, catalog.path]).first()) ??
-      null
-    );
-  }, [entryId]);
-  const entries = useLiveQuery(() => db.library.toArray());
+  const entry = useLiveQuery(() => db.catalog.get(entryId), [entryId]);
+  const entries = useLiveQuery(() => db.catalog.toArray());
   const deviceId = useLiveQuery(() => getDeviceId(), []);
-  const playbackKey = catalogEntry?.canonicalPlaybackKey ?? null;
+  const playbackKey = entry?.canonicalPlaybackKey ?? null;
   const localPlayback = useLiveQuery(
     () => (deviceId && playbackKey ? getLocalPlayback(deviceId, playbackKey) : Promise.resolve(null)),
     [deviceId, playbackKey],
@@ -162,6 +139,7 @@ export function Player() {
 
     const siblings = entries
       .filter((candidate) => candidate.id !== entry.id)
+      .filter((candidate) => candidate.hasLocalFile !== false)
       .filter((candidate) => buildSeriesIdentity(candidate) === seriesIdentity)
       .filter(
         (candidate) => candidate.seasonNumber != null && candidate.episodeNumber != null,
@@ -188,9 +166,10 @@ export function Player() {
     navigate(`/play/${nextEpisode.id}`);
   }, [autoplayNextEpisode, hasEnded, navigate, nextEpisode]);
 
-  const siblingSubtitleKey = entry ? `${entry.directoryId}:${entry.path}` : null;
+  const siblingSubtitleKey =
+    entry && entry.hasLocalFile !== false ? `${entry.directoryId}:${entry.path}` : null;
   useEffect(() => {
-    if (!entry || phase !== 'ready') {
+    if (!entry || entry.hasLocalFile === false || phase !== 'ready') {
       setSiblingSubtitles([]);
       setLoadingSiblingSubtitles(false);
       setSiblingSubtitleStatus('');
@@ -231,48 +210,19 @@ export function Player() {
 
   if (
     entry === undefined ||
-    catalogEntry === undefined ||
     deviceId === undefined ||
     (playbackKey !== null && localPlayback === undefined)
   ) {
     return <div className="player-page">Loading...</div>;
   }
 
-  if (!entry && !catalogEntry) {
+  if (!entry) {
     return (
       <div className="player-page">
         <Link to="/" className="player-back">
           &larr; Back to Library
         </Link>
         <p>Video not found.</p>
-      </div>
-    );
-  }
-
-  if (!entry && catalogEntry) {
-    return (
-      <div className="player-page">
-        <Link to="/" className="player-back">
-          &larr; Back to Library
-        </Link>
-        <h2 className="player-filename">{catalogEntry.name}</h2>
-        <div className="player-virtual-notice">
-          <p>{missingMessage(catalogEntry)}</p>
-          {catalogEntry.torrentMagnetUrl ? (
-            <div className="player-virtual-magnet">
-              <a href={catalogEntry.torrentMagnetUrl}>Open Magnet Link</a>
-              <button
-                type="button"
-                className="btn btn-secondary"
-                onClick={() => {
-                  void navigator.clipboard.writeText(catalogEntry.torrentMagnetUrl!);
-                }}
-              >
-                Copy Magnet
-              </button>
-            </div>
-          ) : null}
-        </div>
       </div>
     );
   }
@@ -285,12 +235,7 @@ export function Player() {
         </Link>
         <h2 className="player-filename">{entry.name}</h2>
         <div className="player-virtual-notice">
-          <p>This file is not available locally.</p>
-          {entry.torrentComplete === false ? (
-            <p>Download is incomplete in JSTorrent.</p>
-          ) : entry.torrentComplete === true ? (
-            <p>Downloaded via torrent but file not found on disk.</p>
-          ) : null}
+          <p>{missingMessage(entry)}</p>
           {entry.torrentMagnetUrl ? (
             <div className="player-virtual-magnet">
               <a href={entry.torrentMagnetUrl}>Open Magnet Link</a>

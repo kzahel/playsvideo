@@ -48,34 +48,6 @@ export interface SeasonMetadataPayload {
   episodes: SeasonMetadataEpisode[];
 }
 
-export interface LibraryEntry {
-  id: number;
-  directoryId: number;
-  name: string;
-  path: string;
-  size: number;
-  lastModified: number;
-  watchState: WatchState;
-  playbackPositionSec: number;
-  durationSec: number;
-  addedAt: number;
-  detectedMediaType: DetectedMediaType;
-  parsedTitle?: string;
-  parsedYear?: number;
-  seasonNumber?: number;
-  episodeNumber?: number;
-  endingEpisodeNumber?: number;
-  seriesMetadataKey?: string;
-  movieMetadataKey?: string;
-  lastPlayedAt?: number;
-  contentHash?: string;
-  torrentInfoHash?: string;
-  torrentFileIndex?: number;
-  torrentMagnetUrl?: string;
-  torrentComplete?: boolean;
-  hasLocalFile?: boolean;
-}
-
 export interface CatalogEntry {
   id: number;
   createdAt: number;
@@ -101,6 +73,7 @@ export interface CatalogEntry {
   torrentFileIndex?: number;
   torrentMagnetUrl?: string;
   torrentComplete?: boolean;
+  hasLocalFile?: boolean;
   canonicalPlaybackKey?: string;
 }
 
@@ -197,8 +170,8 @@ export interface MovieMetadataEntry {
   debugSearchCandidates?: SeriesMetadataSearchCandidate[];
 }
 
-export type ParsedLibraryFields = Pick<
-  LibraryEntry,
+export type ParsedCatalogFields = Pick<
+  CatalogEntry,
   | 'detectedMediaType'
   | 'parsedTitle'
   | 'parsedYear'
@@ -214,7 +187,7 @@ export interface MetadataParseCacheEntry {
   path: string;
   lastModified: number;
   parsedAt: number;
-  parsed: ParsedLibraryFields;
+  parsed: ParsedCatalogFields;
 }
 
 export interface MetadataSeasonCacheEntry {
@@ -239,7 +212,6 @@ export interface MetadataTransportStateEntry {
 }
 
 class PlaysVideoDB extends Dexie {
-  library!: EntityTable<LibraryEntry, 'id'>;
   catalog!: EntityTable<CatalogEntry, 'id'>;
   playback!: Table<PlaybackEntry, [string, string]>;
   remotePlayback!: Table<RemotePlaybackEntry, [string, string]>;
@@ -256,22 +228,17 @@ class PlaysVideoDB extends Dexie {
   constructor() {
     super('playsvideo');
     this.version(1).stores({
-      library: '++id, directoryId, path, name, watchState, addedAt',
       directories: '++id, name',
       playlists: '++id, name',
       settings: 'key',
     });
     this.version(2).stores({
-      library:
-        '++id, directoryId, path, name, watchState, addedAt, detectedMediaType, parsedTitle, seriesMetadataKey',
       directories: '++id, name',
       playlists: '++id, name',
       settings: 'key',
       seriesMetadata: 'key, tmdbId, fetchedAt, query',
     });
     this.version(3).stores({
-      library:
-        '++id, directoryId, path, name, watchState, addedAt, detectedMediaType, parsedTitle, seriesMetadataKey, movieMetadataKey',
       directories: '++id, name',
       playlists: '++id, name',
       settings: 'key',
@@ -279,8 +246,6 @@ class PlaysVideoDB extends Dexie {
       movieMetadata: 'key, tmdbId, fetchedAt, query',
     });
     this.version(4).stores({
-      library:
-        '++id, directoryId, path, name, watchState, addedAt, detectedMediaType, parsedTitle, seriesMetadataKey, movieMetadataKey',
       directories: '++id, name',
       playlists: '++id, name',
       settings: 'key',
@@ -291,8 +256,6 @@ class PlaysVideoDB extends Dexie {
       metadataTransportState: 'key, transport, credentialSlot, status, cooldownUntil, updatedAt',
     });
     this.version(5).stores({
-      library:
-        '++id, directoryId, path, name, watchState, addedAt, detectedMediaType, parsedTitle, seriesMetadataKey, movieMetadataKey',
       directories: '++id, name',
       playlists: '++id, name',
       settings: 'key',
@@ -303,8 +266,6 @@ class PlaysVideoDB extends Dexie {
       metadataTransportState: 'key, transport, credentialSlot, status, cooldownUntil, updatedAt',
     });
     this.version(6).stores({
-      library:
-        '++id, directoryId, path, name, watchState, addedAt, detectedMediaType, parsedTitle, seriesMetadataKey, movieMetadataKey, lastPlayedAt',
       directories: '++id, name',
       playlists: '++id, name',
       settings: 'key',
@@ -315,8 +276,6 @@ class PlaysVideoDB extends Dexie {
       metadataTransportState: 'key, transport, credentialSlot, status, cooldownUntil, updatedAt',
     });
     this.version(7).stores({
-      library:
-        '++id, directoryId, path, name, watchState, addedAt, detectedMediaType, parsedTitle, seriesMetadataKey, movieMetadataKey, lastPlayedAt, contentHash, torrentInfoHash',
       directories: '++id, name',
       playlists: '++id, name',
       settings: 'key',
@@ -326,25 +285,35 @@ class PlaysVideoDB extends Dexie {
       metadataSeasonCache: 'key, seriesMetadataKey, tmdbSeriesId, seasonNumber, fetchedAt, status',
       metadataTransportState: 'key, transport, credentialSlot, status, cooldownUntil, updatedAt',
     });
-    this.version(8)
-      .stores({
-        library:
-          '++id, directoryId, path, name, watchState, addedAt, detectedMediaType, parsedTitle, seriesMetadataKey, movieMetadataKey, lastPlayedAt, contentHash, torrentInfoHash, hasLocalFile',
-        directories: '++id, name',
-        playlists: '++id, name',
-        settings: 'key',
-        seriesMetadata: 'key, tmdbId, fetchedAt, query',
-        movieMetadata: 'key, tmdbId, fetchedAt, query',
-        metadataParseCache: 'key, path, lastModified, parsedAt',
-        metadataSeasonCache: 'key, seriesMetadataKey, tmdbSeriesId, seasonNumber, fetchedAt, status',
-        metadataTransportState: 'key, transport, credentialSlot, status, cooldownUntil, updatedAt',
-      })
-      .upgrade((tx) => tx.table('library').toCollection().modify({ hasLocalFile: true }));
+    this.version(8).stores({
+      directories: '++id, name',
+      playlists: '++id, name',
+      settings: 'key',
+      seriesMetadata: 'key, tmdbId, fetchedAt, query',
+      movieMetadata: 'key, tmdbId, fetchedAt, query',
+      metadataParseCache: 'key, path, lastModified, parsedAt',
+      metadataSeasonCache: 'key, seriesMetadataKey, tmdbSeriesId, seasonNumber, fetchedAt, status',
+      metadataTransportState: 'key, transport, credentialSlot, status, cooldownUntil, updatedAt',
+    });
     this.version(9).stores({
-      library:
-        '++id, directoryId, path, name, watchState, addedAt, detectedMediaType, parsedTitle, seriesMetadataKey, movieMetadataKey, lastPlayedAt, contentHash, torrentInfoHash, hasLocalFile',
       catalog:
-        '++id, directoryId, path, name, availability, lastSeenAt, firstMissingAt, detectedMediaType, parsedTitle, seriesMetadataKey, movieMetadataKey, canonicalPlaybackKey, contentHash, torrentInfoHash, [directoryId+path], [torrentInfoHash+torrentFileIndex]',
+        '++id, directoryId, path, name, availability, lastSeenAt, firstMissingAt, detectedMediaType, parsedTitle, seriesMetadataKey, movieMetadataKey, canonicalPlaybackKey, contentHash, torrentInfoHash, hasLocalFile, [directoryId+path], [torrentInfoHash+torrentFileIndex]',
+      playback: '[deviceId+playbackKey], deviceId, playbackKey, watchState, lastPlayedAt, updatedAt',
+      remotePlayback:
+        '[deviceId+playbackKey], deviceId, playbackKey, watchState, lastPlayedAt, updatedAt',
+      catalogAliases: '[catalogId+playbackKey], catalogId, playbackKey, source, createdAt',
+      directories: '++id, name',
+      playlists: '++id, name',
+      settings: 'key',
+      seriesMetadata: 'key, tmdbId, fetchedAt, query',
+      movieMetadata: 'key, tmdbId, fetchedAt, query',
+      metadataParseCache: 'key, path, lastModified, parsedAt',
+      metadataSeasonCache: 'key, seriesMetadataKey, tmdbSeriesId, seasonNumber, fetchedAt, status',
+      metadataTransportState: 'key, transport, credentialSlot, status, cooldownUntil, updatedAt',
+    });
+    this.version(10).stores({
+      catalog:
+        '++id, directoryId, path, name, availability, lastSeenAt, firstMissingAt, detectedMediaType, parsedTitle, seriesMetadataKey, movieMetadataKey, canonicalPlaybackKey, contentHash, torrentInfoHash, hasLocalFile, [directoryId+path], [torrentInfoHash+torrentFileIndex]',
       playback: '[deviceId+playbackKey], deviceId, playbackKey, watchState, lastPlayedAt, updatedAt',
       remotePlayback:
         '[deviceId+playbackKey], deviceId, playbackKey, watchState, lastPlayedAt, updatedAt',

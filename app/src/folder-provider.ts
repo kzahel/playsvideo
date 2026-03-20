@@ -1,4 +1,4 @@
-import { db, type LibraryEntry } from './db.js';
+import { db, type CatalogEntry } from './db.js';
 import { isExtension } from './context.js';
 import { isSiblingSubtitleCandidate } from './subtitle-sibling.js';
 
@@ -85,8 +85,8 @@ export interface FolderProvider {
   getRescanAccessState(): Promise<FolderRescanAccessState>;
   hasLiveAccess(): boolean;
   pickFolder(): Promise<FolderResult>;
-  getFile(entry: LibraryEntry, options?: FileAccessOptions): Promise<File>;
-  listSiblingSubtitleFiles(entry: LibraryEntry): Promise<SiblingSubtitleFile[]>;
+  getFile(entry: CatalogEntry, options?: FileAccessOptions): Promise<File>;
+  listSiblingSubtitleFiles(entry: CatalogEntry): Promise<SiblingSubtitleFile[]>;
   rescan(directoryId?: number, options?: FolderRescanOptions): Promise<FolderResult>;
 }
 
@@ -232,7 +232,7 @@ class FsAccessProvider implements FolderProvider {
     return dir.handle;
   }
 
-  async getFile(entry: LibraryEntry, options: FileAccessOptions = {}): Promise<File> {
+  async getFile(entry: CatalogEntry, options: FileAccessOptions = {}): Promise<File> {
     const handle = await this.resolveHandle(entry.directoryId);
     await ensurePermission(handle, options);
     this.grantedHandles.set(entry.directoryId, handle);
@@ -245,7 +245,7 @@ class FsAccessProvider implements FolderProvider {
     return fileHandle.getFile();
   }
 
-  async listSiblingSubtitleFiles(entry: LibraryEntry): Promise<SiblingSubtitleFile[]> {
+  async listSiblingSubtitleFiles(entry: CatalogEntry): Promise<SiblingSubtitleFile[]> {
     let handle: FileSystemDirectoryHandle;
     try {
       handle = await this.resolveHandle(entry.directoryId);
@@ -356,7 +356,7 @@ class WebkitDirectoryProvider implements FolderProvider {
     return await this.processFiles(rawFiles);
   }
 
-  async getFile(entry: LibraryEntry): Promise<File> {
+  async getFile(entry: CatalogEntry): Promise<File> {
     const key = fileKey(entry.name, entry.size, entry.lastModified);
     const file = this.fileMap.get(key);
     if (!file) {
@@ -365,7 +365,7 @@ class WebkitDirectoryProvider implements FolderProvider {
     return file;
   }
 
-  async listSiblingSubtitleFiles(entry: LibraryEntry): Promise<SiblingSubtitleFile[]> {
+  async listSiblingSubtitleFiles(entry: CatalogEntry): Promise<SiblingSubtitleFile[]> {
     const folder = parentPath(entry.path);
     const siblings: SiblingSubtitleFile[] = [];
     for (const [path, file] of this.pathFileMap.entries()) {

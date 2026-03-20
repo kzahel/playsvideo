@@ -21,7 +21,7 @@ function formatYear(value?: string | number): string | null {
 type MediaBrowserMode = 'all' | 'shows' | 'movies';
 
 function MediaBrowserContent({ mode }: { mode: MediaBrowserMode }) {
-  const entries = useLiveQuery(() => db.library.toArray());
+  const entries = useLiveQuery(() => db.catalog.toArray());
   const seriesMetadata = useLiveQuery(() => db.seriesMetadata.toArray());
   const movieMetadata = useLiveQuery(() => db.movieMetadata.toArray());
 

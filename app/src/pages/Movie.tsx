@@ -6,7 +6,7 @@ import { useSetting } from '../hooks/useSetting.js';
 import { useFilesystemRescan } from '../hooks/useFilesystemRescan.js';
 import { groupMovies } from '../library-groups.js';
 import { getDeviceId } from '../device.js';
-import { applyLocalPlaybackToLibraryEntries } from '../local-playback-views.js';
+import { applyLocalPlaybackToCatalogEntries } from '../local-playback-views.js';
 import { invalidateMetadata, refreshLibraryMetadata } from '../metadata/client.js';
 import { TMDB_REQUESTS_ENABLED_KEY } from '../metadata/settings.js';
 import { AUTO_RESCAN_DETAIL_PAGES_KEY } from '../settings.js';
@@ -16,15 +16,13 @@ export function Movie() {
   const decodedId = decodeURIComponent(movieId ?? '');
   const deviceId = useLiveQuery(() => getDeviceId(), []);
   const entries = useLiveQuery(async () => {
-    const [libraryEntries, catalogEntries, playbackEntries] = await Promise.all([
-      db.library.toArray(),
+    const [catalogEntries, playbackEntries] = await Promise.all([
       db.catalog.toArray(),
       deviceId
         ? db.playback.where('deviceId').equals(deviceId).toArray()
         : Promise.resolve([]),
     ]);
-    return applyLocalPlaybackToLibraryEntries({
-      libraryEntries,
+    return applyLocalPlaybackToCatalogEntries({
       catalogEntries,
       playbackEntries,
     });

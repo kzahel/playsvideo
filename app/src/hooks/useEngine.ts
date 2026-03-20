@@ -1,6 +1,6 @@
 import { useRef, useState, useEffect, useCallback, type MutableRefObject } from 'react';
 import { PlaysVideoEngine } from 'playsvideo';
-import type { LibraryEntry, PlaybackEntry } from '../db';
+import type { CatalogEntry, PlaybackEntry } from '../db';
 import { useSetting } from './useSetting.js';
 import { getFile, setFolder } from '../scan.js';
 import { folderProvider, isFileAccessPermissionError } from '../folder-provider.js';
@@ -14,7 +14,7 @@ import {
 export type EngineSource =
   | {
       kind: 'entry';
-      entry: LibraryEntry;
+      entry: CatalogEntry;
       deviceId: string;
       playbackKey: string;
       playback: PlaybackEntry | null;

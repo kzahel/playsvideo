@@ -14,14 +14,12 @@ export function Sidebar({ open, onClose }: SidebarProps) {
   const nowPlaying = useLiveQuery(
     async () => {
       if (!deviceId) return null;
-      const [catalogEntries, libraryEntries, playbackEntries] = await Promise.all([
+      const [catalogEntries, playbackEntries] = await Promise.all([
         db.catalog.toArray(),
-        db.library.toArray(),
         db.playback.where('deviceId').equals(deviceId).toArray(),
       ]);
       return getNowPlayingView({
         catalogEntries,
-        libraryEntries,
         playbackEntries,
       });
     },

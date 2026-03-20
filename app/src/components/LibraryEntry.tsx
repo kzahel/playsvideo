@@ -1,5 +1,6 @@
 import { Link } from 'react-router-dom';
-import type { LibraryEntry, SeriesMetadataEntry } from '../db';
+import type { SeriesMetadataEntry } from '../db';
+import type { CatalogPlaybackView } from '../local-playback-views.js';
 
 function formatSize(bytes: number): string {
   if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(0)} KB`;
@@ -22,12 +23,12 @@ const BADGE_LABEL: Record<string, string> = {
 };
 
 interface Props {
-  entry: LibraryEntry;
+  entry: CatalogPlaybackView;
   seriesMetadata?: SeriesMetadataEntry;
   showMetadataDebug?: boolean;
 }
 
-function formatEpisodeLabel(entry: LibraryEntry): string | null {
+function formatEpisodeLabel(entry: CatalogPlaybackView): string | null {
   if (entry.detectedMediaType !== 'tv' || entry.seasonNumber == null || entry.episodeNumber == null) {
     return null;
   }
@@ -90,7 +91,7 @@ export function LibraryEntryCard({ entry, seriesMetadata, showMetadataDebug = fa
           }
         </div>
       </div>
-      {!isInProgress && entry.watchState !== 'none' ? (
+      {!isInProgress && entry.watchState !== 'unwatched' ? (
         <span className={`watch-badge ${entry.watchState}`}>
           {BADGE_LABEL[entry.watchState]}
         </span>

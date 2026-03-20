@@ -138,7 +138,7 @@ export { TMDB_READ_ACCESS_TOKEN_KEY } from './settings.js';
 export async function refreshLibraryMetadata(
   options?: RefreshLibraryMetadataOptions,
 ): Promise<void> {
-  const entries = await metadataRepository.hydrateParsedLibraryEntries(options?.entries);
+  const entries = await metadataRepository.hydrateParsedCatalogEntries(options?.entries);
   if (!(await metadataRepository.areTmdbRequestsEnabled())) return;
   const credentials = await metadataRepository.listTmdbCredentials();
   if (credentials.length === 0) return;

@@ -1,23 +1,9 @@
 import { describe, expect, it } from 'vitest';
-import type { CatalogEntry, LibraryEntry, PlaybackEntry } from '../../app/src/db.js';
-import { applyLocalPlaybackToLibraryEntries, getNowPlayingView } from '../../app/src/local-playback-views.js';
-
-function makeLibraryEntry(overrides: Partial<LibraryEntry> = {}): LibraryEntry {
-  return {
-    id: 1,
-    directoryId: 1,
-    name: 'video.mkv',
-    path: 'video.mkv',
-    size: 1000,
-    lastModified: 123,
-    watchState: 'unwatched',
-    playbackPositionSec: 0,
-    durationSec: 0,
-    addedAt: 1,
-    detectedMediaType: 'unknown',
-    ...overrides,
-  };
-}
+import type { CatalogEntry, PlaybackEntry } from '../../app/src/db.js';
+import {
+  applyLocalPlaybackToCatalogEntries,
+  getNowPlayingView,
+} from '../../app/src/local-playback-views.js';
 
 function makeCatalogEntry(overrides: Partial<CatalogEntry> = {}): CatalogEntry {
   return {
@@ -50,9 +36,8 @@ function makePlaybackEntry(overrides: Partial<PlaybackEntry> = {}): PlaybackEntr
 }
 
 describe('local-playback-views', () => {
-  it('applies local playback state to visible library entries', () => {
-    const result = applyLocalPlaybackToLibraryEntries({
-      libraryEntries: [makeLibraryEntry()],
+  it('applies local playback state to catalog entries', () => {
+    const result = applyLocalPlaybackToCatalogEntries({
       catalogEntries: [makeCatalogEntry()],
       playbackEntries: [makePlaybackEntry()],
     });
@@ -67,8 +52,7 @@ describe('local-playback-views', () => {
   });
 
   it('defaults to unwatched when no playback row exists', () => {
-    const result = applyLocalPlaybackToLibraryEntries({
-      libraryEntries: [makeLibraryEntry({ watchState: 'watched', playbackPositionSec: 500 })],
+    const result = applyLocalPlaybackToCatalogEntries({
       catalogEntries: [makeCatalogEntry()],
       playbackEntries: [],
     });
@@ -82,7 +66,6 @@ describe('local-playback-views', () => {
   it('finds now playing from playback and catalog even when no live library row exists', () => {
     const result = getNowPlayingView({
       catalogEntries: [makeCatalogEntry({ parsedTitle: 'My Video' })],
-      libraryEntries: [],
       playbackEntries: [makePlaybackEntry()],
     });
 

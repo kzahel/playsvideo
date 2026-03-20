@@ -1,12 +1,15 @@
 import { useEffect, useState } from 'react';
 import { Link, useParams } from 'react-router-dom';
 import { useLiveQuery } from 'dexie-react-hooks';
-import { db, type LibraryEntry } from '../db.js';
+import { db } from '../db.js';
 import { getDeviceId } from '../device.js';
 import { useSetting } from '../hooks/useSetting.js';
 import { useFilesystemRescan } from '../hooks/useFilesystemRescan.js';
 import { groupTvShows } from '../library-groups.js';
-import { applyLocalPlaybackToLibraryEntries } from '../local-playback-views.js';
+import {
+  applyLocalPlaybackToCatalogEntries,
+  type CatalogPlaybackView,
+} from '../local-playback-views.js';
 import {
   invalidateMetadata,
   refreshLibraryMetadata,
@@ -25,7 +28,7 @@ function seasonLabel(seasonNumber?: number): string {
   return `Season ${seasonNumber}`;
 }
 
-function localEpisodeLabel(entry: LibraryEntry): string {
+function localEpisodeLabel(entry: CatalogPlaybackView): string {
   if (entry.seasonNumber == null || entry.episodeNumber == null) {
     return entry.name;
   }
@@ -62,7 +65,7 @@ function formatSize(bytes: number): string {
   return `${(bytes / (1024 * 1024 * 1024)).toFixed(2)} GB`;
 }
 
-function watchLabel(entry: LibraryEntry): string {
+function watchLabel(entry: CatalogPlaybackView): string {
   if (entry.watchState === 'watched') return 'Watched';
   if (entry.watchState === 'in-progress') return 'In Progress';
   return 'New';
@@ -73,15 +76,13 @@ export function TvShow() {
   const decodedId = decodeURIComponent(showId ?? '');
   const deviceId = useLiveQuery(() => getDeviceId(), []);
   const entries = useLiveQuery(async () => {
-    const [libraryEntries, catalogEntries, playbackEntries] = await Promise.all([
-      db.library.toArray(),
+    const [catalogEntries, playbackEntries] = await Promise.all([
       db.catalog.toArray(),
       deviceId
         ? db.playback.where('deviceId').equals(deviceId).toArray()
         : Promise.resolve([]),
     ]);
-    return applyLocalPlaybackToLibraryEntries({
-      libraryEntries,
+    return applyLocalPlaybackToCatalogEntries({
       catalogEntries,
       playbackEntries,
     });
@@ -128,8 +129,8 @@ export function TvShow() {
   const resolvedSeasonCount = [...seasonCacheByNumber.values()].filter(
     (entry) => entry.status === 'resolved',
   ).length;
-  const entriesBySeasonAndEpisode = new Map<number, Map<number, LibraryEntry>>();
-  const otherEntries: LibraryEntry[] = [];
+  const entriesBySeasonAndEpisode = new Map<number, Map<number, CatalogPlaybackView>>();
+  const otherEntries: CatalogPlaybackView[] = [];
   for (const entry of show?.entries ?? []) {
     if (entry.seasonNumber == null || entry.episodeNumber == null) {
       otherEntries.push(entry);
@@ -137,7 +138,8 @@ export function TvShow() {
     }
 
     const seasonEntries =
-      entriesBySeasonAndEpisode.get(entry.seasonNumber) ?? new Map<number, LibraryEntry>();
+      entriesBySeasonAndEpisode.get(entry.seasonNumber) ??
+      new Map<number, CatalogPlaybackView>();
     const endingEpisode = entry.endingEpisodeNumber ?? entry.episodeNumber;
     for (let episode = entry.episodeNumber; episode <= endingEpisode; episode += 1) {
       if (!seasonEntries.has(episode)) {

@@ -1,4 +1,4 @@
-import type { LibraryEntry, MovieMetadataEntry, SeriesMetadataEntry } from './db.js';
+import type { CatalogEntry, MovieMetadataEntry, SeriesMetadataEntry } from './db.js';
 import { normalizeLookupText } from './media-metadata.js';
 
 export interface TvShowGroup {
@@ -6,7 +6,7 @@ export interface TvShowGroup {
   slug: string;
   title: string;
   year?: number;
-  entries: LibraryEntry[];
+  entries: CatalogEntry[];
   seriesMetadata?: SeriesMetadataEntry;
 }
 
@@ -15,7 +15,7 @@ export interface MovieGroup {
   slug: string;
   title: string;
   year?: number;
-  entries: LibraryEntry[];
+  entries: CatalogEntry[];
   movieMetadata?: MovieMetadataEntry;
 }
 
@@ -24,7 +24,7 @@ export function buildMovieGroupKey(title: string, year?: number): string {
 }
 
 export function groupTvShows(
-  entries: LibraryEntry[],
+  entries: CatalogEntry[],
   metadataByKey: Map<string, SeriesMetadataEntry>,
 ): TvShowGroup[] {
   const groups = new Map<string, TvShowGroup>();
@@ -61,7 +61,7 @@ export function groupTvShows(
 }
 
 export function groupMovies(
-  entries: LibraryEntry[],
+  entries: CatalogEntry[],
   metadataByKey: Map<string, MovieMetadataEntry>,
 ): MovieGroup[] {
   const groups = new Map<string, MovieGroup>();
@@ -111,7 +111,7 @@ export function buildMovieSlug(group: Pick<MovieGroup, 'title' | 'year' | 'movie
   return group.year != null ? `${titleSlug}-${group.year}` : titleSlug;
 }
 
-export function sortTvEntries(entries: LibraryEntry[]): LibraryEntry[] {
+export function sortTvEntries(entries: CatalogEntry[]): CatalogEntry[] {
   return [...entries].sort((left, right) => {
     const seasonDiff = compareOptionalNumber(left.seasonNumber, right.seasonNumber);
     if (seasonDiff !== 0) return seasonDiff;

@@ -14,7 +14,6 @@ import {
 import {
   db,
   type CatalogEntry,
-  type LibraryEntry,
   type MovieMetadataEntry,
   type PlaybackEntry,
   type RemotePlaybackEntry,
@@ -108,7 +107,7 @@ export type { DeviceSyncDoc, RemoteDeviceState };
 // --- Sync key builders ---
 
 export function buildSyncKey(
-  entry: LibraryEntry,
+  entry: CatalogEntry,
   seriesMetadataByKey: Map<string, SeriesMetadataEntry>,
   movieMetadataByKey: Map<string, MovieMetadataEntry>,
 ): string {
