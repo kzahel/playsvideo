@@ -1,1 +1,1 @@
-import '/src/sw.ts';
+import '/app/src/sw.ts';
