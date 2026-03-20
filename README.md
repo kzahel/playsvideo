@@ -77,6 +77,16 @@ engine.destroy(); // clean up
 
 See [engine API docs](docs/engine-api.md) for events, properties, and full usage.
 
+### App architecture
+
+This repo also contains the browser media catalog app in [`app/`](app/).
+
+If you are working on the app rather than the core playback engine, start with:
+
+- [app/README.md](app/README.md)
+- [docs/app-architecture.md](docs/app-architecture.md)
+- [docs/data-model-separation.md](docs/data-model-separation.md)
+
 ### Roadmap
 
 See [docs/roadmap.md](docs/roadmap.md) for the full list. Highlights:
@@ -105,7 +115,7 @@ src/adapters/       Platform adapters (ffmpeg.wasm for browser, node-ffmpeg for 
 src/worker.ts       Web worker — demux + on-demand segment processing
 src/engine.ts       PlaysVideoEngine class (worker, hls.js, subtitles)
 src/pwa-player.ts   Browser entry — file picker, drag-and-drop
-app/                React media player — library management, folder picker, playlists
+app/                React media catalog app built on playsvideo
 tests/              Unit, integration, and e2e (Playwright) tests
 ```
 

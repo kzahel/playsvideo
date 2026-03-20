@@ -28,7 +28,7 @@ We do not need backwards compatibility for this phase. It is acceptable to reset
 
 ## Implemented So Far
 
-Phases 1 through 6 are now implemented in the codebase.
+Phases 1 through 7 are now implemented in the codebase.
 
 What exists today:
 
@@ -36,20 +36,14 @@ What exists today:
 - scan reconciles into `catalog` and marks unseen items as `missing`
 - `playback` stores local per-device playback state
 - `remotePlayback` caches playback facts pulled from other devices
-- sync pushes local `playback` facts and no longer merges remote state into local media rows
+- sync pushes local `playback` facts and does not merge remote state into local media rows
 - player resume/save behavior uses `catalogId -> canonicalPlaybackKey -> playback`
-- sidebar, library, movie, and TV pages derive local progress from `catalog + playback`
+- catalog, movie, and TV pages derive local progress from `catalog + playback`
+- the old `library` table has been removed
 
-What still exists temporarily:
+## Problem With The Previous Model
 
-- `library` is still present as a compatibility projection for currently present items
-- some grouping, navigation, and file-access code still reads `library`
-
-That compatibility layer was useful for the transition, but it is not part of the target design.
-
-## Problem With The Current Model
-
-Today one `LibraryEntry` row tries to serve too many roles at once:
+Previously one `LibraryEntry` row tried to serve too many roles at once:
 
 - scan result
 - local playback state
