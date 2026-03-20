@@ -112,6 +112,13 @@ function DeviceCard({
   );
 }
 
+function formatEpisodeTag(seasonNumber?: number, episodeNumber?: number): string {
+  if (seasonNumber == null && episodeNumber == null) return '';
+  const s = seasonNumber != null ? `S${String(seasonNumber).padStart(2, '0')}` : '';
+  const e = episodeNumber != null ? `E${String(episodeNumber).padStart(2, '0')}` : '';
+  return ` ${s}${e}`;
+}
+
 function formatEntryTitle(syncKey: string, entry: SyncEntry): string {
   const base = entry.title ?? syncKey;
   // Extract episode info from sync key like "tmdb:tv:73586:s01:e03"
@@ -120,6 +127,10 @@ function formatEntryTitle(syncKey: string, entry: SyncEntry): string {
     const season = Number(tvMatch[1]);
     const episode = tvMatch[2];
     return `${base} S${String(season).padStart(2, '0')}E${episode.includes('-') ? episode : String(Number(episode)).padStart(2, '0')}`;
+  }
+  // Use synced season/episode fields
+  if (entry.seasonNumber != null || entry.episodeNumber != null) {
+    return `${base}${formatEpisodeTag(entry.seasonNumber, entry.episodeNumber)}`;
   }
   // For file-based keys, show the filename
   const fileMatch = syncKey.match(/^file:(.+)\|/);

@@ -6,6 +6,8 @@ export interface DeviceSyncEntry {
   durationSec: number;
   watchedAt: number;
   title?: string;
+  seasonNumber?: number;
+  episodeNumber?: number;
   contentHash?: string;
   torrentInfoHash?: string;
   torrentFileIndex?: number;
@@ -30,6 +32,8 @@ export interface DevicePlaybackFact {
 
 export interface PlaybackSyncMetadata {
   title?: string;
+  seasonNumber?: number;
+  episodeNumber?: number;
   contentHash?: string;
   torrentInfoHash?: string;
   torrentFileIndex?: number;
@@ -68,6 +72,8 @@ export function buildDeviceSyncDoc(input: {
       watchedAt: row.lastPlayedAt,
     };
     if (metadata?.title != null) entry.title = metadata.title;
+    if (metadata?.seasonNumber != null) entry.seasonNumber = metadata.seasonNumber;
+    if (metadata?.episodeNumber != null) entry.episodeNumber = metadata.episodeNumber;
     if (metadata?.contentHash != null) entry.contentHash = metadata.contentHash;
     if (metadata?.torrentInfoHash != null) entry.torrentInfoHash = metadata.torrentInfoHash;
     if (metadata?.torrentFileIndex != null) entry.torrentFileIndex = metadata.torrentFileIndex;

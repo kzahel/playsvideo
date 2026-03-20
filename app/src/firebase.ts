@@ -163,6 +163,8 @@ async function buildCatalogPlaybackMetadata(): Promise<Map<string, PlaybackSyncM
       playbackKey,
       {
         title: catalogEntryTitle(entry),
+        seasonNumber: entry.seasonNumber,
+        episodeNumber: entry.episodeNumber,
         contentHash: entry.contentHash,
         torrentInfoHash: entry.torrentInfoHash,
         torrentFileIndex: entry.torrentFileIndex,
