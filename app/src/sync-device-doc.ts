@@ -61,18 +61,19 @@ export function buildDeviceSyncDoc(input: {
     if (row.durationSec <= 0) continue;
 
     const metadata = metadataByPlaybackKey.get(row.playbackKey);
-    entries[row.playbackKey] = {
+    const entry: DeviceSyncEntry = {
       position: row.positionSec,
       watchState: row.watchState,
       durationSec: row.durationSec,
       watchedAt: row.lastPlayedAt,
-      title: metadata?.title,
-      contentHash: metadata?.contentHash,
-      torrentInfoHash: metadata?.torrentInfoHash,
-      torrentFileIndex: metadata?.torrentFileIndex,
-      torrentMagnetUrl: metadata?.torrentMagnetUrl,
-      torrentComplete: metadata?.torrentComplete,
     };
+    if (metadata?.title != null) entry.title = metadata.title;
+    if (metadata?.contentHash != null) entry.contentHash = metadata.contentHash;
+    if (metadata?.torrentInfoHash != null) entry.torrentInfoHash = metadata.torrentInfoHash;
+    if (metadata?.torrentFileIndex != null) entry.torrentFileIndex = metadata.torrentFileIndex;
+    if (metadata?.torrentMagnetUrl != null) entry.torrentMagnetUrl = metadata.torrentMagnetUrl;
+    if (metadata?.torrentComplete != null) entry.torrentComplete = metadata.torrentComplete;
+    entries[row.playbackKey] = entry;
   }
 
   return {
