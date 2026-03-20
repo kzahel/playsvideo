@@ -1,17 +1,20 @@
 import path from 'node:path';
+import basicSsl from '@vitejs/plugin-basic-ssl';
 import react from '@vitejs/plugin-react';
 import { defineConfig } from 'vite';
 
 export default defineConfig({
   base: '/app/',
-  plugins: [react()],
+  plugins: [react(), basicSsl()],
   resolve: {
     alias: {
       playsvideo: path.resolve(__dirname, '../src/index.ts'),
     },
   },
   server: {
-    port: 4201,
+    port: 9300,
+    host: '0.0.0.0',
+    allowedHosts: ['local.playsvideo.com'],
   },
   build: {
     rollupOptions: {

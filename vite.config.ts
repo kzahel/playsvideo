@@ -17,7 +17,7 @@ export default defineConfig({
   server: {
     port: 4200,
     host: '0.0.0.0',
-    allowedHosts: ['playsvideo.graehlarts.com'],
+    allowedHosts: ['playsvideo.graehlarts.com', 'local.playsvideo.com'],
   },
   appType: 'mpa',
   plugins: [

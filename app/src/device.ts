@@ -28,13 +28,14 @@ export function generateDeviceLabel(): string {
   return parts.join(' · ') || 'Unknown Device';
 }
 
-export async function getDeviceId(): Promise<string> {
-  if (cachedDeviceId) return cachedDeviceId;
+/** Ensure a device ID exists in the DB. Call once at startup (outside liveQuery). */
+export async function ensureDeviceId(): Promise<void> {
+  if (cachedDeviceId) return;
 
   const stored = await db.settings.get(DEVICE_ID_KEY);
   if (stored?.value) {
     cachedDeviceId = stored.value as string;
-    return cachedDeviceId;
+    return;
   }
 
   const id = crypto.randomUUID();
@@ -44,7 +45,20 @@ export async function getDeviceId(): Promise<string> {
     { key: DEVICE_LABEL_KEY, value: label },
   ]);
   cachedDeviceId = id;
-  return id;
+}
+
+/** Read-only — safe to call inside liveQuery. Requires ensureDeviceId() to have run first. */
+export async function getDeviceId(): Promise<string> {
+  if (cachedDeviceId) return cachedDeviceId;
+
+  const stored = await db.settings.get(DEVICE_ID_KEY);
+  if (stored?.value) {
+    cachedDeviceId = stored.value as string;
+    return cachedDeviceId;
+  }
+
+  // Fallback: should not normally reach here if ensureDeviceId ran at startup
+  throw new Error('Device ID not initialized — call ensureDeviceId() first');
 }
 
 export async function getDeviceLabel(): Promise<string> {
