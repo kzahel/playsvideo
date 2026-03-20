@@ -59,22 +59,7 @@ export function Movie() {
           <Link to="/movies" className="player-back">
             &larr; Back to Movies
           </Link>
-          {filesystemRescan.showManualButton ? (
-            <button
-              type="button"
-              className="btn btn-secondary"
-              onClick={() => void filesystemRescan.rescan()}
-              disabled={filesystemRescan.isRescanning}
-            >
-              {filesystemRescan.isRescanning ? 'Rescanning...' : filesystemRescan.buttonLabel}
-            </button>
-          ) : null}
         </div>
-        {filesystemRescan.statusMessage ? (
-          <div className="page-toolbar-status" aria-live="polite">
-            {filesystemRescan.statusMessage}
-          </div>
-        ) : null}
         <p>{waitingForRescan ? 'Refreshing files...' : 'Movie not found.'}</p>
       </div>
     );
@@ -119,23 +104,8 @@ export function Movie() {
           >
             {isRefreshingMetadata ? 'Refreshing Metadata...' : 'Refresh Metadata'}
           </button>
-          {filesystemRescan.showManualButton ? (
-            <button
-              type="button"
-              className="btn btn-secondary"
-              onClick={() => void filesystemRescan.rescan()}
-              disabled={filesystemRescan.isRescanning}
-            >
-              {filesystemRescan.isRescanning ? 'Rescanning...' : filesystemRescan.buttonLabel}
-            </button>
-          ) : null}
         </div>
       </div>
-      {filesystemRescan.statusMessage ? (
-        <div className="page-toolbar-status" aria-live="polite">
-          {filesystemRescan.statusMessage}
-        </div>
-      ) : null}
       {metadataStatusMessage ? (
         <div className="page-toolbar-status" aria-live="polite">
           {metadataStatusMessage}

@@ -145,12 +145,20 @@ body {
 .folder-status-needs-grant {
   border-color: #f59e0b;
 }
+.folder-status-ready {
+  border-color: #22c55e;
+}
 .folder-status-dot {
   width: 6px;
   height: 6px;
   border-radius: 50%;
-  background: #f59e0b;
   flex-shrink: 0;
+}
+.folder-status-dot-warning {
+  background: #f59e0b;
+}
+.folder-status-dot-ok {
+  background: #22c55e;
 }
 .folder-status-dropdown {
   position: absolute;

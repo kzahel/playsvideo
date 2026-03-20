@@ -218,22 +218,7 @@ export function TvShow() {
           <Link to="/shows" className="player-back">
             &larr; Back to Shows
           </Link>
-          {filesystemRescan.showManualButton ? (
-            <button
-              type="button"
-              className="btn btn-secondary"
-              onClick={() => void filesystemRescan.rescan()}
-              disabled={filesystemRescan.isRescanning}
-            >
-              {filesystemRescan.isRescanning ? 'Rescanning...' : filesystemRescan.buttonLabel}
-            </button>
-          ) : null}
         </div>
-        {filesystemRescan.statusMessage ? (
-          <div className="page-toolbar-status" aria-live="polite">
-            {filesystemRescan.statusMessage}
-          </div>
-        ) : null}
         <p>{waitingForRescan ? 'Refreshing files...' : 'Show not found.'}</p>
       </div>
     );
@@ -397,23 +382,8 @@ export function TvShow() {
               {isRefreshingSeasonMetadata ? 'Loading Episode Metadata...' : 'Load Episode Metadata'}
             </button>
           ) : null}
-          {filesystemRescan.showManualButton ? (
-            <button
-              type="button"
-              className="btn btn-secondary"
-              onClick={() => void filesystemRescan.rescan()}
-              disabled={filesystemRescan.isRescanning}
-            >
-              {filesystemRescan.isRescanning ? 'Rescanning...' : filesystemRescan.buttonLabel}
-            </button>
-          ) : null}
         </div>
       </div>
-      {filesystemRescan.statusMessage ? (
-        <div className="page-toolbar-status" aria-live="polite">
-          {filesystemRescan.statusMessage}
-        </div>
-      ) : null}
       {metadataStatusMessage ? (
         <div className="page-toolbar-status" aria-live="polite">
           {metadataStatusMessage}

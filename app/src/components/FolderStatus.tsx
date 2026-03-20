@@ -21,6 +21,9 @@ export function FolderStatus() {
   const [accessState, setAccessState] = useState<FolderRescanAccessState>('unavailable');
   const [dropdownOpen, setDropdownOpen] = useState(false);
   const [granting, setGranting] = useState(false);
+  const [rescanning, setRescanning] = useState(false);
+  const [toast, setToast] = useState<string | null>(null);
+  const toastTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const wrapperRef = useRef<HTMLDivElement>(null);
 
   const hasDirectories = (directories?.length ?? 0) > 0;
@@ -57,12 +60,21 @@ export function FolderStatus() {
     return () => document.removeEventListener('mousedown', handleClick);
   }, [dropdownOpen]);
 
+  const showToast = (message: string) => {
+    if (toastTimerRef.current) clearTimeout(toastTimerRef.current);
+    setToast(message);
+    toastTimerRef.current = setTimeout(() => setToast(null), 5000);
+  };
+
   const handleGrant = async () => {
     setGranting(true);
     try {
-      await rescanFolder(undefined, { requestPermission: true });
+      const startTime = performance.now();
+      const result = await rescanFolder(undefined, { requestPermission: true });
+      const elapsed = ((performance.now() - startTime) / 1000).toFixed(1);
       setAccessState('ready');
       setDropdownOpen(false);
+      showToast(`Scanned ${result.fileCount} file${result.fileCount === 1 ? '' : 's'} in ${elapsed}s`);
     } catch {
       // permission denied or cancelled — stay open
     } finally {
@@ -70,10 +82,28 @@ export function FolderStatus() {
     }
   };
 
+  const handleRescan = async () => {
+    setRescanning(true);
+    try {
+      const startTime = performance.now();
+      const result = await rescanFolder(undefined, { requestPermission: accessState === 'needs-user-gesture' });
+      const elapsed = ((performance.now() - startTime) / 1000).toFixed(1);
+      setAccessState('ready');
+      setDropdownOpen(false);
+      showToast(`Scanned ${result.fileCount} file${result.fileCount === 1 ? '' : 's'} in ${elapsed}s`);
+    } catch {
+      // failed
+    } finally {
+      setRescanning(false);
+    }
+  };
+
   const handleChooseFolder = async () => {
     try {
-      await setFolder();
+      const result = await setFolder();
+      setAccessState('ready');
       setDropdownOpen(false);
+      showToast(`Scanned ${result.fileCount} file${result.fileCount === 1 ? '' : 's'}`);
     } catch (err: unknown) {
       if (err instanceof DOMException && err.name === 'AbortError') return;
       console.error('Failed to select folder:', err);
@@ -92,12 +122,13 @@ export function FolderStatus() {
   }
 
   const needsGrant = accessState === 'needs-user-gesture';
+  const isReady = accessState === 'ready';
 
   return (
     <div className="folder-status-wrapper" ref={wrapperRef}>
       <button
         type="button"
-        className={`folder-status-btn ${needsGrant ? 'folder-status-needs-grant' : 'folder-status-ready'}`}
+        className={`folder-status-btn ${needsGrant ? 'folder-status-needs-grant' : isReady ? 'folder-status-ready' : ''}`}
         onClick={() => setDropdownOpen((o) => !o)}
         title={directory?.name}
       >
@@ -105,8 +136,15 @@ export function FolderStatus() {
           <path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z" />
         </svg>
         <span className="folder-status-name">{directory?.name}</span>
-        {needsGrant && <span className="folder-status-dot" />}
+        {needsGrant && <span className="folder-status-dot folder-status-dot-warning" />}
+        {isReady && <span className="folder-status-dot folder-status-dot-ok" />}
       </button>
+
+      {toast && (
+        <div className="scan-toast" aria-live="polite">
+          {toast}
+        </div>
+      )}
 
       {dropdownOpen && (
         <div className="folder-status-dropdown">
@@ -124,6 +162,11 @@ export function FolderStatus() {
             {needsGrant && (
               <button type="button" className="btn btn-primary btn-sm" onClick={handleGrant} disabled={granting}>
                 {granting ? 'Granting...' : 'Grant File Access'}
+              </button>
+            )}
+            {isReady && (
+              <button type="button" className="btn btn-primary btn-sm" onClick={handleRescan} disabled={rescanning}>
+                {rescanning ? 'Rescanning...' : 'Rescan'}
               </button>
             )}
             <button type="button" className="btn btn-secondary btn-sm" onClick={handleChooseFolder}>

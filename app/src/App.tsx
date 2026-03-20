@@ -57,7 +57,7 @@ export function App() {
           &#9776;
         </button>
         <Link to="/" className="app-logo">
-          <svg width="200" height="32" viewBox="0 0 340 48">
+          <svg width="150" height="28" viewBox="0 0 340 48">
             <polygon points="2,4 2,44 32,24" fill="currentColor" />
             <text
               x="44"
