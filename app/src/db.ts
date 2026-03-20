@@ -1,4 +1,4 @@
-import Dexie, { type EntityTable } from 'dexie';
+import Dexie, { type EntityTable, type Table } from 'dexie';
 
 export type WatchState = 'unwatched' | 'in-progress' | 'watched';
 export type DetectedMediaType = 'tv' | 'movie' | 'unknown';
@@ -6,6 +6,8 @@ export type SeriesMetadataStatus = 'resolved' | 'not-found' | 'error';
 export type MetadataTransportKind = 'direct' | 'proxy';
 export type MetadataCredentialSlot = 'primary' | 'standby';
 export type MetadataTransportStatus = 'healthy' | 'cooldown' | 'invalid';
+export type CatalogAvailability = 'present' | 'missing';
+export type PlaybackKeySource = 'file' | 'hash' | 'torrent' | 'tmdb';
 
 export interface SeriesMetadataSearchCandidate {
   id: number;
@@ -72,6 +74,63 @@ export interface LibraryEntry {
   torrentMagnetUrl?: string;
   torrentComplete?: boolean;
   hasLocalFile?: boolean;
+}
+
+export interface CatalogEntry {
+  id: number;
+  createdAt: number;
+  updatedAt: number;
+  name: string;
+  path: string;
+  directoryId?: number;
+  size: number;
+  lastModified: number;
+  availability: CatalogAvailability;
+  lastSeenAt?: number;
+  firstMissingAt?: number;
+  detectedMediaType: DetectedMediaType;
+  parsedTitle?: string;
+  parsedYear?: number;
+  seasonNumber?: number;
+  episodeNumber?: number;
+  endingEpisodeNumber?: number;
+  seriesMetadataKey?: string;
+  movieMetadataKey?: string;
+  contentHash?: string;
+  torrentInfoHash?: string;
+  torrentFileIndex?: number;
+  torrentMagnetUrl?: string;
+  torrentComplete?: boolean;
+  canonicalPlaybackKey?: string;
+}
+
+export interface PlaybackEntry {
+  deviceId: string;
+  playbackKey: string;
+  positionSec: number;
+  durationSec: number;
+  watchState: WatchState;
+  lastPlayedAt: number;
+  updatedAt: number;
+}
+
+export interface RemotePlaybackEntry {
+  deviceId: string;
+  playbackKey: string;
+  deviceLabel: string;
+  positionSec: number;
+  durationSec: number;
+  watchState: WatchState;
+  lastPlayedAt: number;
+  title?: string;
+  updatedAt: number;
+}
+
+export interface CatalogAliasEntry {
+  catalogId: number;
+  playbackKey: string;
+  source: PlaybackKeySource;
+  createdAt: number;
 }
 
 export interface DirectoryEntry {
@@ -181,6 +240,10 @@ export interface MetadataTransportStateEntry {
 
 class PlaysVideoDB extends Dexie {
   library!: EntityTable<LibraryEntry, 'id'>;
+  catalog!: EntityTable<CatalogEntry, 'id'>;
+  playback!: Table<PlaybackEntry, [string, string]>;
+  remotePlayback!: Table<RemotePlaybackEntry, [string, string]>;
+  catalogAliases!: Table<CatalogAliasEntry, [number, string]>;
   directories!: EntityTable<DirectoryEntry, 'id'>;
   playlists!: EntityTable<PlaylistEntry, 'id'>;
   settings!: EntityTable<SettingEntry, 'key'>;
@@ -277,6 +340,24 @@ class PlaysVideoDB extends Dexie {
         metadataTransportState: 'key, transport, credentialSlot, status, cooldownUntil, updatedAt',
       })
       .upgrade((tx) => tx.table('library').toCollection().modify({ hasLocalFile: true }));
+    this.version(9).stores({
+      library:
+        '++id, directoryId, path, name, watchState, addedAt, detectedMediaType, parsedTitle, seriesMetadataKey, movieMetadataKey, lastPlayedAt, contentHash, torrentInfoHash, hasLocalFile',
+      catalog:
+        '++id, directoryId, path, name, availability, lastSeenAt, firstMissingAt, detectedMediaType, parsedTitle, seriesMetadataKey, movieMetadataKey, canonicalPlaybackKey, contentHash, torrentInfoHash, [directoryId+path], [torrentInfoHash+torrentFileIndex]',
+      playback: '[deviceId+playbackKey], deviceId, playbackKey, watchState, lastPlayedAt, updatedAt',
+      remotePlayback:
+        '[deviceId+playbackKey], deviceId, playbackKey, watchState, lastPlayedAt, updatedAt',
+      catalogAliases: '[catalogId+playbackKey], catalogId, playbackKey, source, createdAt',
+      directories: '++id, name',
+      playlists: '++id, name',
+      settings: 'key',
+      seriesMetadata: 'key, tmdbId, fetchedAt, query',
+      movieMetadata: 'key, tmdbId, fetchedAt, query',
+      metadataParseCache: 'key, path, lastModified, parsedAt',
+      metadataSeasonCache: 'key, seriesMetadataKey, tmdbSeriesId, seasonNumber, fetchedAt, status',
+      metadataTransportState: 'key, transport, credentialSlot, status, cooldownUntil, updatedAt',
+    });
   }
 }
 
