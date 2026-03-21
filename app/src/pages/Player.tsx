@@ -268,7 +268,7 @@ export function Player() {
           <p>{missingMessage(resolvedEntry)}</p>
           {resolvedEntry.torrentMagnetUrl ? (
             <div className="player-virtual-magnet">
-              <a href={magnetWithFileIndex(resolvedEntry)}>Open Magnet Link</a>
+              <a href={magnetWithFileIndex(resolvedEntry)} className="btn btn-secondary">Open Magnet Link</a>
               <button
                 type="button"
                 className="btn btn-secondary"
@@ -284,7 +284,7 @@ export function Player() {
         {previousEpisode || nextEpisode ? (
           <div className="player-episode-nav">
             {previousEpisode ? (
-              <Link to={`/play/${previousEpisode.id}`} state={{ entry: previousEpisode }}>
+              <Link to={`/play/${previousEpisode.id}`} state={{ entry: previousEpisode }} className="btn btn-secondary">
                 &larr; Previous
               </Link>
             ) : null}
