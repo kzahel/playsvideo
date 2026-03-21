@@ -11,6 +11,6 @@ createRoot(document.getElementById('root')!).render(
   <RouterProvider router={router} />,
 );
 
-if ('serviceWorker' in navigator) {
+if ('serviceWorker' in navigator && !import.meta.env.DEV) {
   void registerAppServiceWorker();
 }

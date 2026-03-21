@@ -57,8 +57,8 @@ export async function getDeviceId(): Promise<string> {
     return cachedDeviceId;
   }
 
-  // Fallback: should not normally reach here if ensureDeviceId ran at startup
-  throw new Error('Device ID not initialized — call ensureDeviceId() first');
+  // ensureDeviceId() hasn't completed yet — return empty; liveQuery will re-run
+  return '';
 }
 
 export async function getDeviceLabel(): Promise<string> {
