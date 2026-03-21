@@ -346,6 +346,10 @@ self.onmessage = (event: MessageEvent) => {
     const reason = msg.message || 'Transcode worker crashed';
     wlog(`recv transcode-worker-failed id=${msg.id} reason=${reason}`);
     transcodePool.handleWorkerFailure(msg.id, reason);
+  } else if (msg.type === 'refresh-file') {
+    wlog('recv refresh-file');
+    currentBlob = msg.file;
+    queuePipelineSetup(() => handleFileRefresh(msg.file));
   } else if (msg.type === 'segment') {
     wlog(`recv segment idx=${msg.index}`);
     void handleSegmentRequest(msg.index);
@@ -580,6 +584,28 @@ async function handleRemuxPipeline(prebuiltKeyframeIndex?: KeyframeIndex) {
   schedulePrefetch(1);
 }
 
+/** Re-demux with a fresh File after the old Blob became stale. Keeps the existing plan. */
+async function handleFileRefresh(file: Blob): Promise<void> {
+  const t0 = performance.now();
+  if (demux) {
+    demux.dispose();
+  }
+  demux = await demuxBlob(file);
+  segmentCache.clear();
+  segmentTasks.clear();
+  initSegment = null;
+  wlog(`file-refresh re-demux done ${elapsed(t0)} — plan kept (${plan.length} segments)`);
+  self.postMessage({ type: 'file-refreshed' });
+}
+
+function isStaleFileError(err: unknown): boolean {
+  return (
+    err instanceof TypeError &&
+    typeof err.message === 'string' &&
+    err.message.toLowerCase().includes('network error')
+  );
+}
+
 async function handleSegmentRequest(index: number) {
   const controller = new AbortController();
   segmentAbortControllers.set(index, controller);
@@ -594,8 +620,12 @@ async function handleSegmentRequest(index: number) {
       wlog(`seg ${index} aborted`);
       return;
     }
+    const stale = isStaleFileError(err);
     emitSegmentState(index, 'error', { message: String(err) });
-    self.postMessage({ type: 'error', message: String(err) });
+    self.postMessage({ type: 'segment-error', index, message: String(err), stale });
+    if (stale) {
+      wlog(`seg ${index} stale file detected — requesting refresh`);
+    }
   } finally {
     segmentAbortControllers.delete(index);
   }

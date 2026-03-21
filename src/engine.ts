@@ -315,6 +315,20 @@ export class PlaysVideoEngine extends EventTarget {
     mlog(`open file=${file.name} size=${(file.size / 1024 / 1024).toFixed(1)}MB type=${file.type}`);
   }
 
+  /**
+   * Re-acquire the file after the Blob became stale. Re-demuxes in the worker
+   * without resetting HLS or the segment plan.
+   */
+  refreshFile(file: File): void {
+    if (!this.worker) return;
+    if (this._blobUrl) {
+      URL.revokeObjectURL(this._blobUrl);
+    }
+    this._blobUrl = URL.createObjectURL(file);
+    this.worker.postMessage({ type: 'refresh-file', file });
+    mlog(`refresh file=${file.name} size=${(file.size / 1024 / 1024).toFixed(1)}MB`);
+  }
+
   loadUrl(url: string, opts?: { keyframeIndex?: KeyframeIndex }): void {
     this.reset({ url });
     this._keyframeIndex = opts?.keyframeIndex ?? null;
@@ -1038,6 +1052,19 @@ export class PlaysVideoEngine extends EventTarget {
       mlog(
         `seg ${msg.index} arrived latency=${latency}ms size=${size} pending=${this.pendingSegments.size}`,
       );
+    } else if (msg.type === 'segment-error') {
+      const pending = this.pendingSegments.get(msg.index);
+      mlog(`segment-error: idx=${msg.index} ${msg.message} stale=${msg.stale ?? false}`);
+      if (pending) {
+        this.noteSegmentState(msg.index, 'error', { message: msg.message });
+        pending.reject(new Error(msg.message));
+        this.pendingSegments.delete(msg.index);
+      }
+      if (msg.stale) {
+        this.dispatchEvent(new CustomEvent('file-stale'));
+      }
+    } else if (msg.type === 'file-refreshed') {
+      mlog('file refreshed — worker re-demuxed');
     } else if (msg.type === 'error') {
       mlog(`error: ${msg.message} pending=${this.pendingSegments.size}`);
       this.failPlayback(msg.message);

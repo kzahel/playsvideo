@@ -315,6 +315,24 @@ export function useEngine(source: EngineSource | null): UseEngineResult {
       }
     }) as EventListener);
 
+    engine.addEventListener('file-stale', (() => {
+      pushDiagnosticEvent(diagnosticsRef, 'engine:file-stale', 'Re-acquiring file...');
+      const currentEntry = entryRef.current;
+      if (!currentEntry) return;
+      getFile(currentEntry, { requestPermission: false })
+        .then((freshFile) => {
+          pushDiagnosticEvent(diagnosticsRef, 'engine:file-refreshed', freshFile.name);
+          engine.refreshFile(freshFile);
+        })
+        .catch((err) => {
+          pushDiagnosticEvent(
+            diagnosticsRef,
+            'engine:file-refresh-failed',
+            err instanceof Error ? err.message : String(err),
+          );
+        });
+    }) as EventListener);
+
     const logVideoEvent = (label: string) => {
       pushDiagnosticEvent(
         diagnosticsRef,
