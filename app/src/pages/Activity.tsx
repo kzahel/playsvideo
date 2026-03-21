@@ -1,6 +1,8 @@
 import { useState, useEffect } from 'react';
 import { Link } from 'react-router-dom';
 import { useAuth } from '../hooks/useAuth.js';
+import { db } from '../db.js';
+import { getDeviceId, getDeviceLabel } from '../device.js';
 import {
   pullAllDeviceDocs,
   buildLocalSyncKeyIndex,
@@ -321,14 +323,72 @@ export function Activity() {
 
     async function load() {
       try {
-        const [docs, keyIndex] = await Promise.all([
-          pullAllDeviceDocs(user!.uid),
-          buildLocalSyncKeyIndex(),
-        ]);
+        const [docs, keyIndex, localDeviceId, localDeviceLabel, localPlayback, catalogEntries, seriesMeta, movieMeta] =
+          await Promise.all([
+            pullAllDeviceDocs(user!.uid),
+            buildLocalSyncKeyIndex(),
+            getDeviceId(),
+            getDeviceLabel(),
+            db.playback.toArray(),
+            db.catalog.toArray(),
+            db.seriesMetadata.toArray(),
+            db.movieMetadata.toArray(),
+          ]);
         if (cancelled) return;
 
-        // Merge all devices (including current) — most recent wins
+        // Merge all remote devices — most recent wins
         const merged = mergeDeviceDocs(docs);
+
+        // Build catalog metadata lookup for local entries
+        const catalogByKey = new Map<string, (typeof catalogEntries)[number]>();
+        for (const entry of catalogEntries) {
+          if (entry.canonicalPlaybackKey) {
+            catalogByKey.set(entry.canonicalPlaybackKey, entry);
+          }
+        }
+        const seriesMetaByKey = new Map(seriesMeta.map((m) => [m.key, m]));
+        const movieMetaByKey = new Map(movieMeta.map((m) => [m.key, m]));
+
+        // Merge local playback entries (may be newer than last Firestore sync)
+        for (const pb of localPlayback) {
+          if (pb.deviceId !== localDeviceId || pb.durationSec <= 0) continue;
+
+          const existing = merged.get(pb.playbackKey);
+          if (existing && existing.watchedAt >= pb.lastPlayedAt) continue;
+
+          const cat = catalogByKey.get(pb.playbackKey);
+          let tmdbId: number | undefined;
+          let tmdbMediaType: 'tv' | 'movie' | undefined;
+          if (cat?.seriesMetadataKey) {
+            const series = seriesMetaByKey.get(cat.seriesMetadataKey);
+            if (series?.status === 'resolved' && series.tmdbId != null) {
+              tmdbId = series.tmdbId;
+              tmdbMediaType = 'tv';
+            }
+          } else if (cat?.movieMetadataKey) {
+            const movie = movieMetaByKey.get(cat.movieMetadataKey);
+            if (movie?.status === 'resolved' && movie.tmdbId != null) {
+              tmdbId = movie.tmdbId;
+              tmdbMediaType = 'movie';
+            }
+          }
+
+          merged.set(pb.playbackKey, {
+            position: pb.positionSec,
+            watchState: pb.watchState,
+            durationSec: pb.durationSec,
+            watchedAt: pb.lastPlayedAt,
+            title: cat?.parsedTitle ?? cat?.name,
+            seasonNumber: cat?.seasonNumber,
+            episodeNumber: cat?.episodeNumber,
+            tmdbId,
+            tmdbMediaType,
+            playbackKey: pb.playbackKey,
+            sourceDeviceId: localDeviceId,
+            sourceDeviceLabel: localDeviceLabel,
+          });
+        }
+
         const showGroups = buildShowGroups(merged, keyIndex);
         setGroups(showGroups);
       } catch (err) {
