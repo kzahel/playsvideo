@@ -148,7 +148,14 @@ function chooseMetadataEntry(
 }
 
 async function buildCatalogPlaybackMetadata(): Promise<Map<string, PlaybackSyncMetadata>> {
-  const entries = await db.catalog.toArray();
+  const [entries, seriesMeta, movieMeta] = await Promise.all([
+    db.catalog.toArray(),
+    db.seriesMetadata.toArray(),
+    db.movieMetadata.toArray(),
+  ]);
+  const seriesMetaByKey = new Map(seriesMeta.map((m) => [m.key, m]));
+  const movieMetaByKey = new Map(movieMeta.map((m) => [m.key, m]));
+
   const chosenByKey = new Map<string, CatalogEntry>();
   for (const entry of entries) {
     if (!entry.canonicalPlaybackKey) continue;
@@ -159,9 +166,8 @@ async function buildCatalogPlaybackMetadata(): Promise<Map<string, PlaybackSyncM
   }
 
   return new Map(
-    Array.from(chosenByKey.entries()).map(([playbackKey, entry]) => [
-      playbackKey,
-      {
+    Array.from(chosenByKey.entries()).map(([playbackKey, entry]) => {
+      const meta: PlaybackSyncMetadata = {
         title: catalogEntryTitle(entry),
         seasonNumber: entry.seasonNumber,
         episodeNumber: entry.episodeNumber,
@@ -170,8 +176,24 @@ async function buildCatalogPlaybackMetadata(): Promise<Map<string, PlaybackSyncM
         torrentFileIndex: entry.torrentFileIndex,
         torrentMagnetUrl: entry.torrentMagnetUrl,
         torrentComplete: entry.torrentComplete,
-      },
-    ]),
+      };
+
+      if (entry.seriesMetadataKey) {
+        const series = seriesMetaByKey.get(entry.seriesMetadataKey);
+        if (series?.status === 'resolved' && series.tmdbId != null) {
+          meta.tmdbId = series.tmdbId;
+          meta.tmdbMediaType = 'tv';
+        }
+      } else if (entry.movieMetadataKey) {
+        const movie = movieMetaByKey.get(entry.movieMetadataKey);
+        if (movie?.status === 'resolved' && movie.tmdbId != null) {
+          meta.tmdbId = movie.tmdbId;
+          meta.tmdbMediaType = 'movie';
+        }
+      }
+
+      return [playbackKey, meta];
+    }),
   );
 }
 

@@ -8,19 +8,25 @@ import {
 } from '../firebase.js';
 import type { MergedRemotePlaybackEntry } from '../sync-device-doc.js';
 
-interface TmdbTvKey {
-  type: 'tv';
+interface TmdbIdentity {
+  type: 'tv' | 'movie';
   tmdbId: number;
   season: number;
-  episode: string; // "03" or "01-02" for ranges
+  episode: string; // "03" or "01-02" for ranges, "0" for movies
 }
 
-interface TmdbMovieKey {
-  type: 'movie';
-  tmdbId: number;
-}
+function extractTmdbIdentity(syncKey: string, entry: MergedRemotePlaybackEntry): TmdbIdentity | null {
+  // First try the sync entry metadata (covers torrent-keyed entries with TMDB resolution)
+  if (entry.tmdbId != null && entry.tmdbMediaType != null) {
+    return {
+      type: entry.tmdbMediaType,
+      tmdbId: entry.tmdbId,
+      season: entry.seasonNumber ?? 0,
+      episode: entry.episodeNumber != null ? String(entry.episodeNumber).padStart(2, '0') : '0',
+    };
+  }
 
-function parseTmdbKey(syncKey: string): TmdbTvKey | TmdbMovieKey | null {
+  // Fall back to parsing the sync key itself
   const tvMatch = syncKey.match(/^tmdb:tv:(\d+):s(\d+):e(\d+(?:-\d+)?)$/);
   if (tvMatch) {
     return {
@@ -32,7 +38,7 @@ function parseTmdbKey(syncKey: string): TmdbTvKey | TmdbMovieKey | null {
   }
   const movieMatch = syncKey.match(/^tmdb:movie:(\d+)$/);
   if (movieMatch) {
-    return { type: 'movie', tmdbId: Number(movieMatch[1]) };
+    return { type: 'movie', tmdbId: Number(movieMatch[1]), season: 0, episode: '0' };
   }
   return null;
 }
@@ -80,16 +86,16 @@ function buildShowGroups(
   const groups = new Map<string, ShowGroup>();
 
   for (const [syncKey, entry] of merged) {
-    const parsed = parseTmdbKey(syncKey);
-    if (!parsed) continue;
+    const identity = extractTmdbIdentity(syncKey, entry);
+    if (!identity) continue;
 
-    const groupKey = `${parsed.type}:${parsed.tmdbId}`;
+    const groupKey = `${identity.type}:${identity.tmdbId}`;
     let group = groups.get(groupKey);
     if (!group) {
       group = {
-        tmdbId: parsed.tmdbId,
+        tmdbId: identity.tmdbId,
         title: entry.title ?? syncKey,
-        type: parsed.type,
+        type: identity.type,
         mostRecentAt: 0,
         episodes: [],
       };
@@ -98,14 +104,13 @@ function buildShowGroups(
 
     if (entry.watchedAt > group.mostRecentAt) {
       group.mostRecentAt = entry.watchedAt;
-      // Use the most recent entry's title as the group title
       if (entry.title) group.title = entry.title;
     }
 
     const ep: EpisodeEntry = {
       syncKey,
-      season: parsed.type === 'tv' ? parsed.season : 0,
-      episode: parsed.type === 'tv' ? parsed.episode : '0',
+      season: identity.season,
+      episode: identity.episode,
       entry,
       localEntryId: localEntryBySyncKey.get(syncKey),
     };

@@ -13,6 +13,8 @@ export interface DeviceSyncEntry {
   torrentFileIndex?: number;
   torrentMagnetUrl?: string;
   torrentComplete?: boolean;
+  tmdbId?: number;
+  tmdbMediaType?: 'tv' | 'movie';
 }
 
 export interface DeviceSyncDoc {
@@ -39,6 +41,8 @@ export interface PlaybackSyncMetadata {
   torrentFileIndex?: number;
   torrentMagnetUrl?: string;
   torrentComplete?: boolean;
+  tmdbId?: number;
+  tmdbMediaType?: 'tv' | 'movie';
 }
 
 export interface RemoteDeviceState {
@@ -79,6 +83,8 @@ export function buildDeviceSyncDoc(input: {
     if (metadata?.torrentFileIndex != null) entry.torrentFileIndex = metadata.torrentFileIndex;
     if (metadata?.torrentMagnetUrl != null) entry.torrentMagnetUrl = metadata.torrentMagnetUrl;
     if (metadata?.torrentComplete != null) entry.torrentComplete = metadata.torrentComplete;
+    if (metadata?.tmdbId != null) entry.tmdbId = metadata.tmdbId;
+    if (metadata?.tmdbMediaType != null) entry.tmdbMediaType = metadata.tmdbMediaType;
     entries[row.playbackKey] = entry;
   }
 
