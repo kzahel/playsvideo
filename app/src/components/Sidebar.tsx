@@ -40,6 +40,9 @@ export function Sidebar({ open, onClose }: SidebarProps) {
           <NavLink to="/movies" onClick={onClose}>
             Movies
           </NavLink>
+          <NavLink to="/activity" onClick={onClose}>
+            Activity
+          </NavLink>
           <NavLink to="/devices" onClick={onClose}>
             Devices
           </NavLink>
