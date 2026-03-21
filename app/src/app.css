@@ -1303,6 +1303,9 @@ body {
   background: #000;
   border-radius: 0;
 }
+.pv-video-container::backdrop {
+  background: #000;
+}
 .pv-video-container:fullscreen video {
   width: 100%;
   height: 100%;

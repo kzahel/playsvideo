@@ -61,6 +61,7 @@ const isTouch = matchMedia('(pointer: coarse)').matches;
 const CONTROLS_CSS = `
 .pv-video-container { position: relative; }
 .pv-video-container:fullscreen, .pv-video-container.pv-pip { background: #000; }
+.pv-video-container::backdrop { background: #000; }
 .pv-video-container:fullscreen video, .pv-video-container.pv-pip video { width: 100%; height: 100%; object-fit: contain; }
 .pv-video-container.pv-pip { width: 100vw; height: 100vh; }
 
