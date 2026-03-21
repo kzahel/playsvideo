@@ -135,6 +135,7 @@ export function Player() {
     clearExternalSubtitles,
     copyDiagnostics,
     diagnosticsStatus,
+    savePosition,
   } =
     useEngine(
       resolvedEntry &&
@@ -192,8 +193,10 @@ export function Player() {
       return;
     }
 
-    navigate(`/play/${nextEpisode.id}`, { state: { entry: nextEpisode } });
-  }, [autoplayNextEpisode, hasEnded, navigate, nextEpisode]);
+    savePosition('next-episode').then(() => {
+      navigate(`/play/${nextEpisode.id}`, { state: { entry: nextEpisode } });
+    });
+  }, [autoplayNextEpisode, hasEnded, navigate, nextEpisode, savePosition]);
 
   const siblingSubtitleKey =
     resolvedEntry && resolvedEntry.hasLocalFile !== false
@@ -286,9 +289,17 @@ export function Player() {
               </Link>
             ) : null}
             {nextEpisode ? (
-              <Link to={`/play/${nextEpisode.id}`} state={{ entry: nextEpisode }}>
+              <button
+                type="button"
+                className="player-episode-nav-link"
+                onClick={() => {
+                  void savePosition('next-episode').then(() => {
+                    navigate(`/play/${nextEpisode.id}`, { state: { entry: nextEpisode } });
+                  });
+                }}
+              >
                 Next &rarr;
-              </Link>
+              </button>
             ) : null}
           </div>
         ) : null}
@@ -407,9 +418,17 @@ export function Player() {
       {!autoplayNextEpisode && hasEnded && nextEpisode ? (
         <div className="player-next-episode-banner">
           <span>Episode finished. Continue to {formatEpisodeCode(nextEpisode)}.</span>
-          <Link to={`/play/${nextEpisode.id}`} state={{ entry: nextEpisode }} className="btn btn-primary">
+          <button
+            type="button"
+            className="btn btn-primary"
+            onClick={() => {
+              void savePosition('next-episode').then(() => {
+                navigate(`/play/${nextEpisode.id}`, { state: { entry: nextEpisode } });
+              });
+            }}
+          >
             Play Next Episode
-          </Link>
+          </button>
         </div>
       ) : null}
       <div className="player-diagnostics-status">

@@ -6,6 +6,7 @@ import { getFile, setFolder } from '../scan.js';
 import { folderProvider, isFileAccessPermissionError } from '../folder-provider.js';
 import { putLocalPlayback } from '../local-playback.js';
 import { scheduleSyncIfLoggedIn } from '../firebase.js';
+import { deriveWatchState, type SaveReason } from '../watch-state.js';
 import {
   EMBEDDED_SUBTITLE_POLICY_KEY,
   type EmbeddedSubtitlePolicy,
@@ -128,7 +129,7 @@ export function useEngine(source: EngineSource | null): UseEngineResult {
     'auto',
   );
 
-  const savePosition = useCallback(async () => {
+  const savePosition = useCallback(async (reason: SaveReason = 'passive') => {
     const currentEntry = entryRef.current;
     const currentPlaybackTarget = playbackTargetRef.current;
     if (!currentEntry || !currentPlaybackTarget || !videoRef.current) return;
@@ -138,13 +139,13 @@ export function useEngine(source: EngineSource | null): UseEngineResult {
 
     if (Number.isNaN(duration) || duration <= 0) return;
 
-    const nearEnd = duration - currentTime < 30;
     const previousWatchState = playbackRef.current?.watchState ?? 'unwatched';
-    const watchState = nearEnd
-      ? ('watched' as const)
-      : currentTime > 10
-        ? ('in-progress' as const)
-        : previousWatchState;
+    const watchState = deriveWatchState({
+      currentTime,
+      duration,
+      previousWatchState,
+      reason,
+    });
     const nextPlayback = await putLocalPlayback({
       deviceId: currentPlaybackTarget.deviceId,
       playbackKey: currentPlaybackTarget.playbackKey,
@@ -496,5 +497,6 @@ export function useEngine(source: EngineSource | null): UseEngineResult {
     clearExternalSubtitles,
     copyDiagnostics,
     diagnosticsStatus,
+    savePosition,
   };
 }
