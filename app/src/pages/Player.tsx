@@ -13,6 +13,13 @@ import { AUTOPLAY_NEXT_EPISODE_KEY, PLAYER_CONTROLS_TYPE_KEY } from '../settings
 
 const PLAYER_QUERY_PENDING = Symbol('player-query-pending');
 
+function magnetWithFileIndex(entry: CatalogEntry): string {
+  const url = entry.torrentMagnetUrl!;
+  if (entry.torrentFileIndex == null) return url;
+  const sep = url.includes('?') ? '&' : '?';
+  return `${url}${sep}so=${entry.torrentFileIndex}`;
+}
+
 function buildSeriesIdentity(entry: CatalogEntry): string | null {
   if (entry.detectedMediaType !== 'tv' || !entry.parsedTitle) {
     return null;
@@ -258,12 +265,12 @@ export function Player() {
           <p>{missingMessage(resolvedEntry)}</p>
           {resolvedEntry.torrentMagnetUrl ? (
             <div className="player-virtual-magnet">
-              <a href={resolvedEntry.torrentMagnetUrl}>Open Magnet Link</a>
+              <a href={magnetWithFileIndex(resolvedEntry)}>Open Magnet Link</a>
               <button
                 type="button"
                 className="btn btn-secondary"
                 onClick={() => {
-                  void navigator.clipboard.writeText(resolvedEntry.torrentMagnetUrl!);
+                  void navigator.clipboard.writeText(magnetWithFileIndex(resolvedEntry));
                 }}
               >
                 Copy Magnet
