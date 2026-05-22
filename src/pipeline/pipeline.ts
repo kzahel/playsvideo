@@ -4,7 +4,10 @@ import { collectPacketsInRange, demuxFile, getKeyframeIndex } from './demux.js';
 import { muxToFmp4 } from './mux.js';
 import { generateVodPlaylist } from './playlist.js';
 import { buildSegmentPlan } from './segment-plan.js';
+import { getSegmentAudioStartSec } from './segment-processor.js';
 import type { FfmpegRunner } from './types.js';
+
+const MAX_SEGMENT_KEYFRAME_REWIND_SEC = 0.5;
 
 export interface PipelineOptions {
   filePath: string;
@@ -63,10 +66,12 @@ export async function runPipeline(opts: PipelineOptions): Promise<PipelineResult
       // Extract packets for this segment
       const videoPackets = await collectPacketsInRange(demux.videoSink, seg.startSec, endSec, {
         startFromKeyframe: true,
+        maxKeyframeRewindSec: MAX_SEGMENT_KEYFRAME_REWIND_SEC,
       });
 
+      const audioStartSec = getSegmentAudioStartSec(seg.startSec, videoPackets);
       let audioPackets = demux.audioSink
-        ? await collectPacketsInRange(demux.audioSink, seg.startSec, endSec)
+        ? await collectPacketsInRange(demux.audioSink, audioStartSec, endSec)
         : [];
 
       // Transcode audio if needed

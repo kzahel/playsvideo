@@ -143,13 +143,20 @@ export async function collectPacketsInRange(
   sink: EncodedPacketSink,
   startSec: number,
   endSec: number,
-  opts?: { startFromKeyframe?: boolean },
+  opts?: { startFromKeyframe?: boolean; maxKeyframeRewindSec?: number },
 ): Promise<EncodedPacket[]> {
   const packets: EncodedPacket[] = [];
 
   let packet: EncodedPacket | null = null;
   if (opts?.startFromKeyframe) {
     packet = await sink.getKeyPacket(startSec);
+    const maxRewindSec = opts.maxKeyframeRewindSec;
+    if (packet && maxRewindSec !== undefined && packet.timestamp < startSec - maxRewindSec) {
+      const nextKeyPacket = await sink.getNextKeyPacket(packet);
+      if (nextKeyPacket && nextKeyPacket.timestamp < endSec) {
+        packet = nextKeyPacket;
+      }
+    }
   } else {
     packet = await sink.getPacket(startSec);
   }

@@ -5,6 +5,9 @@ import { muxToFmp4 } from './mux.js';
 import { checkAbort } from './source-signal.js';
 import type { PlannedSegment } from './types.js';
 
+const MAX_SEGMENT_KEYFRAME_REWIND_SEC = 0.5;
+const MAX_AUDIO_PREROLL_SEC = 0.75;
+
 export interface SegmentProcessorConfig {
   videoSink: EncodedPacketSink;
   audioSink: EncodedPacketSink | null;
@@ -54,6 +57,7 @@ export async function processSegmentWithAbort(
   const tVid = performance.now();
   const videoPackets = await collectPacketsInRange(config.videoSink, seg.startSec, endSec, {
     startFromKeyframe: true,
+    maxKeyframeRewindSec: MAX_SEGMENT_KEYFRAME_REWIND_SEC,
   });
   log(`seg ${index} video-collect ${elapsed(tVid)} pkts=${videoPackets.length}`);
 
@@ -61,8 +65,9 @@ export async function processSegmentWithAbort(
 
   // Stage 2: Collect audio packets
   const tAud = performance.now();
+  const audioStartSec = getSegmentAudioStartSec(seg.startSec, videoPackets);
   let audioPackets: EncodedPacket[] = config.audioSink
-    ? await collectPacketsInRange(config.audioSink, seg.startSec, endSec)
+    ? await collectPacketsInRange(config.audioSink, audioStartSec, endSec)
     : [];
   log(`seg ${index} audio-collect ${elapsed(tAud)} pkts=${audioPackets.length}`);
 
@@ -120,4 +125,18 @@ export async function processSegmentWithAbort(
     initSegment: muxResult.init,
     audioDecoderConfig,
   };
+}
+
+export function getSegmentAudioStartSec(
+  segmentStartSec: number,
+  videoPackets: EncodedPacket[],
+): number {
+  const videoStartSec = videoPackets.reduce(
+    (min, packet) => (Number.isFinite(packet.timestamp) ? Math.min(min, packet.timestamp) : min),
+    Infinity,
+  );
+  if (!Number.isFinite(videoStartSec) || videoStartSec >= segmentStartSec) {
+    return segmentStartSec;
+  }
+  return Math.max(0, Math.max(segmentStartSec - MAX_AUDIO_PREROLL_SEC, videoStartSec));
 }
