@@ -37,6 +37,7 @@ import type {
   PlannedSegment,
   SubtitleTrackInfo,
 } from './pipeline/types.js';
+import { formatSubtitleTrackLabel, normalizeSubtitleLanguageCode } from './subtitle-labels.js';
 import type { TranscodeWorkerSnapshot, TranscodeWorkerStateMessage } from './transcode-protocol.js';
 import type {
   WorkerSegmentStateMessage,
@@ -1555,11 +1556,7 @@ export class PlaysVideoEngine extends EventTarget {
     track.srclang = normalizeSubtitleLanguageCode(language ?? info?.language ?? 'und');
     track.label =
       label ??
-      info?.name ??
-      languageLabel(
-        info?.language ?? 'und',
-        trackIndex ?? this.video.querySelectorAll('track').length,
-      );
+      formatSubtitleTrackLabel(info, trackIndex ?? this.video.querySelectorAll('track').length);
     track.default = defaultTrack;
     this.video.appendChild(track);
     this.attachedSubtitleTracks.push({ element: track, url, source });
@@ -1747,58 +1744,4 @@ function makeStats(): LoaderStats {
     parsing: { start: now, end: now },
     buffering: { start: now, first: now, end: now },
   } as LoaderStats;
-}
-
-function iso639_2to1(code: string): string {
-  const map: Record<string, string> = {
-    eng: 'en',
-    spa: 'es',
-    fra: 'fr',
-    deu: 'de',
-    ita: 'it',
-    por: 'pt',
-    rus: 'ru',
-    jpn: 'ja',
-    kor: 'ko',
-    zho: 'zh',
-    ara: 'ar',
-    hin: 'hi',
-    nld: 'nl',
-    swe: 'sv',
-    pol: 'pl',
-    tur: 'tr',
-    vie: 'vi',
-    tha: 'th',
-    und: '',
-  };
-  return map[code] ?? code;
-}
-
-function normalizeSubtitleLanguageCode(code: string): string {
-  if (code.length === 2) return code;
-  return iso639_2to1(code);
-}
-
-function languageLabel(langCode: string, trackIndex: number): string {
-  const names: Record<string, string> = {
-    eng: 'English',
-    spa: 'Spanish',
-    fra: 'French',
-    deu: 'German',
-    ita: 'Italian',
-    por: 'Portuguese',
-    rus: 'Russian',
-    jpn: 'Japanese',
-    kor: 'Korean',
-    zho: 'Chinese',
-    ara: 'Arabic',
-    hin: 'Hindi',
-    nld: 'Dutch',
-    swe: 'Swedish',
-    pol: 'Polish',
-    tur: 'Turkish',
-    vie: 'Vietnamese',
-    tha: 'Thai',
-  };
-  return names[langCode] ?? `Track ${trackIndex + 1}`;
 }

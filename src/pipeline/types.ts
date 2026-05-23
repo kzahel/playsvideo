@@ -67,7 +67,7 @@ export interface SubtitleTrackInfo {
   index: number;
   /** Original codec in the container. */
   codec: string;
-  /** ISO 639-2/T language code (e.g. 'eng', 'spa', 'und'). */
+  /** Demuxer language code, usually ISO 639/BCP 47 (e.g. 'en', 'eng', 'und'). */
   language: string;
   /** User-visible track name, if any. */
   name: string | null;
