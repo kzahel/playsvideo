@@ -1,4 +1,4 @@
-import { useEffect, useRef } from 'react';
+import { useEffect, useRef, type MutableRefObject } from 'react';
 import videojsImport from 'video.js';
 import type { PlayerControlsType } from '../settings.js';
 
@@ -28,6 +28,18 @@ type VideoJsFactory = (element: HTMLVideoElement, options: typeof VIDEOJS_OPTION
 
 const videojs = videojsImport as unknown as VideoJsFactory;
 
+function disposeVideoJsPlayer(
+  playerRef: MutableRefObject<VideoJsPlayer | null>,
+  playerElementRef: MutableRefObject<HTMLVideoElement | null>,
+) {
+  const player = playerRef.current;
+  if (player && !player.isDisposed()) {
+    player.dispose();
+  }
+  playerRef.current = null;
+  playerElementRef.current = null;
+}
+
 function sizePlayer(player: VideoJsPlayer) {
   const playerEl = player.el();
   playerEl.style.width = '100%';
@@ -48,19 +60,13 @@ export function useVideoJsControls(
 
   useEffect(() => {
     const video = videoElement;
-    if (!video) return;
-
-    const disposePlayer = () => {
-      const player = playerRef.current;
-      if (player && !player.isDisposed()) {
-        player.dispose();
-      }
-      playerRef.current = null;
-      playerElementRef.current = null;
-    };
+    if (!video) {
+      disposeVideoJsPlayer(playerRef, playerElementRef);
+      return;
+    }
 
     if (playerElementRef.current && playerElementRef.current !== video) {
-      disposePlayer();
+      disposeVideoJsPlayer(playerRef, playerElementRef);
     }
 
     if (controlsType === 'videojs') {
@@ -78,20 +84,12 @@ export function useVideoJsControls(
       sizePlayer(player);
       player.controls(true);
       player.responsive(true);
-      return;
+      return () => {
+        disposeVideoJsPlayer(playerRef, playerElementRef);
+      };
     }
 
-    disposePlayer();
+    disposeVideoJsPlayer(playerRef, playerElementRef);
     video.controls = true;
   }, [controlsType, videoElement]);
-
-  useEffect(() => {
-    return () => {
-      const player = playerRef.current;
-      if (player && !player.isDisposed()) {
-        player.dispose();
-      }
-      playerRef.current = null;
-    };
-  }, []);
 }

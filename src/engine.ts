@@ -418,6 +418,13 @@ export class PlaysVideoEngine extends EventTarget {
     this.startSourcePipeline(input.source);
   }
 
+  private clearMediaElement(): void {
+    this.video.pause();
+    this.video.removeAttribute('src');
+    this.video.srcObject = null;
+    this.video.load();
+  }
+
   private reset(detail: LoadingDetail): void {
     if (this.hls) {
       this.hls.destroy();
@@ -432,10 +439,7 @@ export class PlaysVideoEngine extends EventTarget {
       URL.revokeObjectURL(this._blobUrl);
       this._blobUrl = null;
     }
-    if (this._passthrough) {
-      this.video.removeAttribute('src');
-      this.video.load();
-    }
+    this.clearMediaElement();
 
     this.playlist = null;
     this.initData = null;
@@ -557,10 +561,7 @@ export class PlaysVideoEngine extends EventTarget {
       URL.revokeObjectURL(this._blobUrl);
       this._blobUrl = null;
     }
-    if (this._passthrough) {
-      this.video.removeAttribute('src');
-      this.video.load();
-    }
+    this.clearMediaElement();
     this.removeSubtitleTracks();
     if (this._sourceSegmentAbort) {
       this._sourceSegmentAbort.abort();
