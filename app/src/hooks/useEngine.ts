@@ -1,6 +1,6 @@
 import { useRef, useState, useEffect, useCallback, type MutableRefObject } from 'react';
 import { PlaysVideoEngine } from 'playsvideo';
-import type { CatalogEntry, PlaybackEntry } from '../db';
+import type { CatalogEntry, PlaybackEntry, WatchState } from '../db';
 import { useSetting } from './useSetting.js';
 import { getFile, setFolder } from '../scan.js';
 import { folderProvider, isFileAccessPermissionError } from '../folder-provider.js';
@@ -45,6 +45,17 @@ interface UseEngineResult {
   copyDiagnostics: () => Promise<void>;
   diagnosticsStatus: string;
   savePosition: (reason?: SaveReason) => Promise<void>;
+}
+
+interface PlaybackSaveTarget {
+  deviceId: string;
+  playbackKey: string;
+}
+
+interface PlaybackSaveOptions {
+  playbackTarget: PlaybackSaveTarget | null;
+  previousWatchState: WatchState;
+  onSaved: (playback: PlaybackEntry) => void;
 }
 
 function pushDiagnosticEvent(
@@ -142,16 +153,17 @@ export function useEngine(
   const savePositionForVideo = useCallback(async (
     video: HTMLVideoElement | null,
     reason: SaveReason = 'passive',
+    options?: PlaybackSaveOptions,
   ) => {
-    const currentEntry = entryRef.current;
-    const currentPlaybackTarget = playbackTargetRef.current;
-    if (!currentEntry || !currentPlaybackTarget || !video) return;
+    const currentPlaybackTarget = options?.playbackTarget ?? playbackTargetRef.current;
+    if (!currentPlaybackTarget || !video) return;
     const currentTime = video.currentTime;
     const duration = video.duration;
 
     if (Number.isNaN(duration) || duration <= 0) return;
 
-    const previousWatchState = playbackRef.current?.watchState ?? 'unwatched';
+    const previousWatchState =
+      options?.previousWatchState ?? playbackRef.current?.watchState ?? 'unwatched';
     const watchState = deriveWatchState({
       currentTime,
       duration,
@@ -166,7 +178,11 @@ export function useEngine(
       watchState,
       lastPlayedAt: Date.now(),
     });
-    playbackRef.current = nextPlayback;
+    if (options) {
+      options.onSaved(nextPlayback);
+    } else {
+      playbackRef.current = nextPlayback;
+    }
   }, []);
 
   const savePosition = useCallback(
@@ -240,6 +256,24 @@ export function useEngine(
 
     videoRef.current = video;
     video.currentTime = 0;
+    let sessionPlayback = playback;
+    const sessionPlaybackTarget = playbackTarget;
+    const saveSessionPosition = async (reason: SaveReason = 'passive') => {
+      await savePositionForVideo(video, reason, {
+        playbackTarget: sessionPlaybackTarget,
+        previousWatchState: sessionPlayback?.watchState ?? 'unwatched',
+        onSaved: (nextPlayback) => {
+          sessionPlayback = nextPlayback;
+          const currentPlaybackTarget = playbackTargetRef.current;
+          if (
+            currentPlaybackTarget?.deviceId === nextPlayback.deviceId &&
+            currentPlaybackTarget.playbackKey === nextPlayback.playbackKey
+          ) {
+            playbackRef.current = nextPlayback;
+          }
+        },
+      });
+    };
     const engine = new PlaysVideoEngine(video, {
       embeddedSubtitlePolicy,
     });
@@ -288,7 +322,7 @@ export function useEngine(
           `currentTime=${sessionResume.positionSec.toFixed(3)}`,
         );
       } else if (entry) {
-        const resumePlayback = playbackRef.current;
+        const resumePlayback = sessionPlayback;
         if (resumePlayback?.positionSec > 0 && resumePlayback.watchState === 'in-progress') {
           video.currentTime = resumePlayback.positionSec;
           pushDiagnosticEvent(
@@ -355,7 +389,7 @@ export function useEngine(
 
     engine.addEventListener('file-stale', (() => {
       pushDiagnosticEvent(diagnosticsRef, 'engine:file-stale', 'Re-acquiring file...');
-      const currentEntry = entryRef.current;
+      const currentEntry = entry;
       if (!currentEntry) return;
       getFile(currentEntry, { requestPermission: false })
         .then((freshFile) => {
@@ -386,14 +420,14 @@ export function useEngine(
     const onPause = () => {
       logVideoEvent('video:pause');
       if (entry) {
-        savePosition().then(() => scheduleSyncIfLoggedIn());
+        saveSessionPosition().then(() => scheduleSyncIfLoggedIn());
       }
     };
     const onEnded = () => {
       logVideoEvent('video:ended');
       setHasEnded(true);
       if (entry) {
-        savePosition().then(() => scheduleSyncIfLoggedIn());
+        saveSessionPosition().then(() => scheduleSyncIfLoggedIn());
       }
     };
     const onPlay = () => setHasEnded(false);
@@ -410,7 +444,7 @@ export function useEngine(
     video.addEventListener('ended', onEnded);
     video.addEventListener('error', onVideoError);
 
-    const interval = entry ? setInterval(savePosition, 5000) : null;
+    const interval = entry ? setInterval(saveSessionPosition, 5000) : null;
 
     (async () => {
       if (file) {
@@ -454,7 +488,7 @@ export function useEngine(
     return () => {
       rememberSessionResumePosition(video, sourceKey);
       if (entry) {
-        savePositionForVideo(video).then(() => scheduleSyncIfLoggedIn());
+        saveSessionPosition().then(() => scheduleSyncIfLoggedIn());
       }
       if (interval) clearInterval(interval);
       video.removeEventListener('playing', onPlaying);
@@ -476,7 +510,6 @@ export function useEngine(
     reloadKey,
     externalVideoElement,
     rememberSessionResumePosition,
-    savePosition,
     savePositionForVideo,
   ]);
 

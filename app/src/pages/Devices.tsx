@@ -140,6 +140,18 @@ function formatEntryTitle(syncKey: string, entry: SyncEntry): string {
   return base;
 }
 
+function buildResumeState(syncKey: string, entry: SyncEntry) {
+  return {
+    resumePlayback: {
+      playbackKey: syncKey,
+      positionSec: entry.position,
+      durationSec: entry.durationSec,
+      watchState: entry.watchState,
+      lastPlayedAt: entry.watchedAt,
+    },
+  };
+}
+
 function DeviceEntryRow({
   syncKey,
   entry,
@@ -194,7 +206,11 @@ function DeviceEntryRow({
 
   if (localEntryId != null) {
     return (
-      <Link to={`/play/${localEntryId}`} className={className}>
+      <Link
+        to={`/play/${localEntryId}`}
+        state={buildResumeState(syncKey, entry)}
+        className={className}
+      >
         {content}
       </Link>
     );

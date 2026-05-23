@@ -259,4 +259,78 @@ describe('Player', () => {
       null,
     );
   });
+
+  it('uses route resume playback over a newer local playback row', async () => {
+    const entry = makeCatalogEntry();
+    const localPlayback = makePlaybackEntry({
+      positionSec: 900,
+      lastPlayedAt: 1_000,
+      updatedAt: 1_000,
+    });
+    const routeResumePlayback = makePlaybackEntry({
+      deviceId: 'phone',
+      positionSec: 600,
+      lastPlayedAt: 500,
+      updatedAt: 500,
+    });
+
+    useLiveQueryMock
+      .mockReturnValueOnce(entry)
+      .mockReturnValueOnce([entry])
+      .mockReturnValueOnce('device-1')
+      .mockReturnValueOnce(localPlayback);
+
+    const html = renderToStaticMarkup(
+      createElement(
+        MemoryRouter,
+        {
+          initialEntries: [
+            {
+              pathname: '/play/1',
+              state: {
+                resumePlayback: {
+                  playbackKey: routeResumePlayback.playbackKey,
+                  positionSec: routeResumePlayback.positionSec,
+                  durationSec: routeResumePlayback.durationSec,
+                  watchState: routeResumePlayback.watchState,
+                  lastPlayedAt: routeResumePlayback.lastPlayedAt,
+                },
+              },
+            },
+          ],
+        },
+        createElement(
+          Routes,
+          null,
+          createElement(Route, {
+            path: '/play/:id',
+            element: createElement(Player),
+          }),
+        ),
+      ),
+    );
+
+    expect(html).not.toContain('Loading...');
+    expect(useEngineMock).toHaveBeenCalledWith(
+      {
+        kind: 'entry',
+        entry,
+        playback: {
+          deviceId: 'device-1',
+          playbackKey: 'file:Episode.mkv|1000',
+          positionSec: 600,
+          durationSec: 3600,
+          watchState: 'in-progress',
+          lastPlayedAt: 500,
+          updatedAt: 500,
+        },
+        playbackTarget: {
+          deviceId: 'device-1',
+          playbackKey: 'file:Episode.mkv|1000',
+        },
+      },
+      'stock',
+      null,
+    );
+  });
 });

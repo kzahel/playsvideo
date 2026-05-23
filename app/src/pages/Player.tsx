@@ -65,10 +65,8 @@ function selectInitialPlayback(input: {
       : null;
 
   if (!input.localPlayback) return routePlayback;
-  if (!routePlayback) return input.localPlayback;
-  return routePlayback.lastPlayedAt > input.localPlayback.lastPlayedAt
-    ? routePlayback
-    : input.localPlayback;
+  if (routePlayback) return routePlayback;
+  return input.localPlayback;
 }
 
 function magnetWithFileIndex(entry: CatalogEntry): string {
