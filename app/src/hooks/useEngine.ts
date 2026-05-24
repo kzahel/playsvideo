@@ -258,6 +258,28 @@ export function useEngine(
     video.currentTime = 0;
     let sessionPlayback = playback;
     const sessionPlaybackTarget = playbackTarget;
+    let pendingStartPosition:
+      | {
+          positionSec: number;
+          diagnosticLabel: string;
+        }
+      | null = null;
+    const applyStartPosition = (positionSec: number, diagnosticLabel: string) => {
+      pendingStartPosition = {
+        positionSec,
+        diagnosticLabel,
+      };
+      try {
+        video.currentTime = positionSec;
+      } catch {
+        return;
+      }
+      pushDiagnosticEvent(
+        diagnosticsRef,
+        diagnosticLabel,
+        `currentTime=${positionSec.toFixed(3)}`,
+      );
+    };
     const saveSessionPosition = async (reason: SaveReason = 'passive') => {
       await savePositionForVideo(video, reason, {
         playbackTarget: sessionPlaybackTarget,
@@ -314,23 +336,17 @@ export function useEngine(
 
       const sessionResume = sessionResumeRef.current;
       if (sessionResume?.sourceKey === sourceKey && sessionResume.positionSec > 0) {
-        video.currentTime = sessionResume.positionSec;
+        applyStartPosition(sessionResume.positionSec, 'video:restore-position');
         sessionResumeRef.current = null;
-        pushDiagnosticEvent(
-          diagnosticsRef,
-          'video:restore-position',
-          `currentTime=${sessionResume.positionSec.toFixed(3)}`,
-        );
       } else if (entry) {
         const resumePlayback = sessionPlayback;
         if (resumePlayback?.positionSec > 0 && resumePlayback.watchState === 'in-progress') {
-          video.currentTime = resumePlayback.positionSec;
-          pushDiagnosticEvent(
-            diagnosticsRef,
-            'video:resume-position',
-            `currentTime=${resumePlayback.positionSec.toFixed(3)}`,
-          );
+          applyStartPosition(resumePlayback.positionSec, 'video:resume-position');
+        } else {
+          applyStartPosition(0, 'video:start-position');
         }
+      } else {
+        applyStartPosition(0, 'video:start-position');
       }
     }) as EventListener);
 
@@ -417,6 +433,18 @@ export function useEngine(
     const onStalled = () => logVideoEvent('video:stalled');
     const onSeeking = () => logVideoEvent('video:seeking');
     const onSeeked = () => logVideoEvent('video:seeked');
+    const onLoadedMetadata = () => {
+      const startPosition = pendingStartPosition;
+      logVideoEvent('video:loadedmetadata');
+      if (!startPosition) return;
+      video.currentTime = startPosition.positionSec;
+      pendingStartPosition = null;
+      pushDiagnosticEvent(
+        diagnosticsRef,
+        startPosition.diagnosticLabel,
+        `currentTime=${startPosition.positionSec.toFixed(3)}`,
+      );
+    };
     const onPause = () => {
       logVideoEvent('video:pause');
       if (entry) {
@@ -440,6 +468,7 @@ export function useEngine(
     video.addEventListener('stalled', onStalled);
     video.addEventListener('seeking', onSeeking);
     video.addEventListener('seeked', onSeeked);
+    video.addEventListener('loadedmetadata', onLoadedMetadata);
     video.addEventListener('pause', onPause);
     video.addEventListener('ended', onEnded);
     video.addEventListener('error', onVideoError);
@@ -497,6 +526,7 @@ export function useEngine(
       video.removeEventListener('stalled', onStalled);
       video.removeEventListener('seeking', onSeeking);
       video.removeEventListener('seeked', onSeeked);
+      video.removeEventListener('loadedmetadata', onLoadedMetadata);
       video.removeEventListener('pause', onPause);
       video.removeEventListener('ended', onEnded);
       video.removeEventListener('error', onVideoError);

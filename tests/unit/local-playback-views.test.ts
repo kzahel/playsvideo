@@ -72,9 +72,11 @@ describe('local-playback-views', () => {
     expect(result).toEqual({
       id: 1,
       name: 'My Video',
+      playbackKey: 'file:video.mkv|1000',
       watchState: 'in-progress',
       durationSec: 3600,
       playbackPositionSec: 120,
+      lastPlayedAt: 100,
     });
   });
 });

@@ -2,11 +2,23 @@ import { NavLink } from 'react-router-dom';
 import { useLiveQuery } from 'dexie-react-hooks';
 import { db } from '../db';
 import { getDeviceId } from '../device.js';
-import { getNowPlayingView } from '../local-playback-views.js';
+import { getNowPlayingView, type NowPlayingView } from '../local-playback-views.js';
 
 interface SidebarProps {
   open: boolean;
   onClose: () => void;
+}
+
+function buildResumeState(nowPlaying: NowPlayingView) {
+  return {
+    resumePlayback: {
+      playbackKey: nowPlaying.playbackKey,
+      positionSec: nowPlaying.playbackPositionSec,
+      durationSec: nowPlaying.durationSec,
+      watchState: nowPlaying.watchState,
+      lastPlayedAt: nowPlaying.lastPlayedAt,
+    },
+  };
 }
 
 export function Sidebar({ open, onClose }: SidebarProps) {
@@ -53,7 +65,12 @@ export function Sidebar({ open, onClose }: SidebarProps) {
         {nowPlaying && (
           <div className="sidebar-now-playing">
             <div className="sidebar-section-label">Now Playing</div>
-            <NavLink to={`/play/${nowPlaying.id}`} onClick={onClose} className="sidebar-now-playing-link">
+            <NavLink
+              to={`/play/${nowPlaying.id}`}
+              state={buildResumeState(nowPlaying)}
+              onClick={onClose}
+              className="sidebar-now-playing-link"
+            >
               <span className="sidebar-now-playing-name">{nowPlaying.name}</span>
               {(nowPlaying.seasonNumber != null || nowPlaying.episodeNumber != null) && (
                 <span className="sidebar-now-playing-episode">

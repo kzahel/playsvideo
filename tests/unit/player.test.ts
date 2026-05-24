@@ -191,6 +191,150 @@ describe('Player', () => {
     expect(useEngineMock).toHaveBeenCalledWith(null, 'stock', null);
   });
 
+  it('waits when the playback lookup still contains the previous episode row', async () => {
+    const entry = makeCatalogEntry({
+      id: 2,
+      name: 'Episode 2.mkv',
+      path: 'shows/show/episode-2.mkv',
+      episodeNumber: 2,
+      canonicalPlaybackKey: 'file:Episode2.mkv|1000',
+    });
+    const stalePlayback = makePlaybackEntry({
+      playbackKey: 'file:Episode1.mkv|1000',
+      positionSec: 1520,
+    });
+
+    useLiveQueryMock
+      .mockReturnValueOnce(entry)
+      .mockReturnValueOnce([entry])
+      .mockReturnValueOnce('device-1')
+      .mockReturnValueOnce(stalePlayback);
+
+    const html = renderToStaticMarkup(
+      createElement(
+        MemoryRouter,
+        { initialEntries: ['/play/2'] },
+        createElement(
+          Routes,
+          null,
+          createElement(Route, {
+            path: '/play/:id',
+            element: createElement(Player),
+          }),
+        ),
+      ),
+    );
+
+    expect(html).toContain('Loading...');
+    expect(useEngineMock).toHaveBeenCalledWith(null, 'stock', null);
+  });
+
+  it('uses the route entry while the catalog lookup still contains the previous episode', async () => {
+    const previousEntry = makeCatalogEntry();
+    const nextEntry = makeCatalogEntry({
+      id: 2,
+      name: 'Episode 2.mkv',
+      path: 'shows/show/episode-2.mkv',
+      episodeNumber: 2,
+      canonicalPlaybackKey: 'file:Episode2.mkv|1000',
+    });
+
+    useLiveQueryMock
+      .mockReturnValueOnce(previousEntry)
+      .mockReturnValueOnce([previousEntry, nextEntry])
+      .mockReturnValueOnce('device-1')
+      .mockReturnValueOnce(null);
+
+    const html = renderToStaticMarkup(
+      createElement(
+        MemoryRouter,
+        {
+          initialEntries: [
+            {
+              pathname: '/play/2',
+              state: { entry: nextEntry, startAtBeginning: true },
+            },
+          ],
+        },
+        createElement(
+          Routes,
+          null,
+          createElement(Route, {
+            path: '/play/:id',
+            element: createElement(Player),
+          }),
+        ),
+      ),
+    );
+
+    expect(html).not.toContain('Loading...');
+    expect(useEngineMock).toHaveBeenCalledWith(
+      {
+        kind: 'entry',
+        entry: nextEntry,
+        playback: null,
+        playbackTarget: {
+          deviceId: 'device-1',
+          playbackKey: 'file:Episode2.mkv|1000',
+        },
+      },
+      'stock',
+      null,
+    );
+  });
+
+  it('starts next-episode route navigation at the beginning even when playback exists', async () => {
+    const entry = makeCatalogEntry();
+    const playback = makePlaybackEntry({
+      positionSec: 900,
+      lastPlayedAt: 1_000,
+      updatedAt: 1_000,
+    });
+
+    useLiveQueryMock
+      .mockReturnValueOnce(entry)
+      .mockReturnValueOnce([entry])
+      .mockReturnValueOnce('device-1')
+      .mockReturnValueOnce(playback);
+
+    const html = renderToStaticMarkup(
+      createElement(
+        MemoryRouter,
+        {
+          initialEntries: [
+            {
+              pathname: '/play/1',
+              state: { entry, startAtBeginning: true },
+            },
+          ],
+        },
+        createElement(
+          Routes,
+          null,
+          createElement(Route, {
+            path: '/play/:id',
+            element: createElement(Player),
+          }),
+        ),
+      ),
+    );
+
+    expect(html).not.toContain('Loading...');
+    expect(useEngineMock).toHaveBeenCalledWith(
+      {
+        kind: 'entry',
+        entry,
+        playback: null,
+        playbackTarget: {
+          deviceId: 'device-1',
+          playbackKey: 'file:Episode.mkv|1000',
+        },
+      },
+      'stock',
+      null,
+    );
+  });
+
   it('uses route resume playback when no local playback exists', async () => {
     const entry = makeCatalogEntry();
     const resumePlayback = makePlaybackEntry({
@@ -249,6 +393,74 @@ describe('Player', () => {
           watchState: 'in-progress',
           lastPlayedAt: 500,
           updatedAt: 500,
+        },
+        playbackTarget: {
+          deviceId: 'device-1',
+          playbackKey: 'file:Episode.mkv|1000',
+        },
+      },
+      'stock',
+      null,
+    );
+  });
+
+  it('uses route resume playback without waiting for a local playback lookup', async () => {
+    const entry = makeCatalogEntry();
+    const resumePlayback = makePlaybackEntry({
+      positionSec: 420,
+      lastPlayedAt: 700,
+      updatedAt: 700,
+    });
+
+    useLiveQueryMock
+      .mockReturnValueOnce(entry)
+      .mockReturnValueOnce([entry])
+      .mockReturnValueOnce('device-1')
+      .mockImplementationOnce((_: unknown, __: unknown, defaultResult: unknown) => defaultResult);
+
+    const html = renderToStaticMarkup(
+      createElement(
+        MemoryRouter,
+        {
+          initialEntries: [
+            {
+              pathname: '/play/1',
+              state: {
+                resumePlayback: {
+                  playbackKey: resumePlayback.playbackKey,
+                  positionSec: resumePlayback.positionSec,
+                  durationSec: resumePlayback.durationSec,
+                  watchState: resumePlayback.watchState,
+                  lastPlayedAt: resumePlayback.lastPlayedAt,
+                },
+              },
+            },
+          ],
+        },
+        createElement(
+          Routes,
+          null,
+          createElement(Route, {
+            path: '/play/:id',
+            element: createElement(Player),
+          }),
+        ),
+      ),
+    );
+
+    expect(html).not.toContain('Loading...');
+    expect(useEngineMock).toHaveBeenCalledWith(
+      {
+        kind: 'entry',
+        entry,
+        playback: {
+          deviceId: 'device-1',
+          playbackKey: 'file:Episode.mkv|1000',
+          positionSec: 420,
+          durationSec: 3600,
+          watchState: 'in-progress',
+          lastPlayedAt: 700,
+          updatedAt: 700,
         },
         playbackTarget: {
           deviceId: 'device-1',

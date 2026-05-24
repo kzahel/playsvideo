@@ -27,6 +27,7 @@ type RouteResumePlayback = Pick<
 interface PlayerRouteState {
   entry?: CatalogEntry | null;
   resumePlayback?: RouteResumePlayback | null;
+  startAtBeginning?: boolean;
 }
 
 function isPlayerRouteState(value: unknown): value is PlayerRouteState {
@@ -54,7 +55,10 @@ function selectInitialPlayback(input: {
   routeResumePlayback: RouteResumePlayback | null;
   deviceId: string | null;
   playbackKey: string | null;
+  startAtBeginning?: boolean;
 }): PlaybackEntry | null {
+  if (input.startAtBeginning) return null;
+
   const routePlayback =
     input.routeResumePlayback && input.playbackKey
       ? routeResumeToPlaybackEntry({
@@ -67,6 +71,23 @@ function selectInitialPlayback(input: {
   if (!input.localPlayback) return routePlayback;
   if (routePlayback) return routePlayback;
   return input.localPlayback;
+}
+
+function nextEpisodeRouteState(entry: CatalogEntry): PlayerRouteState {
+  return { entry, startAtBeginning: true };
+}
+
+function isPlaybackForTarget(
+  playback: PlaybackEntry | null | undefined,
+  input: { deviceId: string | null; playbackKey: string | null },
+): playback is PlaybackEntry {
+  return (
+    playback != null &&
+    input.deviceId != null &&
+    input.playbackKey != null &&
+    playback.deviceId === input.deviceId &&
+    playback.playbackKey === input.playbackKey
+  );
 }
 
 function magnetWithFileIndex(entry: CatalogEntry): string {
@@ -170,10 +191,13 @@ export function Player() {
   );
   const entries = useLiveQuery(() => db.catalog.toArray(), [], []);
   const deviceId = useLiveQuery(() => getDeviceId(), [], PLAYER_QUERY_PENDING);
-  const resolvedEntry = entry === PLAYER_QUERY_PENDING ? routeEntry : entry;
+  const entryLookupPending =
+    entry === PLAYER_QUERY_PENDING || (entry != null && entry.id !== entryId);
+  const resolvedEntry = entryLookupPending ? routeEntry : entry;
   const deviceIdPending = deviceId === PLAYER_QUERY_PENDING || deviceId === '';
   const resolvedDeviceId = deviceIdPending ? null : deviceId;
   const playbackKey = resolvedEntry?.canonicalPlaybackKey ?? null;
+  const startAtBeginning = routeState?.startAtBeginning === true;
   const localPlayback = useLiveQuery(
     () =>
       resolvedDeviceId && playbackKey
@@ -184,9 +208,21 @@ export function Player() {
   );
   const routeResumePlayback =
     routeState?.resumePlayback?.playbackKey === playbackKey ? routeState.resumePlayback : null;
+  const localPlaybackForTarget =
+    localPlayback !== PLAYER_QUERY_PENDING &&
+    isPlaybackForTarget(localPlayback, { deviceId: resolvedDeviceId, playbackKey })
+      ? localPlayback
+      : null;
+  const staleLocalPlayback =
+    localPlayback !== PLAYER_QUERY_PENDING &&
+    localPlayback != null &&
+    !isPlaybackForTarget(localPlayback, { deviceId: resolvedDeviceId, playbackKey });
   const playbackLookupPending =
     Boolean(resolvedEntry && resolvedEntry.hasLocalFile !== false && playbackKey) &&
-    (deviceIdPending || localPlayback === PLAYER_QUERY_PENDING);
+    (deviceIdPending ||
+      (!startAtBeginning &&
+        !routeResumePlayback &&
+        (localPlayback === PLAYER_QUERY_PENDING || staleLocalPlayback)));
   const selectedPlayback =
     localPlayback === PLAYER_QUERY_PENDING
       ? selectInitialPlayback({
@@ -194,12 +230,14 @@ export function Player() {
           routeResumePlayback,
           deviceId: resolvedDeviceId,
           playbackKey,
+          startAtBeginning,
         })
       : selectInitialPlayback({
-          localPlayback: localPlayback ?? null,
+          localPlayback: localPlaybackForTarget,
           routeResumePlayback,
           deviceId: resolvedDeviceId,
           playbackKey,
+          startAtBeginning,
         });
   const {
     status,
@@ -271,7 +309,7 @@ export function Player() {
     }
 
     savePosition('next-episode').then(() => {
-      navigate(`/play/${nextEpisode.id}`, { state: { entry: nextEpisode } });
+      navigate(`/play/${nextEpisode.id}`, { state: nextEpisodeRouteState(nextEpisode) });
     });
   }, [autoplayNextEpisode, hasEnded, navigate, nextEpisode, savePosition]);
 
@@ -319,7 +357,7 @@ export function Player() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [resolvedEntry, siblingSubtitleKey, phase]);
 
-  if ((entry === PLAYER_QUERY_PENDING && !routeEntry) || playbackLookupPending) {
+  if ((entryLookupPending && !routeEntry) || playbackLookupPending) {
     return <div className="player-page">Loading...</div>;
   }
 
@@ -371,7 +409,9 @@ export function Player() {
                 className="player-episode-nav-link"
                 onClick={() => {
                   void savePosition('next-episode').then(() => {
-                    navigate(`/play/${nextEpisode.id}`, { state: { entry: nextEpisode } });
+                    navigate(`/play/${nextEpisode.id}`, {
+                      state: nextEpisodeRouteState(nextEpisode),
+                    });
                   });
                 }}
               >
@@ -419,26 +459,32 @@ export function Player() {
       )}
       {previousEpisode || nextEpisode ? (
         <div className="player-episode-nav">
-        {previousEpisode ? (
-          <Link
-            to={`/play/${previousEpisode.id}`}
-            state={{ entry: previousEpisode }}
-            className="btn btn-secondary"
-          >
-            Previous Episode: {formatEpisodeCode(previousEpisode)}
-          </Link>
-        ) : (
-          <span className="player-episode-nav-spacer" />
-        )}
-        {nextEpisode ? (
-          <Link
-            to={`/play/${nextEpisode.id}`}
-            state={{ entry: nextEpisode }}
-            className="btn btn-secondary"
-          >
-            Next Episode: {formatEpisodeCode(nextEpisode)}
-          </Link>
-        ) : null}
+          {previousEpisode ? (
+            <Link
+              to={`/play/${previousEpisode.id}`}
+              state={{ entry: previousEpisode }}
+              className="btn btn-secondary"
+            >
+              Previous Episode: {formatEpisodeCode(previousEpisode)}
+            </Link>
+          ) : (
+            <span className="player-episode-nav-spacer" />
+          )}
+          {nextEpisode ? (
+            <button
+              type="button"
+              className="btn btn-secondary"
+              onClick={() => {
+                void savePosition('next-episode').then(() => {
+                  navigate(`/play/${nextEpisode.id}`, {
+                    state: nextEpisodeRouteState(nextEpisode),
+                  });
+                });
+              }}
+            >
+              Next Episode: {formatEpisodeCode(nextEpisode)}
+            </button>
+          ) : null}
         </div>
       ) : null}
       <div className="player-actions">
@@ -503,7 +549,9 @@ export function Player() {
             className="btn btn-primary"
             onClick={() => {
               void savePosition('next-episode').then(() => {
-                navigate(`/play/${nextEpisode.id}`, { state: { entry: nextEpisode } });
+                navigate(`/play/${nextEpisode.id}`, {
+                  state: nextEpisodeRouteState(nextEpisode),
+                });
               });
             }}
           >

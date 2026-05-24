@@ -10,11 +10,13 @@ export interface CatalogPlaybackView extends CatalogEntry {
 export interface NowPlayingView {
   id: number;
   name: string;
+  playbackKey: string;
   seasonNumber?: number;
   episodeNumber?: number;
   watchState: WatchState;
   durationSec: number;
   playbackPositionSec: number;
+  lastPlayedAt: number;
 }
 
 export function applyLocalPlaybackToCatalogEntries(input: {
@@ -70,10 +72,12 @@ export function getNowPlayingView(input: {
   return {
     id,
     name: catalogEntry?.parsedTitle ?? catalogEntry?.name ?? playback.playbackKey,
+    playbackKey: playback.playbackKey,
     seasonNumber: catalogEntry?.seasonNumber,
     episodeNumber: catalogEntry?.episodeNumber,
     watchState: playback.watchState,
     durationSec: playback.durationSec,
     playbackPositionSec: playback.positionSec,
+    lastPlayedAt: playback.lastPlayedAt,
   };
 }
