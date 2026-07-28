@@ -4,23 +4,39 @@ All notable changes to the Chrome extension are documented here.
 
 ## [Unreleased]
 
-### Changed
-
-- Temporarily disabled and hid Video.js controls in favor of native browser controls to prevent detached players from continuing playback after switching modes.
+## [0.5.0] - 2026-07-28
 
 ### Added
-- Full catalog, shows, movies, activity, devices, and settings routes
-- Offline capability declaration
+
+- A full offline media catalog with persistent folders, grouped shows and
+  movies, activity, devices, and settings.
+- Persistent episode-specific thumbnails generated locally with WebCodecs and
+  stored in IndexedDB for offline use.
+- A child-friendly large-card catalog with 16:9 thumbnails, plain-language
+  episode labels, playback progress, and preserved compact-row and sortable-list
+  layouts.
+- Resume, previous/next episode navigation, and next-episode autoplay.
+- Embedded and sibling subtitle discovery with improved language labels and
+  extraction progress.
+- Optional sign-in and per-device playback-history synchronization.
+- Offline capability declaration.
 
 ### Changed
-- Autoplay next episode is enabled by default
+
+- Enabled next-episode autoplay by default.
+- Use native browser video controls while the Video.js lifecycle path remains
+  disabled, preventing detached players from continuing after navigation or a
+  control-mode change.
+- Reworked scanning and playback state around durable catalog rows and retained
+  folder access.
 
 ### Fixed
-- MV3 module service worker registration
-- Extension CSP violations caused by inline theme initialization
-- Extension startup device initialization
-- Release-resolution tags being parsed as multi-episode ranges
-- Autoplay skipping an episode during route transitions
+
+- MV3 module service worker registration and extension CSP violations.
+- Offline startup, device initialization, and route handling.
+- Resume-position, next-episode, and player teardown races.
+- Release-resolution tags being parsed as multi-episode ranges.
+- Sparse MKV cue handling and playback gaps around segment boundaries.
 
 ## [0.1.0] - 2026-03-08
 
