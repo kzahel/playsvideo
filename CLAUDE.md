@@ -138,6 +138,12 @@ If testing on physical Chromebook/ChromeOS hardware, read and follow
 ~/code/chromeos-testbed/bin/chromeos doctor
 ```
 
+For PlaysVideo-specific device state and workflows, also read
+`~/code/dotfiles/projects/playsvideo-chromebook-offline-media.md`. It is the
+runbook for building and deploying the extension, reopening it after reload,
+managing the test media, retaining folder permission, and validating offline
+playback.
+
 ## Rebuilding ffmpeg.wasm (audio-only)
 
 The audio-only bundle is built via Docker on the desktop machine. To rebuild after changing `ffmpegbuild/Dockerfile.ffmpeg-audio`:
