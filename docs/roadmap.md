@@ -26,7 +26,7 @@ Small features that make the player feel complete. These are the "why would I sw
 
 The app has a library with folder scanning and watch state. These features make it a real media manager.
 
-- **Library thumbnails** — generate thumbnails via `VideoDecoder` single-frame capture, store in IndexedDB. The grid is text-only right now.
+- **Library thumbnails** — generate persistent episode thumbnails with a WebCodecs worker and use TMDB stills when available. See the [Chromebook offline kids media plan](chromebook-offline-kids-plan.md) for the worker, cache, intro-detection, ChromeOS validation, and kid-UI plan.
 - **Search / filter / sort** — filter by name, sort by date/size/watch state. Essential once libraries get large.
 - **Playlists** — create, reorder, and manage playlists in IndexedDB. Play next automatically.
 - **Responsive sidebar** — permanent on desktop, hamburger drawer on mobile.
