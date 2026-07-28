@@ -13,11 +13,49 @@ describe('parseMediaMetadata', () => {
   });
 
   it('ignores release tags after the episode code', () => {
-    expect(parseMediaMetadata('Sample.Show.S01E07.1080p.WEB-DL.x265.mkv')).toMatchObject({
+    expect(parseMediaMetadata('Sample.Show.S01E07.1080p.WEB-DL.x265.mkv')).toEqual({
       detectedMediaType: 'tv',
       parsedTitle: 'Sample Show',
+      parsedYear: undefined,
       seasonNumber: 1,
       episodeNumber: 7,
+      endingEpisodeNumber: undefined,
+      seriesMetadataKey: 'tv:sample show:',
+    });
+  });
+
+  it('does not mistake Bluey 720p release tags for an episode range', () => {
+    expect(
+      parseMediaMetadata('Season 01/Bluey.S01E01.720p.DSNP.WEBRip.x264-GalaxyTV.mkv'),
+    ).toMatchObject({
+      detectedMediaType: 'tv',
+      parsedTitle: 'Bluey',
+      seasonNumber: 1,
+      episodeNumber: 1,
+      endingEpisodeNumber: undefined,
+    });
+  });
+
+  it('does not mistake a hyphenated resolution tag for an episode range', () => {
+    expect(parseMediaMetadata('Bluey.S01E01-720p.WEBRip.mkv')).toMatchObject({
+      detectedMediaType: 'tv',
+      parsedTitle: 'Bluey',
+      seasonNumber: 1,
+      episodeNumber: 1,
+      endingEpisodeNumber: undefined,
+    });
+  });
+
+  it.each([
+    ['Sample.Show.S01E07-E08.mkv', 8],
+    ['Sample.Show.S01E07-08.mkv', 8],
+    ['Sample Show 1x07-08.mkv', 8],
+  ])('parses multi-episode filename %s', (filename, endingEpisodeNumber) => {
+    expect(parseMediaMetadata(filename)).toMatchObject({
+      detectedMediaType: 'tv',
+      seasonNumber: 1,
+      episodeNumber: 7,
+      endingEpisodeNumber,
     });
   });
 

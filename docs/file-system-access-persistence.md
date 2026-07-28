@@ -13,14 +13,31 @@ The app uses the File System Access API (`showDirectoryPicker`) to access local 
 
 | Platform | Handle persists | Permission persists | User experience |
 |---|---|---|---|
+| ChromeOS MV3 extension | Yes (IDB) | Yes, after choosing "Allow on every visit" | Pick once, then grant persistent access once |
 | Desktop Chrome (installed PWA) | Yes (IDB) | Yes — "allow all the time" option | Best: silent access after initial grant |
 | Desktop Chrome (website) | Yes (IDB) | Per-session — must click "allow" | Must re-grant each session |
 | Mobile Chrome (installed PWA) | Yes (IDB) | Per-session — must tap "allow" | No "allow all the time" option available |
 | Mobile Chrome (website) | Yes (IDB) | Per-session — must tap "allow" | Same as mobile PWA |
 | Firefox / Safari | N/A — falls back to `<input webkitdirectory>` | None — files are in-memory only | Must re-pick folder every session |
 
+### Validated ChromeOS extension flow
+
+Tested with an unpacked MV3 extension on ChromeOS 150:
+
+1. Choose the media folder and accept the initial "view and copy files" confirmation.
+2. The directory handle is stored in IndexedDB, but reopening the extension initially reports
+   `queryPermission({ mode: 'read' }) === 'prompt'`.
+3. Click **Grant File Access** and choose **Allow on every visit** in Chrome's permission dialog.
+4. Permission then remains `granted` across extension-page close/reopen and
+   `chrome.runtime.reload()`.
+
+The extension can keep using the standard File System Access API. Legacy Chrome App filesystem
+or media-gallery APIs are not required for this flow.
+
 ## Key Takeaways
 
+- On ChromeOS, the MV3 extension supports persistent access after the explicit
+  **Allow on every visit** grant.
 - On mobile Chrome, PWA vs regular website makes **no difference** for folder persistence. Both require tapping "allow" every session.
 - On desktop Chrome, installing as a PWA unlocks the "allow all the time" persistent permission.
 - The `FileSystemDirectoryHandle` always persists in IndexedDB (on Chromium). The bottleneck is the permission grant, not the handle.

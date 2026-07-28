@@ -175,7 +175,7 @@ export function Player() {
   );
   const controlsType = normalizePlayerControlsType(storedControlsType);
   const { setVideoHostElement, videoElement } = usePlaybackVideoElement(controlsType);
-  const [autoplayNextEpisode] = useSetting<boolean>(AUTOPLAY_NEXT_EPISODE_KEY, false);
+  const [autoplayNextEpisode] = useSetting<boolean>(AUTOPLAY_NEXT_EPISODE_KEY, true);
   const routeState = isPlayerRouteState(location.state) ? location.state : null;
   const routeEntry =
     routeState &&

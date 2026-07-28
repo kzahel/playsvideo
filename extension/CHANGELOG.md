@@ -4,6 +4,20 @@ All notable changes to the Chrome extension are documented here.
 
 ## [Unreleased]
 
+### Added
+- Full catalog, shows, movies, activity, devices, and settings routes
+- Offline capability declaration
+
+### Changed
+- Autoplay next episode is enabled by default
+
+### Fixed
+- MV3 module service worker registration
+- Extension CSP violations caused by inline theme initialization
+- Extension startup device initialization
+- Release-resolution tags being parsed as multi-episode ranges
+- Autoplay skipping an episode during route transitions
+
 ## [0.1.0] - 2026-03-08
 
 ### Added

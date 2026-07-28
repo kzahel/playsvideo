@@ -136,7 +136,7 @@ export function useEngine(
   const sessionResumeRef = useRef<{ sourceKey: string; positionSec: number } | null>(null);
   const [status, setStatus] = useState('');
   const [phase, setPhase] = useState('idle');
-  const [hasEnded, setHasEnded] = useState(false);
+  const [endedSourceKey, setEndedSourceKey] = useState<string | null>(null);
   const [subtitleStatus, setSubtitleStatus] = useState('');
   const [diagnosticsStatus, setDiagnosticsStatus] = useState('');
   const [needsPermission, setNeedsPermission] = useState(false);
@@ -313,7 +313,7 @@ export function useEngine(
     engine.addEventListener('loading', ((e: CustomEvent) => {
       setStatus(`Opening ${e.detail.file?.name ?? ''}...`);
       setPhase('demuxing');
-      setHasEnded(false);
+      setEndedSourceKey(null);
       setSubtitleStatus('');
       pushDiagnosticEvent(
         diagnosticsRef,
@@ -326,7 +326,7 @@ export function useEngine(
       const mode = e.detail.passthrough ? 'direct playback' : `${e.detail.totalSegments} segments`;
       setStatus(`Ready \u2014 ${mode}`);
       setPhase('ready');
-      setHasEnded(false);
+      setEndedSourceKey(null);
       readyDetailRef.current = e.detail;
       pushDiagnosticEvent(
         diagnosticsRef,
@@ -453,12 +453,12 @@ export function useEngine(
     };
     const onEnded = () => {
       logVideoEvent('video:ended');
-      setHasEnded(true);
+      setEndedSourceKey(sourceKey);
       if (entry) {
         saveSessionPosition().then(() => scheduleSyncIfLoggedIn());
       }
     };
-    const onPlay = () => setHasEnded(false);
+    const onPlay = () => setEndedSourceKey(null);
     const onVideoError = () =>
       pushDiagnosticEvent(diagnosticsRef, 'video:error', formatMediaError(video.error) ?? 'unknown');
 
@@ -599,7 +599,7 @@ export function useEngine(
     videoRef,
     status,
     phase,
-    hasEnded,
+    hasEnded: sourceKey != null && endedSourceKey === sourceKey,
     needsPermission,
     retryPermission,
     subtitleStatus,

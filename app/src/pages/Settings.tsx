@@ -35,7 +35,7 @@ export function Settings() {
   const controlsType = normalizePlayerControlsType(storedControlsType);
   const [autoplayNextEpisode, setAutoplayNextEpisode] = useSetting<boolean>(
     AUTOPLAY_NEXT_EPISODE_KEY,
-    false,
+    true,
   );
   const [embeddedSubtitlePolicy, setEmbeddedSubtitlePolicy] = useSetting<EmbeddedSubtitlePolicy>(
     EMBEDDED_SUBTITLE_POLICY_KEY,

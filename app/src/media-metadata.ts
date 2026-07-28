@@ -1,13 +1,13 @@
 import type { DetectedMediaType } from './db.js';
 
 const EPISODE_PATTERNS = [
-  /^(?<series>.+?)[\s._-]+s(?<season>\d{1,2})[\s._-]*e(?<episode>\d{1,3})(?:[\s._-]*(?:e|ep)?(?<ending>\d{1,3}))?/i,
-  /^(?<series>.+?)[\s._-]+(?<season>\d{1,2})x(?<episode>\d{1,3})(?:[\s._-]*(?<ending>\d{1,3}))?/i,
+  /^(?<series>.+?)[\s._-]+s(?<season>\d{1,2})[\s._-]*e(?<episode>\d{1,3})(?:(?:[\s._-]*(?:e|ep)(?<ending>\d{1,3}))|(?:-(?<bareEnding>\d{1,3})(?!\d|p\b)))?/i,
+  /^(?<series>.+?)[\s._-]+(?<season>\d{1,2})x(?<episode>\d{1,3})(?:(?:[\s._-]*(?:e|ep)(?<ending>\d{1,3}))|(?:-(?<bareEnding>\d{1,3})(?!\d|p\b)))?/i,
 ];
 
 const BARE_EPISODE_PATTERNS = [
-  /\bs(?<season>\d{1,2})[\s._-]*e(?<episode>\d{1,3})(?:[\s._-]*(?:e|ep)?(?<ending>\d{1,3}))?/i,
-  /\b(?<season>\d{1,2})x(?<episode>\d{1,3})(?:[\s._-]*(?<ending>\d{1,3}))?/i,
+  /\bs(?<season>\d{1,2})[\s._-]*e(?<episode>\d{1,3})(?:(?:[\s._-]*(?:e|ep)(?<ending>\d{1,3}))|(?:-(?<bareEnding>\d{1,3})(?!\d|p\b)))?/i,
+  /\b(?<season>\d{1,2})x(?<episode>\d{1,3})(?:(?:[\s._-]*(?:e|ep)(?<ending>\d{1,3}))|(?:-(?<bareEnding>\d{1,3})(?!\d|p\b)))?/i,
 ];
 
 const SEASON_FOLDER_PATTERN = /^(?:season|series)\s*\d+|s\d{1,2}|specials?$/i;
@@ -95,7 +95,9 @@ export function parseMediaMetadata(path: string): ParsedMediaMetadata {
       parsedYear,
       seasonNumber,
       episodeNumber,
-      endingEpisodeNumber: parseOptionalNumber(match.groups.ending),
+      endingEpisodeNumber: parseOptionalNumber(
+        match.groups.ending ?? match.groups.bareEnding,
+      ),
       seriesMetadataKey: buildSeriesMetadataKey(extracted.title, parsedYear),
     };
   }
@@ -112,7 +114,9 @@ export function parseMediaMetadata(path: string): ParsedMediaMetadata {
       parsedYear: fallback.year,
       seasonNumber: parseOptionalNumber(match.groups.season),
       episodeNumber: parseOptionalNumber(match.groups.episode),
-      endingEpisodeNumber: parseOptionalNumber(match.groups.ending),
+      endingEpisodeNumber: parseOptionalNumber(
+        match.groups.ending ?? match.groups.bareEnding,
+      ),
       seriesMetadataKey: buildSeriesMetadataKey(fallback.title, fallback.year),
     };
   }

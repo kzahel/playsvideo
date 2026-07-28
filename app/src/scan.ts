@@ -226,7 +226,7 @@ function buildCatalogEntry(
     parsedYear: record.parsedYear ?? existing?.parsedYear,
     seasonNumber: record.seasonNumber ?? existing?.seasonNumber,
     episodeNumber: record.episodeNumber ?? existing?.episodeNumber,
-    endingEpisodeNumber: record.endingEpisodeNumber ?? existing?.endingEpisodeNumber,
+    endingEpisodeNumber: record.endingEpisodeNumber,
     seriesMetadataKey: record.seriesMetadataKey ?? existing?.seriesMetadataKey,
     movieMetadataKey: record.movieMetadataKey ?? existing?.movieMetadataKey,
     contentHash: existing?.contentHash,
