@@ -1,6 +1,9 @@
 import { useEffect, useRef, type MutableRefObject } from 'react';
 import videojsImport from 'video.js';
-import type { PlayerControlsType } from '../settings.js';
+import {
+  VIDEOJS_CONTROLS_ENABLED,
+  type PlayerControlsType,
+} from '../settings.js';
 
 const VIDEOJS_OPTIONS = {
   autoplay: true,
@@ -69,7 +72,7 @@ export function useVideoJsControls(
       disposeVideoJsPlayer(playerRef, playerElementRef);
     }
 
-    if (controlsType === 'videojs') {
+    if (VIDEOJS_CONTROLS_ENABLED && controlsType === 'videojs') {
       if (!video.isConnected) return;
 
       video.controls = false;

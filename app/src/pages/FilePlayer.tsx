@@ -9,6 +9,7 @@ import {
   normalizePlayerControlsType,
   PLAYER_CONTROLS_TYPE_KEY,
   type PlayerControlsType,
+  VIDEOJS_CONTROLS_ENABLED,
 } from '../settings.js';
 
 export function FilePlayer() {
@@ -116,12 +117,14 @@ export function FilePlayer() {
         <div className="pv-video-host" ref={setVideoHostElement} />
       </div>
       <div className="player-actions">
-        <button
-          className="btn btn-secondary"
-          onClick={() => setControlsType(controlsType === 'stock' ? 'videojs' : 'stock')}
-        >
-          {controlsType === 'stock' ? 'Video.js controls' : 'Stock controls'}
-        </button>
+        {VIDEOJS_CONTROLS_ENABLED ? (
+          <button
+            className="btn btn-secondary"
+            onClick={() => setControlsType(controlsType === 'stock' ? 'videojs' : 'stock')}
+          >
+            {controlsType === 'stock' ? 'Video.js controls' : 'Stock controls'}
+          </button>
+        ) : null}
         <button
           className="btn btn-secondary"
           onClick={() => subtitleInputRef.current?.click()}

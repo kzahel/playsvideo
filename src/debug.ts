@@ -3,6 +3,7 @@ import { PlaysVideoEngine } from './engine.js';
 import { bindExternalSubtitlePicker } from './external-subtitle-picker.js';
 import videojsImport from 'video.js';
 import 'video.js/dist/video-js.css';
+import { VIDEOJS_CONTROLS_ENABLED } from './feature-flags.js';
 
 const fileInput = document.getElementById('file-input') as HTMLInputElement;
 const subtitleInput = document.getElementById('subtitle-input') as HTMLInputElement;
@@ -469,7 +470,9 @@ type VideoJsFactory = (element: HTMLVideoElement, options: typeof VIDEOJS_OPTION
 const videojs = videojsImport as unknown as VideoJsFactory;
 
 function normalizeControlsType(value: unknown): ControlsType {
-  return value === 'videojs' || value === 'custom' ? 'videojs' : 'stock';
+  return VIDEOJS_CONTROLS_ENABLED && (value === 'videojs' || value === 'custom')
+    ? 'videojs'
+    : 'stock';
 }
 
 let controlsType = normalizeControlsType(localStorage.getItem('pv-controls-type'));
@@ -508,11 +511,12 @@ function setVideoVisible(visible: boolean) {
 }
 
 function applyControlsType() {
+  toggleControlsBtn.hidden = !VIDEOJS_CONTROLS_ENABLED;
   toggleControlsBtn.textContent =
     controlsType === 'videojs' ? 'Stock controls' : 'Video.js controls';
   videoContainer.classList.toggle('pv-videojs-container', controlsType === 'videojs');
   if (!videoReady) return;
-  if (controlsType === 'videojs') {
+  if (VIDEOJS_CONTROLS_ENABLED && controlsType === 'videojs') {
     video.removeAttribute('controls');
     const player = getVideoJsPlayer();
     player.controls(true);
@@ -524,6 +528,7 @@ function applyControlsType() {
 }
 
 toggleControlsBtn.addEventListener('click', () => {
+  if (!VIDEOJS_CONTROLS_ENABLED) return;
   controlsType = controlsType === 'stock' ? 'videojs' : 'stock';
   localStorage.setItem('pv-controls-type', controlsType);
   applyControlsType();

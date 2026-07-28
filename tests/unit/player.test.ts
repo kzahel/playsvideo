@@ -121,6 +121,7 @@ describe('Player', () => {
 
     expect(html).not.toContain('Loading...');
     expect(html).toContain('pv-video-host');
+    expect(html).not.toContain('Video.js controls');
     expect(useEngineMock).toHaveBeenCalledWith(
       {
         kind: 'entry',

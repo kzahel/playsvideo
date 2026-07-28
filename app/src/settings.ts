@@ -1,6 +1,10 @@
+import { VIDEOJS_CONTROLS_ENABLED } from '../../src/feature-flags.js';
+
 export type ThemePreference = 'system' | 'light' | 'dark';
 export type EmbeddedSubtitlePolicy = 'auto' | 'off';
 export type PlayerControlsType = 'stock' | 'videojs';
+
+export { VIDEOJS_CONTROLS_ENABLED };
 
 export const THEME_PREFERENCE_KEY = 'ui-theme-preference';
 export const THEME_PREFERENCE_STORAGE_KEY = 'pv-theme-preference';
@@ -13,7 +17,7 @@ export const CATALOG_VIEW_MODE_KEY = 'catalog-view-mode';
 export type CatalogViewMode = 'card' | 'list';
 
 export function normalizePlayerControlsType(value: unknown): PlayerControlsType {
-  if (value === 'videojs' || value === 'custom') {
+  if (VIDEOJS_CONTROLS_ENABLED && (value === 'videojs' || value === 'custom')) {
     return 'videojs';
   }
 

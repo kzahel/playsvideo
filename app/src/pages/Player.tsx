@@ -15,6 +15,7 @@ import {
   normalizePlayerControlsType,
   PLAYER_CONTROLS_TYPE_KEY,
   type PlayerControlsType,
+  VIDEOJS_CONTROLS_ENABLED,
 } from '../settings.js';
 
 const PLAYER_QUERY_PENDING = Symbol('player-query-pending');
@@ -488,12 +489,14 @@ export function Player() {
         </div>
       ) : null}
       <div className="player-actions">
-        <button
-          className="btn btn-secondary"
-          onClick={() => setControlsType(controlsType === 'stock' ? 'videojs' : 'stock')}
-        >
-          {controlsType === 'stock' ? 'Video.js controls' : 'Stock controls'}
-        </button>
+        {VIDEOJS_CONTROLS_ENABLED ? (
+          <button
+            className="btn btn-secondary"
+            onClick={() => setControlsType(controlsType === 'stock' ? 'videojs' : 'stock')}
+          >
+            {controlsType === 'stock' ? 'Video.js controls' : 'Stock controls'}
+          </button>
+        ) : null}
         <button
           className="btn btn-secondary"
           onClick={() => subtitleInputRef.current?.click()}

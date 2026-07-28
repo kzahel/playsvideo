@@ -20,6 +20,7 @@ import {
   type PlayerControlsType,
   type ThemePreference,
   THEME_PREFERENCE_KEY,
+  VIDEOJS_CONTROLS_ENABLED,
 } from '../settings.js';
 
 export function Settings() {
@@ -102,21 +103,25 @@ export function Settings() {
         <div className="settings-card-header">
           <div>
             <h2>Playback</h2>
-            <p className="settings-card-copy">Set which control overlay the player should use.</p>
+            <p className="settings-card-copy">Configure video playback behavior.</p>
           </div>
         </div>
-        <label className="metadata-settings-label" htmlFor="player-controls-preference">
-          Player controls
-        </label>
-        <select
-          id="player-controls-preference"
-          className="metadata-settings-input"
-          value={controlsType}
-          onChange={(event) => setControlsType(event.target.value as PlayerControlsType)}
-        >
-          <option value="stock">Native browser controls</option>
-          <option value="videojs">Video.js controls</option>
-        </select>
+        {VIDEOJS_CONTROLS_ENABLED ? (
+          <>
+            <label className="metadata-settings-label" htmlFor="player-controls-preference">
+              Player controls
+            </label>
+            <select
+              id="player-controls-preference"
+              className="metadata-settings-input"
+              value={controlsType}
+              onChange={(event) => setControlsType(event.target.value as PlayerControlsType)}
+            >
+              <option value="stock">Native browser controls</option>
+              <option value="videojs">Video.js controls</option>
+            </select>
+          </>
+        ) : null}
         <label className="metadata-settings-checkbox">
           <input
             type="checkbox"

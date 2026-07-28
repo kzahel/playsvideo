@@ -4,6 +4,10 @@ All notable changes to the Chrome extension are documented here.
 
 ## [Unreleased]
 
+### Changed
+
+- Temporarily disabled and hid Video.js controls in favor of native browser controls to prevent detached players from continuing playback after switching modes.
+
 ### Added
 - Full catalog, shows, movies, activity, devices, and settings routes
 - Offline capability declaration
