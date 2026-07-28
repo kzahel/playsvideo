@@ -9,6 +9,8 @@ import { getDeviceId } from '../device.js';
 import { applyLocalPlaybackToCatalogEntries } from '../local-playback-views.js';
 import { SHOW_METADATA_DEBUG_KEY } from '../metadata/settings.js';
 import { CATALOG_VIEW_MODE_KEY, type CatalogViewMode } from '../settings.js';
+import { getLocalThumbnailCacheKey } from '../thumbnails/cache.js';
+import { useThumbnailGeneration } from '../hooks/useThumbnailGeneration.js';
 
 export function Catalog() {
   const deviceId = useLiveQuery(() => getDeviceId(), []);
@@ -28,6 +30,22 @@ export function Catalog() {
   const seriesMetadata = useLiveQuery(() => db.seriesMetadata.toArray());
   const [showMetadataDebug] = useSetting<boolean>(SHOW_METADATA_DEBUG_KEY, false);
   const [viewMode, setViewMode] = useSetting<CatalogViewMode>(CATALOG_VIEW_MODE_KEY, 'card');
+  const thumbnailKeySignature =
+    entries
+      ?.map((entry) => getLocalThumbnailCacheKey(entry))
+      .filter((key): key is string => key != null)
+      .join('\n') ?? '';
+  const thumbnails = useLiveQuery(async () => {
+    if (!entries) {
+      return [];
+    }
+    const keys = entries
+      .map((entry) => getLocalThumbnailCacheKey(entry))
+      .filter((key): key is string => key != null);
+    return await db.thumbnailCache.bulkGet(keys);
+  }, [thumbnailKeySignature]);
+
+  useThumbnailGeneration(entries);
 
   const handleRemoveFolder = async (directoryId: number) => {
     try {
@@ -37,13 +55,24 @@ export function Catalog() {
     }
   };
 
-  if (entries === undefined || directories === undefined || seriesMetadata === undefined || deviceId === undefined) {
+  if (
+    entries === undefined ||
+    directories === undefined ||
+    seriesMetadata === undefined ||
+    deviceId === undefined ||
+    thumbnails === undefined
+  ) {
     return <div className="empty-state">Loading...</div>;
   }
 
   const hasDirectories = directories.length > 0;
   const multiFolder = isExtension();
   const metadataByKey = new Map(seriesMetadata.map((entry) => [entry.key, entry]));
+  const thumbnailByCatalogId = new Map(
+    thumbnails.flatMap((thumbnail) =>
+      thumbnail ? [[thumbnail.catalogId, thumbnail] as const] : [],
+    ),
+  );
   const hasTmdbMetadata = seriesMetadata.some((entry) => entry.status === 'resolved');
 
   return (
@@ -124,6 +153,7 @@ export function Catalog() {
                   key={entry.id}
                   entry={entry}
                   seriesMetadata={entry.seriesMetadataKey ? metadataByKey.get(entry.seriesMetadataKey) : undefined}
+                  thumbnail={thumbnailByCatalogId.get(entry.id)}
                   showMetadataDebug={showMetadataDebug}
                 />
               ))}

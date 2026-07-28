@@ -11,6 +11,9 @@ export default defineConfig({
       playsvideo: path.resolve(__dirname, '../src/index.ts'),
     },
   },
+  worker: {
+    format: 'es',
+  },
   server: {
     port: 9300,
     host: '0.0.0.0',

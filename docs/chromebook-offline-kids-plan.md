@@ -37,7 +37,7 @@ extension launch, and playback test on the actual family/travel Chromebook.
 
 | Priority | Thread | Status | Next outcome |
 |---|---|---|---|
-| P0 | Episode thumbnails | Not implemented | Persistent, episode-specific offline thumbnails with local-video fallback |
+| P0 | Episode thumbnails | Stage A implemented and hardware validated | Finish edge-case checks, then evaluate show-level intro detection |
 | P1 | TMDB in the extension | Diagnosed, not fixed | Bundle a working public application credential and verify Bluey metadata on ChromeOS |
 | P1 | Kid-sized catalog UI | Partially present | A true large-card mode with large touch targets and readable episode labels |
 | P1 | Sidebar behavior | Not implemented | Keep navigation visible when the window has room; use a drawer only on small screens |
@@ -151,6 +151,24 @@ candidate timestamps:
 This is intentionally simpler than automatic intro detection. It establishes
 that decoding, persistence, invalidation, and UI rendering are reliable on
 ChromeOS.
+
+Stage A was implemented and validated on the physical test Chromebook on
+2026-07-28:
+
+- all 141 Bluey episodes produced ready local-video thumbnails with zero
+  failures;
+- the 141 cached WebP blobs occupied 1,804,674 bytes in IndexedDB;
+- navigating to playback held the cache count steady, and returning to the
+  catalog resumed the queue to completion;
+- a full unpacked-extension unload/reload preserved the exact record count,
+  creation timestamps, and byte total without regeneration;
+- a visual sample spanning all three seasons avoided black frames, opening title
+  cards, and closing credits.
+
+The remaining Stage A device checks are reboot and Wi-Fi-off persistence, actual
+single-file mutation invalidation, and a corrupt/unsupported-file bounded
+failure. Cache-key invalidation and black/low-detail frame rejection have unit
+coverage.
 
 #### Stage B: show-level intro detection
 
@@ -338,4 +356,3 @@ that exactly one video element exists and no detached media continues playing.
 7. Add TMDB hard expiry and attribution UI.
 8. Release and validate the Web Store update.
 9. Deploy to the family Chromebook and pass the cold offline checklist.
-

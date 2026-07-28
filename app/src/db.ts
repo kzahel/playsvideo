@@ -8,6 +8,7 @@ export type MetadataCredentialSlot = 'primary' | 'standby';
 export type MetadataTransportStatus = 'healthy' | 'cooldown' | 'invalid';
 export type CatalogAvailability = 'present' | 'missing';
 export type PlaybackKeySource = 'file' | 'hash' | 'torrent' | 'tmdb';
+export type ThumbnailSource = 'local-video' | 'tmdb';
 
 export interface SeriesMetadataSearchCandidate {
   id: number;
@@ -211,6 +212,33 @@ export interface MetadataTransportStateEntry {
   updatedAt: number;
 }
 
+interface ThumbnailCacheBase {
+  key: string;
+  catalogId: number;
+  source: ThumbnailSource;
+  createdAt: number;
+  generatorVersion: number;
+  retryAfter?: number;
+  debugReason?: string;
+}
+
+export interface ReadyThumbnailCacheEntry extends ThumbnailCacheBase {
+  status: 'ready';
+  blob: Blob;
+  width: number;
+  height: number;
+  selectedTimestampSec: number;
+  expiresAt?: number;
+}
+
+export interface FailedThumbnailCacheEntry extends ThumbnailCacheBase {
+  status: 'failed';
+}
+
+export type ThumbnailCacheEntry =
+  | ReadyThumbnailCacheEntry
+  | FailedThumbnailCacheEntry;
+
 class PlaysVideoDB extends Dexie {
   catalog!: EntityTable<CatalogEntry, 'id'>;
   playback!: Table<PlaybackEntry, [string, string]>;
@@ -224,6 +252,7 @@ class PlaysVideoDB extends Dexie {
   metadataParseCache!: EntityTable<MetadataParseCacheEntry, 'key'>;
   metadataSeasonCache!: EntityTable<MetadataSeasonCacheEntry, 'key'>;
   metadataTransportState!: EntityTable<MetadataTransportStateEntry, 'key'>;
+  thumbnailCache!: EntityTable<ThumbnailCacheEntry, 'key'>;
 
   constructor() {
     super('playsvideo');
@@ -326,6 +355,23 @@ class PlaysVideoDB extends Dexie {
       metadataParseCache: 'key, path, lastModified, parsedAt',
       metadataSeasonCache: 'key, seriesMetadataKey, tmdbSeriesId, seasonNumber, fetchedAt, status',
       metadataTransportState: 'key, transport, credentialSlot, status, cooldownUntil, updatedAt',
+    });
+    this.version(11).stores({
+      catalog:
+        '++id, directoryId, path, name, availability, lastSeenAt, firstMissingAt, detectedMediaType, parsedTitle, seriesMetadataKey, movieMetadataKey, canonicalPlaybackKey, contentHash, torrentInfoHash, hasLocalFile, [directoryId+path], [torrentInfoHash+torrentFileIndex]',
+      playback: '[deviceId+playbackKey], deviceId, playbackKey, watchState, lastPlayedAt, updatedAt',
+      remotePlayback:
+        '[deviceId+playbackKey], deviceId, playbackKey, watchState, lastPlayedAt, updatedAt',
+      catalogAliases: '[catalogId+playbackKey], catalogId, playbackKey, source, createdAt',
+      directories: '++id, name',
+      playlists: '++id, name',
+      settings: 'key',
+      seriesMetadata: 'key, tmdbId, fetchedAt, query',
+      movieMetadata: 'key, tmdbId, fetchedAt, query',
+      metadataParseCache: 'key, path, lastModified, parsedAt',
+      metadataSeasonCache: 'key, seriesMetadataKey, tmdbSeriesId, seasonNumber, fetchedAt, status',
+      metadataTransportState: 'key, transport, credentialSlot, status, cooldownUntil, updatedAt',
+      thumbnailCache: 'key, catalogId, source, status, [catalogId+source]',
     });
   }
 }

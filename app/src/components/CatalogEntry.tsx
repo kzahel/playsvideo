@@ -1,6 +1,7 @@
 import { useState, useRef, useEffect } from 'react';
 import { Link } from 'react-router-dom';
-import type { SeriesMetadataEntry } from '../db';
+import type { SeriesMetadataEntry, ThumbnailCacheEntry } from '../db';
+import { useObjectUrl } from '../hooks/useObjectUrl.js';
 import type { CatalogPlaybackView } from '../local-playback-views.js';
 
 function formatSize(bytes: number): string {
@@ -26,6 +27,7 @@ const BADGE_LABEL: Record<string, string> = {
 interface Props {
   entry: CatalogPlaybackView;
   seriesMetadata?: SeriesMetadataEntry;
+  thumbnail?: ThumbnailCacheEntry;
   showMetadataDebug?: boolean;
 }
 
@@ -125,8 +127,16 @@ function DebugModal({
   );
 }
 
-export function CatalogEntryCard({ entry, seriesMetadata, showMetadataDebug = false }: Props) {
+export function CatalogEntryCard({
+  entry,
+  seriesMetadata,
+  thumbnail,
+  showMetadataDebug = false,
+}: Props) {
   const [debugOpen, setDebugOpen] = useState(false);
+  const localThumbnailUrl = useObjectUrl(
+    thumbnail?.status === 'ready' ? thumbnail.blob : undefined,
+  );
   const isInProgress =
     entry.watchState === 'in-progress' && entry.durationSec > 0;
   const progressPct = isInProgress
@@ -135,6 +145,7 @@ export function CatalogEntryCard({ entry, seriesMetadata, showMetadataDebug = fa
   const displayTitle = seriesMetadata?.name ?? entry.parsedTitle ?? entry.name;
   const episodeLabel = formatEpisodeLabel(entry);
   const posterUrl = seriesMetadata?.posterUrl ?? seriesMetadata?.backdropUrl;
+  const artworkUrl = localThumbnailUrl ?? posterUrl;
   const artLabel = seriesMetadata?.name ?? entry.parsedTitle ?? entry.name;
   const showFilename = displayTitle !== entry.name;
 
@@ -148,8 +159,13 @@ export function CatalogEntryCard({ entry, seriesMetadata, showMetadataDebug = fa
         className={`catalog-entry${isVirtual ? ' catalog-entry-virtual' : ''}`}
       >
         <div className="catalog-entry-thumb">
-          {posterUrl ? (
-            <img src={posterUrl} alt={artLabel} loading="lazy" />
+          {artworkUrl ? (
+            <img
+              src={artworkUrl}
+              alt={artLabel}
+              loading="lazy"
+              data-thumbnail-source={localThumbnailUrl ? 'local-video' : 'series-artwork'}
+            />
           ) : (
             <div className="catalog-entry-thumb-fallback">{buildInitials(artLabel)}</div>
           )}
