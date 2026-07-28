@@ -129,6 +129,15 @@ pnpm -w run deploy         # both
 - `scripts/deploy.sh` — uploads built files to R2 bucket with correct content types
 - `worker/index.js` — Cloudflare Worker that serves files from R2 and handles caching (no-cache for HTML/SW/manifest, immutable for hashed assets). No COOP/COEP headers needed (see `docs/no-shared-array-buffer.md`)
 
+## ChromeOS Hardware Testing
+
+If testing on physical Chromebook/ChromeOS hardware, read and follow
+`~/code/chromeos-testbed/skills/SKILL.md`. Start with:
+
+```bash
+~/code/chromeos-testbed/bin/chromeos doctor
+```
+
 ## Rebuilding ffmpeg.wasm (audio-only)
 
 The audio-only bundle is built via Docker on the desktop machine. To rebuild after changing `ffmpegbuild/Dockerfile.ffmpeg-audio`:
