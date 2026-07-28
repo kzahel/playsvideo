@@ -29,6 +29,7 @@ interface Props {
   seriesMetadata?: SeriesMetadataEntry;
   thumbnail?: ThumbnailCacheEntry;
   showMetadataDebug?: boolean;
+  variant: 'card' | 'compact';
 }
 
 function formatEpisodeLabel(entry: CatalogPlaybackView): string | null {
@@ -38,6 +39,18 @@ function formatEpisodeLabel(entry: CatalogPlaybackView): string | null {
 
   const ending = entry.endingEpisodeNumber != null ? `-E${String(entry.endingEpisodeNumber).padStart(2, '0')}` : '';
   return `S${String(entry.seasonNumber).padStart(2, '0')}E${String(entry.episodeNumber).padStart(2, '0')}${ending}`;
+}
+
+function formatFriendlyEpisodeLabel(entry: CatalogPlaybackView): string | null {
+  if (entry.detectedMediaType !== 'tv' || entry.seasonNumber == null || entry.episodeNumber == null) {
+    return null;
+  }
+
+  const episode =
+    entry.endingEpisodeNumber == null
+      ? `Episode ${entry.episodeNumber}`
+      : `Episodes ${entry.episodeNumber}\u2013${entry.endingEpisodeNumber}`;
+  return `Season ${entry.seasonNumber} \u00b7 ${episode}`;
 }
 
 function buildInitials(value: string): string {
@@ -132,6 +145,7 @@ export function CatalogEntryCard({
   seriesMetadata,
   thumbnail,
   showMetadataDebug = false,
+  variant,
 }: Props) {
   const [debugOpen, setDebugOpen] = useState(false);
   const localThumbnailUrl = useObjectUrl(
@@ -144,9 +158,11 @@ export function CatalogEntryCard({
     : 0;
   const displayTitle = seriesMetadata?.name ?? entry.parsedTitle ?? entry.name;
   const episodeLabel = formatEpisodeLabel(entry);
+  const friendlyEpisodeLabel = formatFriendlyEpisodeLabel(entry);
   const posterUrl = seriesMetadata?.posterUrl ?? seriesMetadata?.backdropUrl;
   const artworkUrl = localThumbnailUrl ?? posterUrl;
   const artLabel = seriesMetadata?.name ?? entry.parsedTitle ?? entry.name;
+  const accessibleLabel = episodeLabel ? `${artLabel} ${episodeLabel}` : artLabel;
   const showFilename = displayTitle !== entry.name;
 
   const isVirtual = entry.hasLocalFile === false;
@@ -156,13 +172,14 @@ export function CatalogEntryCard({
       <Link
         to={`/play/${entry.id}`}
         state={{ entry }}
-        className={`catalog-entry${isVirtual ? ' catalog-entry-virtual' : ''}`}
+        className={`catalog-entry catalog-entry-${variant}${isVirtual ? ' catalog-entry-virtual' : ''}`}
+        aria-label={`Play ${accessibleLabel}`}
       >
         <div className="catalog-entry-thumb">
           {artworkUrl ? (
             <img
               src={artworkUrl}
-              alt={artLabel}
+              alt={accessibleLabel}
               loading="lazy"
               data-thumbnail-source={localThumbnailUrl ? 'local-video' : 'series-artwork'}
             />
@@ -172,18 +189,38 @@ export function CatalogEntryCard({
         </div>
         <div className="catalog-entry-info">
           <div className="catalog-entry-title">
-            {episodeLabel ? <span className="catalog-entry-episode">{episodeLabel}</span> : null}
-            {displayTitle}
+            {variant === 'card' ? (
+              <>
+                <span className="catalog-entry-name">{displayTitle}</span>
+                {friendlyEpisodeLabel ? (
+                  <span className="catalog-entry-episode">{friendlyEpisodeLabel}</span>
+                ) : null}
+              </>
+            ) : (
+              <>
+                {episodeLabel ? (
+                  <span className="catalog-entry-episode">{episodeLabel}</span>
+                ) : null}
+                {displayTitle}
+              </>
+            )}
           </div>
           <div className="catalog-entry-meta">
             {isVirtual
               ? (entry.torrentComplete ? 'Available via torrent' : 'Not downloaded')
-              : <>
-                  {showFilename ? <>{entry.name}{' \u00b7 '}</> : null}
-                  {formatSize(entry.size)}
-                  {entry.durationSec > 0 ? ` \u00b7 ${formatTime(entry.durationSec)}` : ''}
-                  {isInProgress ? ` \u00b7 ${formatTime(entry.playbackPositionSec)}` : ''}
-                </>
+              : variant === 'card'
+                ? <>
+                    {entry.durationSec > 0 ? formatTime(entry.durationSec) : 'Ready to play'}
+                    {isInProgress
+                      ? ` \u00b7 Continue at ${formatTime(entry.playbackPositionSec)}`
+                      : ''}
+                  </>
+                : <>
+                    {showFilename ? <>{entry.name}{' \u00b7 '}</> : null}
+                    {formatSize(entry.size)}
+                    {entry.durationSec > 0 ? ` \u00b7 ${formatTime(entry.durationSec)}` : ''}
+                    {isInProgress ? ` \u00b7 ${formatTime(entry.playbackPositionSec)}` : ''}
+                  </>
             }
           </div>
         </div>

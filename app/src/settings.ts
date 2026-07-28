@@ -14,7 +14,15 @@ export const AUTOPLAY_NEXT_EPISODE_KEY = 'playback-autoplay-next-episode';
 export const AUTO_RESCAN_DETAIL_PAGES_KEY = 'scan-auto-rescan-detail-pages';
 export const EMBEDDED_SUBTITLE_POLICY_KEY = 'subtitle-embedded-policy';
 export const CATALOG_VIEW_MODE_KEY = 'catalog-view-mode';
-export type CatalogViewMode = 'card' | 'list';
+export type CatalogViewMode = 'card' | 'compact' | 'list';
+
+export function normalizeCatalogViewMode(value: unknown): CatalogViewMode {
+  if (value === 'compact' || value === 'list') {
+    return value;
+  }
+
+  return 'card';
+}
 
 export function normalizePlayerControlsType(value: unknown): PlayerControlsType {
   if (VIDEOJS_CONTROLS_ENABLED && (value === 'videojs' || value === 'custom')) {

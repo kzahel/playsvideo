@@ -8,7 +8,11 @@ import { isExtension } from '../context.js';
 import { getDeviceId } from '../device.js';
 import { applyLocalPlaybackToCatalogEntries } from '../local-playback-views.js';
 import { SHOW_METADATA_DEBUG_KEY } from '../metadata/settings.js';
-import { CATALOG_VIEW_MODE_KEY, type CatalogViewMode } from '../settings.js';
+import {
+  CATALOG_VIEW_MODE_KEY,
+  normalizeCatalogViewMode,
+  type CatalogViewMode,
+} from '../settings.js';
 import { getLocalThumbnailCacheKey } from '../thumbnails/cache.js';
 import { useThumbnailGeneration } from '../hooks/useThumbnailGeneration.js';
 
@@ -29,7 +33,12 @@ export function Catalog() {
   const directories = useLiveQuery(() => db.directories.toArray());
   const seriesMetadata = useLiveQuery(() => db.seriesMetadata.toArray());
   const [showMetadataDebug] = useSetting<boolean>(SHOW_METADATA_DEBUG_KEY, false);
-  const [viewMode, setViewMode] = useSetting<CatalogViewMode>(CATALOG_VIEW_MODE_KEY, 'card');
+  const [storedViewMode, setStoredViewMode] = useSetting<unknown>(
+    CATALOG_VIEW_MODE_KEY,
+    'card',
+  );
+  const viewMode = normalizeCatalogViewMode(storedViewMode);
+  const setViewMode = (nextViewMode: CatalogViewMode) => setStoredViewMode(nextViewMode);
   const thumbnailKeySignature =
     entries
       ?.map((entry) => getLocalThumbnailCacheKey(entry))
@@ -111,13 +120,13 @@ export function Catalog() {
 
       {entries.length > 0 && (
         <>
-          <div className="catalog-view-toggle">
+          <div className="catalog-view-toggle" role="group" aria-label="Catalog layout">
             <button
               type="button"
               className={`view-toggle-btn${viewMode === 'card' ? ' active' : ''}`}
               onClick={() => setViewMode('card')}
-              title="Card view"
-              aria-label="Card view"
+              title="Large cards"
+              aria-label="Large cards"
             >
               <svg width="16" height="16" viewBox="0 0 16 16" fill="currentColor">
                 <rect x="1" y="1" width="6" height="4" rx="1" />
@@ -127,6 +136,27 @@ export function Catalog() {
                 <rect x="1" y="13" width="6" height="2" rx="1" />
                 <rect x="9" y="13" width="6" height="2" rx="1" />
               </svg>
+              <span>Cards</span>
+            </button>
+            <button
+              type="button"
+              className={`view-toggle-btn${viewMode === 'compact' ? ' active' : ''}`}
+              onClick={() => setViewMode('compact')}
+              title="Compact rows"
+              aria-label="Compact rows"
+            >
+              <svg width="16" height="16" viewBox="0 0 16 16" fill="currentColor">
+                <rect x="1" y="2" width="4" height="3" rx="0.75" />
+                <rect x="6.5" y="2" width="8.5" height="1.25" rx="0.5" />
+                <rect x="6.5" y="4" width="6" height="1" rx="0.5" />
+                <rect x="1" y="6.5" width="4" height="3" rx="0.75" />
+                <rect x="6.5" y="6.5" width="8.5" height="1.25" rx="0.5" />
+                <rect x="6.5" y="8.5" width="6" height="1" rx="0.5" />
+                <rect x="1" y="11" width="4" height="3" rx="0.75" />
+                <rect x="6.5" y="11" width="8.5" height="1.25" rx="0.5" />
+                <rect x="6.5" y="13" width="6" height="1" rx="0.5" />
+              </svg>
+              <span>Rows</span>
             </button>
             <button
               type="button"
@@ -141,13 +171,14 @@ export function Catalog() {
                 <rect x="1" y="9" width="14" height="1.5" rx="0.5" />
                 <rect x="1" y="12.5" width="14" height="1.5" rx="0.5" />
               </svg>
+              <span>List</span>
             </button>
           </div>
 
           {viewMode === 'list' ? (
             <CatalogListView entries={entries} metadataByKey={metadataByKey} />
           ) : (
-            <div className="catalog-grid">
+            <div className={viewMode === 'compact' ? 'catalog-compact' : 'catalog-grid'}>
               {entries.map((entry) => (
                 <CatalogEntryCard
                   key={entry.id}
@@ -155,6 +186,7 @@ export function Catalog() {
                   seriesMetadata={entry.seriesMetadataKey ? metadataByKey.get(entry.seriesMetadataKey) : undefined}
                   thumbnail={thumbnailByCatalogId.get(entry.id)}
                   showMetadataDebug={showMetadataDebug}
+                  variant={viewMode === 'compact' ? 'compact' : 'card'}
                 />
               ))}
             </div>

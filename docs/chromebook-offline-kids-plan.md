@@ -37,9 +37,9 @@ extension launch, and playback test on the actual family/travel Chromebook.
 
 | Priority | Thread | Status | Next outcome |
 |---|---|---|---|
-| P0 | Episode thumbnails | Stage A implemented and hardware validated | Finish edge-case checks, then evaluate show-level intro detection |
+| P0 | Episode thumbnails | Stage A implemented and hardware validated | Finish edge-case checks; keep intro detection deferred unless quality regresses |
 | P1 | TMDB in the extension | Diagnosed, not fixed | Bundle a working public application credential and verify Bluey metadata on ChromeOS |
-| P1 | Kid-sized catalog UI | Partially present | A true large-card mode with large touch targets and readable episode labels |
+| P1 | Kid-sized catalog UI | Large-card catalog implemented and hardware validated | Pin the sidebar on wide screens and improve episode titles |
 | P1 | Sidebar behavior | Not implemented | Keep navigation visible when the window has room; use a drawer only on small screens |
 | P1 | Signed-out navigation | Not implemented | Local Activity works without an account; hide or explain account-only destinations |
 | P1 | TMDB retention | Not implemented | Refresh normally and hard-expire TMDB-derived content before six months |
@@ -198,9 +198,9 @@ The thumbnail resolver should be shared by:
 - local Activity entries;
 - future large kid-mode cards.
 
-Current “card view” is not a large card grid. It is a compact row with a 48×32
-image. Thumbnail plumbing should work there first, but the later kid UI should
-render substantially larger versions from the same cached blob.
+Card view now renders the cached blobs in a responsive large-card grid. The
+previous 48×32 rows remain available as **Rows**, and the sortable table remains
+available as **List**.
 
 ### Cache lifecycle
 
@@ -268,17 +268,21 @@ This should follow the first local-thumbnail slice rather than block it.
 
 ## 3. Kid-oriented UI
 
-An existing persistent toggle switches between compact card rows and a denser
-table/list. Neither mode is designed for a six-year-old in a moving car.
+The persistent **Cards** mode is now the child-facing default. It uses large
+16:9 thumbnails, plain-language season and episode labels, child-facing playback
+status, and full-card play targets. The existing compact rows and sortable list
+remain available as separate modes.
 
-Add a third, truly large card mode:
+Physical Chromebook validation on 2026-07-28 confirmed:
 
-- default to it in the extension when a local media library is present;
-- use a responsive two- or three-column grid on the Chromebook tablet;
-- use large 16:9 episode thumbnails and at least 44×44 CSS-pixel targets;
-- make the episode number and useful title readable without exposing filenames;
-- keep progress and watched state visually obvious;
-- avoid small icon-only controls for primary actions.
+- three 392-pixel-wide cards per row in the maximized extension window;
+- 44 CSS-pixel layout controls and full-card keyboard/touch targets;
+- all 141 cached local images rendered, including the final lazy-loaded image
+  after scrolling through the full library;
+- all three layouts rendered correctly, and compact-row selection persisted
+  across reload;
+- selecting the final episode started native playback, and returning to the
+  catalog retained card mode.
 
 The sidebar currently starts closed at every width. On a sufficiently wide
 window it should be pinned open and reserve layout space. On small widths it can
@@ -347,12 +351,12 @@ that exactly one video element exists and no detached media continues playing.
 
 ## Recommended execution order
 
-1. Add thumbnail storage, worker generation, and current-row rendering.
-2. Validate generation and persistence using the 141-file Bluey corpus.
-3. Add intro-aware frame selection and regenerate test thumbnails.
-4. Repair the extension TMDB build path and add TMDB-still resolution.
-5. Implement the large kid card mode and responsive pinned sidebar.
-6. Make Activity local-first and clean up signed-out navigation.
+1. Finish thumbnail mutation, failure, reboot, and Wi-Fi-off edge checks.
+2. Add the responsive pinned sidebar and clean up signed-out navigation.
+3. Repair the extension TMDB build path and add TMDB-still resolution.
+4. Improve episode names when a reliable offline source is available.
+5. Keep intro-aware frame selection deferred unless visual quality regresses.
+6. Make Activity local-first.
 7. Add TMDB hard expiry and attribution UI.
 8. Release and validate the Web Store update.
 9. Deploy to the family Chromebook and pass the cold offline checklist.
