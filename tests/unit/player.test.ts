@@ -25,8 +25,8 @@ vi.mock('../../app/src/hooks/useSetting.js', () => ({
   useSetting: useSettingMock,
 }));
 
-vi.mock('../../app/src/hooks/useVideoJsControls.js', () => ({
-  useVideoJsControls: vi.fn(),
+vi.mock('../../app/src/hooks/useSessionPlayerControlsType.js', () => ({
+  useSessionPlayerControlsType: () => 'stock',
 }));
 
 vi.mock('../../app/src/hooks/useFullscreen.js', () => ({
@@ -120,7 +120,7 @@ describe('Player', () => {
     );
 
     expect(html).not.toContain('Loading...');
-    expect(html).toContain('pv-video-host');
+    expect(html.match(/<video/g)).toHaveLength(1);
     expect(html).not.toContain('Video.js controls');
     expect(useEngineMock).toHaveBeenCalledWith(
       {

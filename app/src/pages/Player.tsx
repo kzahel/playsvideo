@@ -4,18 +4,14 @@ import { useLiveQuery } from 'dexie-react-hooks';
 import { db, type CatalogEntry, type PlaybackEntry } from '../db';
 import { getDeviceId } from '../device.js';
 import { useEngine } from '../hooks/useEngine';
-import { usePlaybackVideoElement } from '../hooks/usePlaybackVideoElement.js';
+import { PlaybackVideo } from '../components/PlaybackVideo.js';
 import { folderProvider, type SiblingSubtitleFile } from '../folder-provider.js';
 import { useSetting } from '../hooks/useSetting';
 import { useFullscreen } from '../hooks/useFullscreen';
-import { useVideoJsControls } from '../hooks/useVideoJsControls.js';
+import { useSessionPlayerControlsType } from '../hooks/useSessionPlayerControlsType.js';
 import { getLocalPlayback } from '../local-playback.js';
 import {
   AUTOPLAY_NEXT_EPISODE_KEY,
-  normalizePlayerControlsType,
-  PLAYER_CONTROLS_TYPE_KEY,
-  type PlayerControlsType,
-  VIDEOJS_CONTROLS_ENABLED,
 } from '../settings.js';
 
 const PLAYER_QUERY_PENDING = Symbol('player-query-pending');
@@ -170,12 +166,8 @@ export function Player() {
   const [siblingSubtitles, setSiblingSubtitles] = useState<SiblingSubtitleFile[]>([]);
   const [loadingSiblingSubtitles, setLoadingSiblingSubtitles] = useState(false);
   const [siblingSubtitleStatus, setSiblingSubtitleStatus] = useState('');
-  const [storedControlsType, setControlsType] = useSetting<PlayerControlsType | 'custom'>(
-    PLAYER_CONTROLS_TYPE_KEY,
-    'stock',
-  );
-  const controlsType = normalizePlayerControlsType(storedControlsType);
-  const { setVideoHostElement, videoElement } = usePlaybackVideoElement(controlsType);
+  const controlsType = useSessionPlayerControlsType();
+  const [videoElement, setVideoElement] = useState<HTMLVideoElement | null>(null);
   const [autoplayNextEpisode] = useSetting<boolean>(AUTOPLAY_NEXT_EPISODE_KEY, true);
   const routeState = isPlayerRouteState(location.state) ? location.state : null;
   const routeEntry =
@@ -253,7 +245,10 @@ export function Player() {
     diagnosticsStatus,
     savePosition,
   } = useEngine(
-    resolvedEntry && resolvedEntry.hasLocalFile !== false && !playbackLookupPending
+    controlsType &&
+      resolvedEntry &&
+      resolvedEntry.hasLocalFile !== false &&
+      !playbackLookupPending
       ? {
           kind: 'entry',
           entry: resolvedEntry,
@@ -267,11 +262,10 @@ export function Player() {
               : null,
         }
       : null,
-    controlsType,
+    controlsType ?? '',
     videoElement,
   );
-  useVideoJsControls(videoElement, controlsType);
-  useFullscreen(videoElement, containerEl);
+  useFullscreen(controlsType === 'stock' ? videoElement : null, containerEl);
 
   const { previousEpisode, nextEpisode } = useMemo(() => {
     if (!resolvedEntry || entries === undefined) {
@@ -358,7 +352,7 @@ export function Player() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [resolvedEntry, siblingSubtitleKey, phase]);
 
-  if ((entryLookupPending && !routeEntry) || playbackLookupPending) {
+  if (controlsType === null || (entryLookupPending && !routeEntry) || playbackLookupPending) {
     return <div className="player-page">Loading...</div>;
   }
 
@@ -446,10 +440,13 @@ export function Player() {
         }}
       />
       <div
-        className={`pv-video-container${controlsType === 'videojs' ? ' pv-videojs-container' : ''}`}
+        className={`pv-video-container${controlsType === 'videojs' ? ' pv-videojs10-container' : ''}`}
         ref={setContainerEl}
       >
-        <div className="pv-video-host" ref={setVideoHostElement} />
+        <PlaybackVideo
+          controlsType={controlsType}
+          onVideoElementChange={setVideoElement}
+        />
       </div>
       {needsPermission && (
         <button className="btn btn-primary player-permission-btn" onClick={retryPermission}>
@@ -489,14 +486,6 @@ export function Player() {
         </div>
       ) : null}
       <div className="player-actions">
-        {VIDEOJS_CONTROLS_ENABLED ? (
-          <button
-            className="btn btn-secondary"
-            onClick={() => setControlsType(controlsType === 'stock' ? 'videojs' : 'stock')}
-          >
-            {controlsType === 'stock' ? 'Video.js controls' : 'Stock controls'}
-          </button>
-        ) : null}
         <button
           className="btn btn-secondary"
           onClick={() => subtitleInputRef.current?.click()}

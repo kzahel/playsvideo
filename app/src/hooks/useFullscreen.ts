@@ -1,9 +1,8 @@
 import { useEffect } from 'react';
 
 /**
- * Handles double-click-to-fullscreen and cursor auto-hide in fullscreen.
- * For stock controls: fullscreens the video element (Chrome manages native control auto-hide).
- * For Video.js controls: fullscreens the container so the player chrome stays visible.
+ * Supplements native browser controls with double-click-to-fullscreen and
+ * cursor auto-hide. Video.js 10 owns these behaviors in its player tree.
  */
 export function useFullscreen(
   video: HTMLVideoElement | null,
@@ -33,10 +32,7 @@ export function useFullscreen(
       if (document.fullscreenElement) {
         document.exitFullscreen();
       } else {
-        // Stock controls: fullscreen the video so Chrome auto-hides native controls.
-        // Video.js controls: fullscreen the container so the player chrome stays visible.
-        const target = video.controls ? video : container;
-        target.requestFullscreen();
+        video.requestFullscreen();
       }
     };
 
@@ -47,7 +43,7 @@ export function useFullscreen(
       toggleFullscreen();
     };
 
-    // Container dblclick handler (Video.js path or direct container tap target)
+    // The container handler catches clicks on the area immediately around the video.
     const onContainerDblClick = (e: MouseEvent) => {
       const target = e.target as HTMLElement;
       if (

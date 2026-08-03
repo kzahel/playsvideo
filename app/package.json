@@ -8,6 +8,7 @@
     "typecheck": "tsc --noEmit"
   },
   "dependencies": {
+    "@videojs/react": "10.0.0-beta.26",
     "dexie": "^4.0.0",
     "dexie-react-hooks": "^1.1.0",
     "firebase": "^12.10.0",
@@ -15,8 +16,7 @@
     "playsvideo": "workspace:*",
     "react": "^19.0.0",
     "react-dom": "^19.0.0",
-    "react-router-dom": "^7.0.0",
-    "video.js": "^8.23.7"
+    "react-router-dom": "^7.0.0"
   },
   "devDependencies": {
     "@types/react": "^19.0.0",

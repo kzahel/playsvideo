@@ -1,28 +1,17 @@
 import { useRef, useState, useEffect } from 'react';
 import { Link } from 'react-router-dom';
+import { PlaybackVideo } from '../components/PlaybackVideo.js';
 import { useEngine } from '../hooks/useEngine';
-import { usePlaybackVideoElement } from '../hooks/usePlaybackVideoElement.js';
-import { useSetting } from '../hooks/useSetting';
 import { useFullscreen } from '../hooks/useFullscreen';
-import { useVideoJsControls } from '../hooks/useVideoJsControls.js';
-import {
-  normalizePlayerControlsType,
-  PLAYER_CONTROLS_TYPE_KEY,
-  type PlayerControlsType,
-  VIDEOJS_CONTROLS_ENABLED,
-} from '../settings.js';
+import { useSessionPlayerControlsType } from '../hooks/useSessionPlayerControlsType.js';
 
 export function FilePlayer() {
   const [file, setFile] = useState<File | null>(null);
   const subtitleInputRef = useRef<HTMLInputElement | null>(null);
   const fileInputRef = useRef<HTMLInputElement | null>(null);
   const [containerEl, setContainerEl] = useState<HTMLDivElement | null>(null);
-  const [storedControlsType, setControlsType] = useSetting<PlayerControlsType | 'custom'>(
-    PLAYER_CONTROLS_TYPE_KEY,
-    'stock',
-  );
-  const controlsType = normalizePlayerControlsType(storedControlsType);
-  const { setVideoHostElement, videoElement } = usePlaybackVideoElement(controlsType);
+  const controlsType = useSessionPlayerControlsType();
+  const [videoElement, setVideoElement] = useState<HTMLVideoElement | null>(null);
 
   // File Handling API (launchQueue)
   useEffect(() => {
@@ -72,9 +61,16 @@ export function FilePlayer() {
     clearExternalSubtitles,
     copyDiagnostics,
     diagnosticsStatus,
-  } = useEngine(file ? { kind: 'file', file } : null, controlsType, videoElement);
-  useVideoJsControls(videoElement, controlsType);
-  useFullscreen(videoElement, containerEl);
+  } = useEngine(
+    file && controlsType ? { kind: 'file', file } : null,
+    controlsType ?? '',
+    videoElement,
+  );
+  useFullscreen(controlsType === 'stock' ? videoElement : null, containerEl);
+
+  if (controlsType === null) {
+    return <div className="player-page">Loading...</div>;
+  }
 
   return (
     <div className="player-page">
@@ -111,20 +107,15 @@ export function FilePlayer() {
         }}
       />
       <div
-        className={`pv-video-container${controlsType === 'videojs' ? ' pv-videojs-container' : ''}`}
+        className={`pv-video-container${controlsType === 'videojs' ? ' pv-videojs10-container' : ''}`}
         ref={setContainerEl}
       >
-        <div className="pv-video-host" ref={setVideoHostElement} />
+        <PlaybackVideo
+          controlsType={controlsType}
+          onVideoElementChange={setVideoElement}
+        />
       </div>
       <div className="player-actions">
-        {VIDEOJS_CONTROLS_ENABLED ? (
-          <button
-            className="btn btn-secondary"
-            onClick={() => setControlsType(controlsType === 'stock' ? 'videojs' : 'stock')}
-          >
-            {controlsType === 'stock' ? 'Video.js controls' : 'Stock controls'}
-          </button>
-        ) : null}
         <button
           className="btn btn-secondary"
           onClick={() => subtitleInputRef.current?.click()}

@@ -1,17 +1,31 @@
 import { describe, expect, it } from 'vitest';
-import { normalizePlayerControlsType, VIDEOJS_CONTROLS_ENABLED } from '../../app/src/settings.js';
+import {
+  DEFAULT_PLAYER_CONTROLS_TYPE,
+  normalizePlayerControlsType,
+} from '../../app/src/settings.js';
 
-describe('player controls feature flag', () => {
-  it('keeps Video.js controls globally disabled', () => {
-    expect(VIDEOJS_CONTROLS_ENABLED).toBe(false);
+describe('player controls preference', () => {
+  it('defaults new users to Video.js 10 controls', () => {
+    expect(DEFAULT_PLAYER_CONTROLS_TYPE).toBe('videojs');
+    expect(normalizePlayerControlsType(undefined)).toBe('videojs');
   });
 
   it.each([
     'videojs',
     'custom',
-    'stock',
-    null,
-  ])('normalizes the stored %s preference to native controls', (storedValue) => {
+  ])('normalizes the stored %s preference to Video.js 10 controls', (storedValue) => {
+    expect(normalizePlayerControlsType(storedValue)).toBe('videojs');
+  });
+
+  it('preserves an explicit native-controls preference', () => {
+    const storedValue = 'stock';
     expect(normalizePlayerControlsType(storedValue)).toBe('stock');
+  });
+
+  it.each([
+    null,
+    'unknown',
+  ])('normalizes the unsaved or invalid %s preference to the default', (storedValue) => {
+    expect(normalizePlayerControlsType(storedValue)).toBe(DEFAULT_PLAYER_CONTROLS_TYPE);
   });
 });

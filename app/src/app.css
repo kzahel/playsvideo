@@ -1446,17 +1446,17 @@ body {
   max-height: 80vh;
   display: block;
 }
-.player-page .pv-videojs-container {
+.player-page .pv-videojs10-container {
   width: min(100%, calc(80vh * 16 / 9));
-}
-.player-page .pv-videojs-container .video-js {
-  width: 100%;
-  height: auto;
   aspect-ratio: 16 / 9;
-  max-height: 80vh;
 }
-.player-page .pv-videojs-container .video-js .vjs-tech {
-  object-fit: contain;
+.player-page .pv-videojs10-player {
+  --media-border-radius: 4px;
+  --media-video-border-radius: 4px;
+  width: 100%;
+  height: 100%;
+  max-height: 80vh;
+  background: #000;
 }
 .player-page video:fullscreen,
 .pv-video-container:fullscreen video {
@@ -1479,32 +1479,25 @@ body {
 .pv-video-container::backdrop {
   background: #000;
 }
-.pv-video-container:fullscreen .pv-video-host,
-.pv-video-container:fullscreen .video-js {
-  width: 100vw !important;
-  max-width: none !important;
-  height: 100vh !important;
-  max-height: none !important;
-  aspect-ratio: auto !important;
-}
-.video-js:fullscreen,
-.video-js.vjs-fullscreen {
-  width: 100vw !important;
-  max-width: none !important;
-  height: 100vh !important;
-  max-height: none !important;
-  aspect-ratio: auto !important;
+.pv-videojs10-player:fullscreen {
+  --media-border-radius: 0px;
+  --media-video-border-radius: 0px;
+  width: 100vw;
+  max-width: none;
+  height: 100vh;
+  max-height: none;
+  border-radius: 0;
   background: #000;
 }
-.video-js:fullscreen .vjs-tech,
-.video-js.vjs-fullscreen .vjs-tech {
-  width: 100% !important;
-  max-width: none !important;
-  height: 100% !important;
-  max-height: none !important;
+.pv-videojs10-player:fullscreen video {
+  width: 100%;
+  max-width: none;
+  height: 100%;
+  max-height: none;
+  border-radius: 0;
   object-fit: contain;
 }
-.video-js::backdrop {
+.pv-videojs10-player::backdrop {
   background: #000;
 }
 .pv-video-container:fullscreen video {

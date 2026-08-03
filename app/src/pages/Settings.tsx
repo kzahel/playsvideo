@@ -12,6 +12,7 @@ import type { MetadataRequestTier } from '../metadata/types.js';
 import {
   AUTOPLAY_NEXT_EPISODE_KEY,
   AUTO_RESCAN_DETAIL_PAGES_KEY,
+  DEFAULT_PLAYER_CONTROLS_TYPE,
   EMBEDDED_SUBTITLE_POLICY_KEY,
   getStoredThemePreference,
   normalizePlayerControlsType,
@@ -20,7 +21,6 @@ import {
   type PlayerControlsType,
   type ThemePreference,
   THEME_PREFERENCE_KEY,
-  VIDEOJS_CONTROLS_ENABLED,
 } from '../settings.js';
 
 export function Settings() {
@@ -31,7 +31,7 @@ export function Settings() {
   );
   const [storedControlsType, setControlsType] = useSetting<PlayerControlsType | 'custom'>(
     PLAYER_CONTROLS_TYPE_KEY,
-    'stock',
+    DEFAULT_PLAYER_CONTROLS_TYPE,
   );
   const controlsType = normalizePlayerControlsType(storedControlsType);
   const [autoplayNextEpisode, setAutoplayNextEpisode] = useSetting<boolean>(
@@ -106,22 +106,21 @@ export function Settings() {
             <p className="settings-card-copy">Configure video playback behavior.</p>
           </div>
         </div>
-        {VIDEOJS_CONTROLS_ENABLED ? (
-          <>
-            <label className="metadata-settings-label" htmlFor="player-controls-preference">
-              Player controls
-            </label>
-            <select
-              id="player-controls-preference"
-              className="metadata-settings-input"
-              value={controlsType}
-              onChange={(event) => setControlsType(event.target.value as PlayerControlsType)}
-            >
-              <option value="stock">Native browser controls</option>
-              <option value="videojs">Video.js controls</option>
-            </select>
-          </>
-        ) : null}
+        <label className="metadata-settings-label" htmlFor="player-controls-preference">
+          Player controls
+        </label>
+        <select
+          id="player-controls-preference"
+          className="metadata-settings-input"
+          value={controlsType}
+          onChange={(event) => setControlsType(event.target.value as PlayerControlsType)}
+        >
+          <option value="videojs">Video.js 10 controls (experimental)</option>
+          <option value="stock">Native browser controls</option>
+        </select>
+        <p className="settings-card-copy">
+          Applied when you next open a player so the current video can be fully torn down first.
+        </p>
         <label className="metadata-settings-checkbox">
           <input
             type="checkbox"
