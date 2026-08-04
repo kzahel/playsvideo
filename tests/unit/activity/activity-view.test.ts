@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import {
   activityFactsFromDeviceDocs,
+  activityFactsFromRemotePlayback,
   buildActivityGroups,
   listActivityDevices,
   type ActivityFact,
@@ -135,6 +136,35 @@ describe('activity view projection', () => {
         deviceLabel: 'Android · Chrome',
         deviceLastSyncedAt: 5000,
         playbackKey: 'torrent:abc:1',
+      }),
+    ]);
+  });
+
+  it('restores complete activity facts from the remote playback cache', () => {
+    const facts = activityFactsFromRemotePlayback([
+      {
+        deviceId: 'phone',
+        deviceLabel: 'Phone',
+        deviceLastSyncedAt: 5000,
+        playbackKey: 'torrent:abc:1',
+        positionSec: 50,
+        durationSec: 100,
+        watchState: 'in-progress',
+        lastPlayedAt: 4000,
+        title: 'Example',
+        torrentInfoHash: 'abc',
+        torrentFileIndex: 1,
+        torrentMagnetUrl: 'magnet:?xt=urn:btih:abc',
+        updatedAt: 6000,
+      },
+    ]);
+
+    expect(facts).toEqual([
+      expect.objectContaining({
+        deviceId: 'phone',
+        deviceLastSyncedAt: 5000,
+        title: 'Example',
+        torrentMagnetUrl: 'magnet:?xt=urn:btih:abc',
       }),
     ]);
   });

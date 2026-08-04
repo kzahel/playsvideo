@@ -1,4 +1,4 @@
-import type { WatchState } from '../db.js';
+import type { RemotePlaybackEntry, WatchState } from '../db.js';
 import {
   resolveLocalPlaybackTarget,
   type LocalPlaybackResolution,
@@ -237,6 +237,29 @@ export function activityFactsFromDeviceDocs(devices: RemoteDeviceState[]): Activ
       tmdbMediaType: entry.tmdbMediaType,
     })),
   );
+}
+
+export function activityFactsFromRemotePlayback(rows: RemotePlaybackEntry[]): ActivityFact[] {
+  return rows.map((row) => ({
+    deviceId: row.deviceId,
+    deviceLabel: row.deviceLabel,
+    deviceLastSyncedAt: row.deviceLastSyncedAt,
+    playbackKey: row.playbackKey,
+    positionSec: row.positionSec,
+    durationSec: row.durationSec,
+    watchState: row.watchState,
+    lastPlayedAt: row.lastPlayedAt,
+    title: row.title,
+    seasonNumber: row.seasonNumber,
+    episodeNumber: row.episodeNumber,
+    contentHash: row.contentHash,
+    torrentInfoHash: row.torrentInfoHash,
+    torrentFileIndex: row.torrentFileIndex,
+    torrentMagnetUrl: row.torrentMagnetUrl,
+    torrentComplete: row.torrentComplete,
+    tmdbId: row.tmdbId,
+    tmdbMediaType: row.tmdbMediaType,
+  }));
 }
 
 export function listActivityDevices(

@@ -6,7 +6,7 @@ import {
   signInEmail,
   signUpEmail,
   logOut,
-  mergeAndSync,
+  requestMergeAndSync,
 } from '../firebase.js';
 
 export interface UseAuthResult {
@@ -27,7 +27,7 @@ export function useAuth(): UseAuthResult {
   const syncOnLogin = useCallback(async (u: User) => {
     try {
       setSyncError(null);
-      await mergeAndSync(u.uid);
+      await requestMergeAndSync(u.uid);
     } catch (err) {
       const message = err instanceof Error ? err.message : String(err);
       setSyncError(message);

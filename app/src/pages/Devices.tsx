@@ -3,7 +3,7 @@ import type { ActivityFact } from '../activity/activity-view.js';
 import { PlaybackHandoffActions } from '../components/PlaybackHandoffActions.js';
 import { useAuth } from '../hooks/useAuth.js';
 import {
-  pullAllDeviceDocs,
+  pullAndCacheDeviceDocs,
   type RemoteDeviceState,
   type SyncEntry,
 } from '../firebase.js';
@@ -256,6 +256,9 @@ export function Devices() {
   const [localTargetIndex, setLocalTargetIndex] = useState<LocalPlaybackTargetIndex | null>(null);
   const [expandedDevice, setExpandedDevice] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
+  const [refreshing, setRefreshing] = useState(false);
+  const [lastRefreshedAt, setLastRefreshedAt] = useState<number | null>(null);
+  const [refreshNonce, setRefreshNonce] = useState(0);
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
@@ -266,10 +269,12 @@ export function Devices() {
     let cancelled = false;
 
     async function load() {
+      setError(null);
+      setRefreshing(true);
       try {
         const [devId, docs, targetIndex] = await Promise.all([
           getDeviceId(),
-          pullAllDeviceDocs(user!.uid),
+          pullAndCacheDeviceDocs(user!.uid),
           loadLocalPlaybackTargetIndex(),
         ]);
         if (cancelled) return;
@@ -284,10 +289,14 @@ export function Devices() {
           return b.doc.lastSyncedAt - a.doc.lastSyncedAt;
         });
         setDevices(docs);
+        setLastRefreshedAt(Date.now());
       } catch (err) {
         if (!cancelled) setError(err instanceof Error ? err.message : String(err));
       } finally {
-        if (!cancelled) setLoading(false);
+        if (!cancelled) {
+          setLoading(false);
+          setRefreshing(false);
+        }
       }
     }
 
@@ -295,7 +304,7 @@ export function Devices() {
     return () => {
       cancelled = true;
     };
-  }, [user]);
+  }, [user, refreshNonce]);
 
   if (!user) {
     return (
@@ -313,7 +322,7 @@ export function Devices() {
     );
   }
 
-  if (error) {
+  if (error && !devices) {
     return (
       <div className="devices-page">
         <div className="devices-error">Failed to load devices: {error}</div>
@@ -333,7 +342,27 @@ export function Devices() {
 
   return (
     <div className="devices-page">
-      <h2 className="devices-title">Devices</h2>
+      <div className="devices-heading">
+        <h2 className="devices-title">Devices</h2>
+        <div className="activity-refresh-status" aria-live="polite">
+          <span>
+            {refreshing
+              ? 'Refreshing…'
+              : lastRefreshedAt
+                ? `Updated ${formatTimeAgo(lastRefreshedAt)}`
+                : ''}
+          </span>
+          <button
+            type="button"
+            className="activity-refresh"
+            disabled={refreshing}
+            onClick={() => setRefreshNonce((value) => value + 1)}
+          >
+            Refresh
+          </button>
+        </div>
+      </div>
+      {error && <div className="devices-error">Could not refresh devices: {error}</div>}
       <div className="devices-list">
         {devices.map((device) => (
           <DeviceCard

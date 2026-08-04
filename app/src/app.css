@@ -1837,11 +1837,45 @@ body {
 .activity-page {
   padding-top: 1.25rem;
 }
+.activity-toolbar,
+.devices-heading {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 1rem;
+  margin-bottom: 1.25rem;
+}
 .activity-device-filters {
   display: flex;
+  flex: 1;
   flex-wrap: wrap;
   gap: 0.5rem;
-  margin-bottom: 1.25rem;
+}
+.activity-refresh-status {
+  display: flex;
+  align-items: center;
+  gap: 0.6rem;
+  min-height: 44px;
+  color: var(--muted);
+  font-size: 0.78rem;
+  white-space: nowrap;
+}
+.activity-refresh {
+  border: 1px solid rgba(128, 128, 128, 0.3);
+  border-radius: 6px;
+  padding: 0.45rem 0.7rem;
+  background: transparent;
+  color: var(--fg);
+  cursor: pointer;
+  font: inherit;
+  font-weight: 600;
+}
+.activity-refresh:hover:not(:disabled) {
+  background: rgba(128, 128, 128, 0.1);
+}
+.activity-refresh:disabled {
+  cursor: default;
+  opacity: 0.55;
 }
 .activity-filter-btn {
   min-height: 44px;
@@ -1876,6 +1910,19 @@ body {
   font-size: 1.25rem;
   font-weight: 600;
   margin: 0 0 1rem;
+}
+.devices-heading .devices-title {
+  margin: 0;
+}
+@media (max-width: 640px) {
+  .activity-toolbar,
+  .devices-heading {
+    align-items: stretch;
+    flex-direction: column;
+  }
+  .activity-refresh-status {
+    justify-content: space-between;
+  }
 }
 .devices-sign-in,
 .devices-loading,

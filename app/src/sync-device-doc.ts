@@ -56,6 +56,21 @@ export interface MergedRemotePlaybackEntry extends DeviceSyncEntry {
   sourceDeviceLabel: string;
 }
 
+export const MAX_DEVICE_SYNC_ENTRIES = 500;
+
+const OPTIONAL_ENTRY_METADATA_FIELDS = [
+  'title',
+  'seasonNumber',
+  'episodeNumber',
+  'contentHash',
+  'torrentInfoHash',
+  'torrentFileIndex',
+  'torrentMagnetUrl',
+  'torrentComplete',
+  'tmdbId',
+  'tmdbMediaType',
+] as const satisfies ReadonlyArray<keyof DeviceSyncEntry>;
+
 export function buildDeviceSyncDoc(input: {
   label: string;
   lastSyncedAt: number;
@@ -65,9 +80,12 @@ export function buildDeviceSyncDoc(input: {
   const entries: Record<string, DeviceSyncEntry> = {};
   const metadataByPlaybackKey = input.metadataByPlaybackKey ?? new Map();
 
-  for (const row of input.playback) {
-    if (row.durationSec <= 0) continue;
+  const eligiblePlayback = input.playback
+    .filter((row) => row.durationSec > 0)
+    .sort((left, right) => right.lastPlayedAt - left.lastPlayedAt)
+    .slice(0, MAX_DEVICE_SYNC_ENTRIES);
 
+  for (const row of eligiblePlayback) {
     const metadata = metadataByPlaybackKey.get(row.playbackKey);
     const entry: DeviceSyncEntry = {
       position: row.positionSec,
@@ -112,12 +130,22 @@ export function flattenRemoteDeviceDocs(
       rows.push({
         deviceId,
         deviceLabel: doc.label,
+        deviceLastSyncedAt: doc.lastSyncedAt,
         playbackKey,
         positionSec: entry.position,
         durationSec: entry.durationSec,
         watchState: entry.watchState,
         lastPlayedAt: entry.watchedAt,
         title: entry.title,
+        seasonNumber: entry.seasonNumber,
+        episodeNumber: entry.episodeNumber,
+        contentHash: entry.contentHash,
+        torrentInfoHash: entry.torrentInfoHash,
+        torrentFileIndex: entry.torrentFileIndex,
+        torrentMagnetUrl: entry.torrentMagnetUrl,
+        torrentComplete: entry.torrentComplete,
+        tmdbId: entry.tmdbId,
+        tmdbMediaType: entry.tmdbMediaType,
         updatedAt,
       });
     }
@@ -139,14 +167,25 @@ export function mergeRemoteDeviceDocs(
 
     for (const [playbackKey, entry] of Object.entries(doc.entries)) {
       const existing = merged.get(playbackKey);
-      if (!existing || entry.watchedAt > existing.watchedAt) {
-        merged.set(playbackKey, {
+      const incoming: MergedRemotePlaybackEntry = {
           ...entry,
           playbackKey,
           sourceDeviceId: deviceId,
           sourceDeviceLabel: doc.label,
-        });
+      };
+      if (!existing) {
+        merged.set(playbackKey, incoming);
+        continue;
       }
+
+      const selected = entry.watchedAt > existing.watchedAt ? incoming : { ...existing };
+      const metadataSource = entry.watchedAt > existing.watchedAt ? existing : incoming;
+      for (const field of OPTIONAL_ENTRY_METADATA_FIELDS) {
+        if (selected[field] == null && metadataSource[field] != null) {
+          Object.assign(selected, { [field]: metadataSource[field] });
+        }
+      }
+      merged.set(playbackKey, selected);
     }
   }
 

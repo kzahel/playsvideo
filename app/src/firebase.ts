@@ -245,32 +245,68 @@ export async function buildDeviceDoc(): Promise<DeviceSyncDoc> {
   });
 }
 
+const remotePullsByUser = new Map<string, Promise<RemoteDeviceState[]>>();
+
+export function pullAndCacheDeviceDocs(uid: string): Promise<RemoteDeviceState[]> {
+  const existing = remotePullsByUser.get(uid);
+  if (existing) return existing;
+
+  const run = (async () => {
+    const [deviceId, allDeviceDocs] = await Promise.all([getDeviceId(), pullAllDeviceDocs(uid)]);
+    const remotePlaybackRows = flattenRemoteDeviceDocs(allDeviceDocs, {
+      excludeDeviceId: deviceId,
+      updatedAt: Date.now(),
+    });
+
+    await db.transaction('rw', db.remotePlayback, async () => {
+      await db.remotePlayback.clear();
+      if (remotePlaybackRows.length > 0) {
+        await db.remotePlayback.bulkPut(remotePlaybackRows);
+      }
+    });
+    return allDeviceDocs;
+  })();
+
+  remotePullsByUser.set(uid, run);
+  const clearRun = () => {
+    if (remotePullsByUser.get(uid) === run) remotePullsByUser.delete(uid);
+  };
+  void run.then(clearRun, clearRun);
+  return run;
+}
+
 export async function mergeAndSync(uid: string): Promise<void> {
-  const [deviceId, allDeviceDocs] = await Promise.all([
-    getDeviceId(),
-    pullAllDeviceDocs(uid),
-  ]);
-  const remotePlaybackRows = flattenRemoteDeviceDocs(allDeviceDocs, {
-    excludeDeviceId: deviceId,
-    updatedAt: Date.now(),
-  });
+  const [deviceId] = await Promise.all([getDeviceId(), pullAndCacheDeviceDocs(uid)]);
+  await pushDeviceDoc(uid, deviceId, await buildDeviceDoc());
+}
 
-  await db.transaction('rw', db.remotePlayback, async () => {
-    await db.remotePlayback.clear();
-    if (remotePlaybackRows.length > 0) {
-      await db.remotePlayback.bulkPut(remotePlaybackRows);
-    }
-  });
+let syncRequested = false;
+let requestedSyncUid: string | null = null;
+let activeSync: Promise<void> | null = null;
 
-  const deviceDoc = await buildDeviceDoc();
-  await pushDeviceDoc(uid, deviceId, deviceDoc);
+export function requestMergeAndSync(uid: string): Promise<void> {
+  requestedSyncUid = uid;
+  syncRequested = true;
+  if (!activeSync) {
+    activeSync = Promise.resolve()
+      .then(async () => {
+        while (syncRequested && requestedSyncUid) {
+          syncRequested = false;
+          await mergeAndSync(requestedSyncUid);
+        }
+      })
+      .finally(() => {
+        activeSync = null;
+      });
+  }
+  return activeSync;
 }
 
 export async function scheduleSyncIfLoggedIn(): Promise<void> {
   const user = auth.currentUser;
   if (!user) return;
   try {
-    await mergeAndSync(user.uid);
+    await requestMergeAndSync(user.uid);
   } catch (err) {
     console.warn('Sync failed:', err);
   }

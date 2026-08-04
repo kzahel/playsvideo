@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState } from 'react';
 import {
   activityFactsFromDeviceDocs,
+  activityFactsFromRemotePlayback,
   buildActivityGroups,
   listActivityDevices,
   type ActivityDeviceOption,
@@ -11,7 +12,7 @@ import {
 import { PlaybackHandoffActions } from '../components/PlaybackHandoffActions.js';
 import { db } from '../db.js';
 import { getDeviceId, getDeviceLabel } from '../device.js';
-import { pullAllDeviceDocs } from '../firebase.js';
+import { pullAndCacheDeviceDocs } from '../firebase.js';
 import { useAuth } from '../hooks/useAuth.js';
 import {
   cleanupExpiredPendingHandoffs,
@@ -180,7 +181,13 @@ function DeviceFilters({
             key={device.deviceId}
             className={`activity-filter-btn${selectedDeviceId === device.deviceId ? ' active' : ''}`}
             aria-pressed={selectedDeviceId === device.deviceId}
-            title={isCurrent ? device.label : undefined}
+            title={
+              isCurrent
+                ? device.label
+                : device.lastSyncedAt
+                  ? `Last synced ${formatTimeAgo(device.lastSyncedAt)}`
+                  : undefined
+            }
             onClick={() => onChange(device.deviceId)}
           >
             {isCurrent ? 'This device' : device.label}
@@ -199,6 +206,9 @@ export function Activity() {
   const [currentDeviceId, setCurrentDeviceId] = useState<string | null>(null);
   const [selectedDeviceId, setSelectedDeviceId] = useState('all');
   const [loading, setLoading] = useState(true);
+  const [refreshing, setRefreshing] = useState(false);
+  const [lastRefreshedAt, setLastRefreshedAt] = useState<number | null>(null);
+  const [refreshNonce, setRefreshNonce] = useState(0);
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
@@ -209,7 +219,6 @@ export function Activity() {
       setError(null);
       try {
         const [
-          docs,
           targetIndex,
           localDeviceId,
           localDeviceLabel,
@@ -217,8 +226,8 @@ export function Activity() {
           catalogEntries,
           seriesMeta,
           movieMeta,
+          cachedRemotePlayback,
         ] = await Promise.all([
-          user ? pullAllDeviceDocs(user.uid) : Promise.resolve([]),
           loadLocalPlaybackTargetIndex(),
           getDeviceId(),
           getDeviceLabel(),
@@ -226,6 +235,7 @@ export function Activity() {
           db.catalog.toArray(),
           db.seriesMetadata.toArray(),
           db.movieMetadata.toArray(),
+          db.remotePlayback.toArray(),
         ]);
         if (cancelled) return;
 
@@ -276,16 +286,37 @@ export function Activity() {
           });
         }
 
-        const allFacts = [...activityFactsFromDeviceDocs(docs), ...localFacts];
-        setFacts(allFacts);
+        const applyFacts = (allFacts: ActivityFact[]) => {
+          setFacts(allFacts);
+          setDevices(listActivityDevices(allFacts, localDeviceId, localDeviceLabel));
+          setSelectedDeviceId((selected) =>
+            selected === 'all' || allFacts.some((fact) => fact.deviceId === selected)
+              ? selected
+              : 'all',
+          );
+        };
+
+        applyFacts([...activityFactsFromRemotePlayback(cachedRemotePlayback), ...localFacts]);
         setLocalTargetIndex(targetIndex);
         setCurrentDeviceId(localDeviceId);
-        setDevices(listActivityDevices(allFacts, localDeviceId, localDeviceLabel));
-        setSelectedDeviceId((selected) =>
-          selected === 'all' || allFacts.some((fact) => fact.deviceId === selected)
-            ? selected
-            : 'all',
-        );
+        setLoading(false);
+
+        if (user) {
+          setRefreshing(true);
+          try {
+            const docs = await pullAndCacheDeviceDocs(user.uid);
+            if (cancelled) return;
+            const remoteFacts = activityFactsFromDeviceDocs(
+              docs.filter((device) => device.deviceId !== localDeviceId),
+            );
+            applyFacts([...remoteFacts, ...localFacts]);
+            setLastRefreshedAt(Date.now());
+          } catch (err) {
+            if (!cancelled) setError(err instanceof Error ? err.message : String(err));
+          } finally {
+            if (!cancelled) setRefreshing(false);
+          }
+        }
       } catch (err) {
         if (!cancelled) setError(err instanceof Error ? err.message : String(err));
       } finally {
@@ -297,7 +328,7 @@ export function Activity() {
     return () => {
       cancelled = true;
     };
-  }, [user]);
+  }, [user, refreshNonce]);
 
   const groups = useMemo(
     () =>
@@ -342,12 +373,31 @@ export function Activity() {
         </div>
       )}
       {user && (
-        <DeviceFilters
-          devices={devices}
-          currentDeviceId={currentDeviceId}
-          selectedDeviceId={selectedDeviceId}
-          onChange={setSelectedDeviceId}
-        />
+        <div className="activity-toolbar">
+          <DeviceFilters
+            devices={devices}
+            currentDeviceId={currentDeviceId}
+            selectedDeviceId={selectedDeviceId}
+            onChange={setSelectedDeviceId}
+          />
+          <div className="activity-refresh-status" aria-live="polite">
+            <span>
+              {refreshing
+                ? 'Refreshing…'
+                : lastRefreshedAt
+                  ? `Updated ${formatTimeAgo(lastRefreshedAt)}`
+                  : 'Showing cached activity'}
+            </span>
+            <button
+              type="button"
+              className="activity-refresh"
+              disabled={refreshing}
+              onClick={() => setRefreshNonce((value) => value + 1)}
+            >
+              Refresh
+            </button>
+          </div>
+        </div>
       )}
       {error && <div className="devices-error">Could not refresh synced activity: {error}</div>}
       {groups.length === 0 ? (

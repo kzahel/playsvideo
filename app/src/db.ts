@@ -92,11 +92,21 @@ export interface RemotePlaybackEntry {
   deviceId: string;
   playbackKey: string;
   deviceLabel: string;
+  deviceLastSyncedAt?: number;
   positionSec: number;
   durationSec: number;
   watchState: WatchState;
   lastPlayedAt: number;
   title?: string;
+  seasonNumber?: number;
+  episodeNumber?: number;
+  contentHash?: string;
+  torrentInfoHash?: string;
+  torrentFileIndex?: number;
+  torrentMagnetUrl?: string;
+  torrentComplete?: boolean;
+  tmdbId?: number;
+  tmdbMediaType?: 'tv' | 'movie';
   updatedAt: number;
 }
 

@@ -459,6 +459,14 @@ export function useEngine(
       }
     };
     const onPlay = () => setEndedSourceKey(null);
+    const saveBeforeHandoff = () => {
+      if (entry) {
+        saveSessionPosition().then(() => scheduleSyncIfLoggedIn());
+      }
+    };
+    const onVisibilityChange = () => {
+      if (document.visibilityState === 'hidden') saveBeforeHandoff();
+    };
     const onVideoError = () =>
       pushDiagnosticEvent(diagnosticsRef, 'video:error', formatMediaError(video.error) ?? 'unknown');
 
@@ -472,6 +480,8 @@ export function useEngine(
     video.addEventListener('pause', onPause);
     video.addEventListener('ended', onEnded);
     video.addEventListener('error', onVideoError);
+    document.addEventListener('visibilitychange', onVisibilityChange);
+    window.addEventListener('pagehide', saveBeforeHandoff);
 
     const interval = entry ? setInterval(saveSessionPosition, 5000) : null;
 
@@ -530,6 +540,8 @@ export function useEngine(
       video.removeEventListener('pause', onPause);
       video.removeEventListener('ended', onEnded);
       video.removeEventListener('error', onVideoError);
+      document.removeEventListener('visibilitychange', onVisibilityChange);
+      window.removeEventListener('pagehide', saveBeforeHandoff);
       engine.destroy();
       engineRef.current = null;
     };
