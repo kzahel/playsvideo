@@ -118,16 +118,18 @@ Changelog-driven releases. The changelog entry must exist before the release scr
 
 ## Deploy
 
-Site is hosted on Cloudflare R2 + Workers at playsvideo.com.
+Site is hosted with Cloudflare Workers Static Assets at playsvideo.com.
 
 ```bash
-pnpm -w run deploy:site    # vite build + upload dist/ to R2
-pnpm -w run deploy:worker  # deploy Cloudflare Worker (serves files from R2)
-pnpm -w run deploy         # both
+pnpm -w run deploy:site    # build both sites + atomically deploy Worker/assets
+pnpm -w run deploy:worker  # deploy Worker with existing dist-site/ + app/dist/
+pnpm -w run deploy         # alias for deploy:site
 ```
 
-- `scripts/deploy.sh` — uploads built files to R2 bucket with correct content types
-- `worker/index.js` — Cloudflare Worker that serves files from R2 and handles caching (no-cache for HTML/SW/manifest, immutable for hashed assets). No COOP/COEP headers needed (see `docs/no-shared-array-buffer.md`)
+- `scripts/deploy.sh` — stages the app under `dist-site/app/` and invokes Wrangler once; Wrangler uploads only changed asset hashes
+- `worker/index.js` — Cloudflare Worker that handles clean URL aliases and the `/app/*` SPA fallback
+- `public/_headers` — cache policy (no-cache for HTML/SW/manifest, immutable for hashed assets). No COOP/COEP headers needed (see `docs/no-shared-array-buffer.md`)
+- The legacy R2 bucket is retained as a rollback source but is not bound to the Worker.
 
 ## ChromeOS Hardware Testing
 

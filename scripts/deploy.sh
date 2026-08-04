@@ -1,45 +1,22 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-# pnpm's bash subprocess loses nvm's node from PATH; re-initialize
-unset npm_config_prefix
-export NVM_DIR="$HOME/.nvm"
-[ -s "$NVM_DIR/nvm.sh" ] && \. "$NVM_DIR/nvm.sh"
+ROOT_DIR=$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)
+SITE_DIR="$ROOT_DIR/dist-site"
+APP_DIR="$ROOT_DIR/app/dist"
 
-BUCKET="playsvideo"
-
-content_type() {
-  case "$1" in
-    *.html) echo "text/html" ;;
-    *.js)   echo "application/javascript" ;;
-    *.wasm) echo "application/wasm" ;;
-    *.json) echo "application/json" ;;
-    *.map)  echo "application/json" ;;
-    *.css)  echo "text/css" ;;
-    *.svg)  echo "image/svg+xml" ;;
-    *.png)  echo "image/png" ;;
-    *)      echo "application/octet-stream" ;;
-  esac
-}
-
-upload_dir() {
-  local dir="$1"
-  local prefix="$2"
-  for f in $(find "$dir" -type f); do
-    local key="${prefix}${f#$dir/}"
-    local ct
-    ct=$(content_type "$f")
-    echo "Uploading $key"
-    npx wrangler r2 object put "$BUCKET/$key" --file="$f" --content-type="$ct" --remote
-  done
-}
-
-# Upload main site
-upload_dir "dist-site" ""
-
-# Upload media player app under app/ prefix
-if [ -d "app/dist" ]; then
-  upload_dir "app/dist" "app/"
+if [ ! -d "$SITE_DIR" ] || [ ! -d "$APP_DIR" ]; then
+  echo "Missing build output. Run pnpm -w run deploy:site to build and deploy both sites." >&2
+  exit 1
 fi
+
+# Workers Static Assets accepts one directory. Stage the React app beneath the
+# main site's build so Wrangler can hash, diff, and upload both in one request.
+rm -rf "$SITE_DIR/app"
+mkdir -p "$SITE_DIR/app"
+cp -R "$APP_DIR/." "$SITE_DIR/app/"
+
+cd "$ROOT_DIR"
+pnpm exec wrangler deploy --config worker/wrangler.toml
 
 echo "Deployed to https://playsvideo.com/"

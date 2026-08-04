@@ -38,9 +38,9 @@
     "check": "biome check --write .",
     "download:ffmpeg-core": "node scripts/download-ffmpeg-core.mjs",
     "setup": "pnpm install && pnpm run download:ffmpeg-core",
-    "deploy:worker": "cd worker && npx wrangler deploy",
+    "deploy:worker": "bash scripts/deploy.sh",
     "deploy:site": "pnpm run build:site && pnpm --filter app build && bash scripts/deploy.sh",
-    "deploy": "pnpm run deploy:site && pnpm run deploy:worker",
+    "deploy": "pnpm run deploy:site",
     "prepublishOnly": "pnpm run build:lib",
     "firebase:emulators": "JAVA_HOME=/opt/homebrew/opt/openjdk@21/libexec/openjdk.jdk/Contents/Home firebase emulators:start --only firestore,auth",
     "test:sync": "FIRESTORE_EMULATOR_HOST=127.0.0.1:8080 FIREBASE_AUTH_EMULATOR_HOST=127.0.0.1:9099 vitest run tests/unit/sync"
@@ -65,6 +65,7 @@
     "typescript": "^5.7.0",
     "video.js": "^8.23.7",
     "vite": "^6.0.0",
-    "vitest": "^3.0.0"
+    "vitest": "^3.0.0",
+    "wrangler": "4.118.0"
   }
 }

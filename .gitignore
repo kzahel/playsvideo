@@ -22,6 +22,7 @@ tests/golden/output/
 test-results/
 tests/tmp/
 .claude/
+.wrangler/
 .env.local
 .env.*.local
 app/.env
