@@ -15,6 +15,7 @@ import {
 } from './folder-provider.js';
 import { parseMediaMetadata } from './media-metadata.js';
 import { refreshCatalogMetadata } from './metadata/client.js';
+import { backfillCatalogAliases } from './playback-identity-resolver.js';
 import { buildPlaybackKeyCandidates } from './playback-key.js';
 
 export { type ScannedFile } from './folder-provider.js';
@@ -300,4 +301,5 @@ async function syncCatalog(
   });
 
   await refreshCatalogMetadata({ entries: nextCatalogEntries });
+  await backfillCatalogAliases();
 }

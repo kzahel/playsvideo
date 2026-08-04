@@ -1,4 +1,10 @@
 import type { WatchState } from '../db.js';
+import {
+  resolveLocalPlaybackTarget,
+  type LocalPlaybackResolution,
+  type LocalPlaybackTarget,
+  type LocalPlaybackTargetIndex,
+} from '../playback-identity-resolver.js';
 import type { RemoteDeviceState } from '../sync-device-doc.js';
 
 export interface ActivityFact {
@@ -30,6 +36,8 @@ export interface ActivityItem {
   seasonNumber?: number;
   episodeLabel?: string;
   localEntryId?: number;
+  localTarget?: LocalPlaybackTarget;
+  localResolutionStatus?: LocalPlaybackResolution['status'];
 }
 
 export interface ActivityGroup {
@@ -153,6 +161,7 @@ function activityItemIdentity(fact: ActivityFact): string {
 function createActivityItem(
   facts: ActivityFact[],
   localEntryByPlaybackKey: ReadonlyMap<string, number>,
+  localTargetIndex?: LocalPlaybackTargetIndex,
 ): ActivityItem {
   const fact = enrichFact(facts);
   const playbackKeys = [...new Set(facts.map((entry) => entry.playbackKey))];
@@ -164,6 +173,10 @@ function createActivityItem(
   const episodeLabel =
     tmdb?.episodeLabel ??
     (fact.episodeNumber != null ? String(fact.episodeNumber).padStart(2, '0') : undefined);
+  const localResolution = localTargetIndex
+    ? resolveLocalPlaybackTarget(localTargetIndex, fact)
+    : undefined;
+  const localTarget = localResolution?.status === 'resolved' ? localResolution.target : undefined;
 
   return {
     id: activityItemIdentity(fact),
@@ -172,7 +185,9 @@ function createActivityItem(
     playbackKeys,
     seasonNumber,
     episodeLabel,
-    localEntryId,
+    localEntryId: localTarget?.catalogId ?? localEntryId,
+    localTarget,
+    localResolutionStatus: localResolution?.status,
   };
 }
 
@@ -257,6 +272,7 @@ export function buildActivityGroups(input: {
   facts: ActivityFact[];
   deviceId?: string;
   localEntryByPlaybackKey?: ReadonlyMap<string, number>;
+  localTargetIndex?: LocalPlaybackTargetIndex;
 }): ActivityGroup[] {
   const localEntryByPlaybackKey = input.localEntryByPlaybackKey ?? new Map();
   const scopedFacts = input.deviceId
@@ -277,7 +293,7 @@ export function buildActivityGroups(input: {
 
   const groups = new Map<string, ActivityGroup>();
   for (const facts of factsByItemIdentity.values()) {
-    const item = createActivityItem(facts, localEntryByPlaybackKey);
+    const item = createActivityItem(facts, localEntryByPlaybackKey, input.localTargetIndex);
     const identity = activityGroupIdentity(item);
     const existing = groups.get(identity.id);
     if (existing) {

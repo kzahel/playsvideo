@@ -1,13 +1,18 @@
 import { useState, useEffect } from 'react';
-import { Link } from 'react-router-dom';
+import type { ActivityFact } from '../activity/activity-view.js';
+import { PlaybackHandoffActions } from '../components/PlaybackHandoffActions.js';
 import { useAuth } from '../hooks/useAuth.js';
 import {
   pullAllDeviceDocs,
-  buildLocalSyncKeyIndex,
   type RemoteDeviceState,
   type SyncEntry,
 } from '../firebase.js';
 import { getDeviceId } from '../device.js';
+import {
+  loadLocalPlaybackTargetIndex,
+  resolveLocalPlaybackTarget,
+  type LocalPlaybackTargetIndex,
+} from '../playback-identity-resolver.js';
 
 function formatDuration(sec: number): string {
   const h = Math.floor(sec / 3600);
@@ -45,13 +50,13 @@ function DeviceCard({
   isCurrentDevice,
   expanded,
   onToggle,
-  localEntryBySyncKey,
+  localTargetIndex,
 }: {
   device: RemoteDeviceState;
   isCurrentDevice: boolean;
   expanded: boolean;
   onToggle: () => void;
-  localEntryBySyncKey: Map<string, number>;
+  localTargetIndex: LocalPlaybackTargetIndex;
 }) {
   const entries = Object.entries(device.doc.entries).sort(
     ([, a], [, b]) => b.watchedAt - a.watchedAt,
@@ -77,7 +82,14 @@ function DeviceCard({
       {!expanded && inProgress.length > 0 && (
         <div className="device-card-preview">
           {inProgress.slice(0, 3).map(([key, entry]) => (
-            <DeviceEntryRow key={key} syncKey={key} entry={entry} localEntryId={localEntryBySyncKey.get(key)} compact />
+            <DeviceEntryRow
+              key={key}
+              device={device}
+              syncKey={key}
+              entry={entry}
+              localTargetIndex={localTargetIndex}
+              compact
+            />
           ))}
           {inProgress.length > 3 && (
             <div className="device-card-more">+{inProgress.length - 3} more in progress</div>
@@ -91,7 +103,13 @@ function DeviceCard({
             <div className="device-entries-section">
               <div className="device-entries-section-label">In Progress ({inProgress.length})</div>
               {inProgress.map(([key, entry]) => (
-                <DeviceEntryRow key={key} syncKey={key} entry={entry} localEntryId={localEntryBySyncKey.get(key)} />
+                <DeviceEntryRow
+                  key={key}
+                  device={device}
+                  syncKey={key}
+                  entry={entry}
+                  localTargetIndex={localTargetIndex}
+                />
               ))}
             </div>
           )}
@@ -99,7 +117,13 @@ function DeviceCard({
             <div className="device-entries-section">
               <div className="device-entries-section-label">Watched ({watched.length})</div>
               {watched.map(([key, entry]) => (
-                <DeviceEntryRow key={key} syncKey={key} entry={entry} localEntryId={localEntryBySyncKey.get(key)} />
+                <DeviceEntryRow
+                  key={key}
+                  device={device}
+                  syncKey={key}
+                  entry={entry}
+                  localTargetIndex={localTargetIndex}
+                />
               ))}
             </div>
           )}
@@ -140,28 +164,18 @@ function formatEntryTitle(syncKey: string, entry: SyncEntry): string {
   return base;
 }
 
-function buildResumeState(syncKey: string, entry: SyncEntry) {
-  return {
-    resumePlayback: {
-      playbackKey: syncKey,
-      positionSec: entry.position,
-      durationSec: entry.durationSec,
-      watchState: entry.watchState,
-      lastPlayedAt: entry.watchedAt,
-    },
-  };
-}
-
 function DeviceEntryRow({
+  device,
   syncKey,
   entry,
   compact,
-  localEntryId,
+  localTargetIndex,
 }: {
+  device: RemoteDeviceState;
   syncKey: string;
   entry: SyncEntry;
   compact?: boolean;
-  localEntryId?: number;
+  localTargetIndex: LocalPlaybackTargetIndex;
 }) {
   const title = formatEntryTitle(syncKey, entry);
   const progress =
@@ -169,8 +183,32 @@ function DeviceEntryRow({
   const remaining =
     entry.durationSec > 0 ? entry.durationSec - (entry.position) : 0;
 
-  const content = (
-    <>
+  const fact: ActivityFact = {
+    deviceId: device.deviceId,
+    deviceLabel: device.doc.label,
+    deviceLastSyncedAt: device.doc.lastSyncedAt,
+    playbackKey: syncKey,
+    positionSec: entry.position,
+    durationSec: entry.durationSec,
+    watchState: entry.watchState,
+    lastPlayedAt: entry.watchedAt,
+    title: entry.title,
+    seasonNumber: entry.seasonNumber,
+    episodeNumber: entry.episodeNumber,
+    contentHash: entry.contentHash,
+    torrentInfoHash: entry.torrentInfoHash,
+    torrentFileIndex: entry.torrentFileIndex,
+    torrentMagnetUrl: entry.torrentMagnetUrl,
+    torrentComplete: entry.torrentComplete,
+    tmdbId: entry.tmdbId,
+    tmdbMediaType: entry.tmdbMediaType,
+  };
+  const resolution = resolveLocalPlaybackTarget(localTargetIndex, fact);
+  const localTarget = resolution.status === 'resolved' ? resolution.target : undefined;
+
+  return (
+    <div className={`device-entry${compact ? ' device-entry-compact' : ''}`}>
+      <>
       <div className="device-entry-info">
         <span className="device-entry-title">{title}</span>
         <span className="device-entry-meta">
@@ -199,31 +237,22 @@ function DeviceEntryRow({
           T
         </span>
       )}
-    </>
+      </>
+      <PlaybackHandoffActions
+        fact={fact}
+        localTarget={localTarget}
+        ambiguous={resolution.status === 'ambiguous'}
+        compact={compact}
+      />
+    </div>
   );
-
-  const className = `device-entry${compact ? ' device-entry-compact' : ''}`;
-
-  if (localEntryId != null) {
-    return (
-      <Link
-        to={`/play/${localEntryId}`}
-        state={buildResumeState(syncKey, entry)}
-        className={className}
-      >
-        {content}
-      </Link>
-    );
-  }
-
-  return <div className={className}>{content}</div>;
 }
 
 export function Devices() {
   const { user } = useAuth();
   const [devices, setDevices] = useState<RemoteDeviceState[] | null>(null);
   const [currentDeviceId, setCurrentDeviceId] = useState<string | null>(null);
-  const [localEntryBySyncKey, setLocalEntryBySyncKey] = useState<Map<string, number>>(new Map());
+  const [localTargetIndex, setLocalTargetIndex] = useState<LocalPlaybackTargetIndex | null>(null);
   const [expandedDevice, setExpandedDevice] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -237,10 +266,14 @@ export function Devices() {
 
     async function load() {
       try {
-        const [devId, docs, keyIndex] = await Promise.all([getDeviceId(), pullAllDeviceDocs(user!.uid), buildLocalSyncKeyIndex()]);
+        const [devId, docs, targetIndex] = await Promise.all([
+          getDeviceId(),
+          pullAllDeviceDocs(user!.uid),
+          loadLocalPlaybackTargetIndex(),
+        ]);
         if (cancelled) return;
         setCurrentDeviceId(devId);
-        setLocalEntryBySyncKey(keyIndex);
+        setLocalTargetIndex(targetIndex);
         // Sort: current device first, then by lastSyncedAt descending
         docs.sort((a, b) => {
           if (a.deviceId === devId) return -1;
@@ -285,7 +318,7 @@ export function Devices() {
     );
   }
 
-  if (!devices || devices.length === 0) {
+  if (!devices || devices.length === 0 || !localTargetIndex) {
     return (
       <div className="devices-page">
         <div className="devices-empty">
@@ -308,7 +341,7 @@ export function Devices() {
             onToggle={() =>
               setExpandedDevice((prev) => (prev === device.deviceId ? null : device.deviceId))
             }
-            localEntryBySyncKey={localEntryBySyncKey}
+            localTargetIndex={localTargetIndex}
           />
         ))}
       </div>

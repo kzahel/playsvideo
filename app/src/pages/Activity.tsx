@@ -1,5 +1,4 @@
 import { useEffect, useMemo, useState } from 'react';
-import { Link } from 'react-router-dom';
 import {
   activityFactsFromDeviceDocs,
   buildActivityGroups,
@@ -9,10 +8,15 @@ import {
   type ActivityGroup,
   type ActivityItem,
 } from '../activity/activity-view.js';
+import { PlaybackHandoffActions } from '../components/PlaybackHandoffActions.js';
 import { db } from '../db.js';
 import { getDeviceId, getDeviceLabel } from '../device.js';
-import { buildLocalSyncKeyIndex, pullAllDeviceDocs } from '../firebase.js';
+import { pullAllDeviceDocs } from '../firebase.js';
 import { useAuth } from '../hooks/useAuth.js';
+import {
+  loadLocalPlaybackTargetIndex,
+  type LocalPlaybackTargetIndex,
+} from '../playback-identity-resolver.js';
 
 function formatDuration(sec: number): string {
   const h = Math.floor(sec / 3600);
@@ -34,56 +38,13 @@ function formatTimeAgo(ts: number): string {
   return new Date(ts).toLocaleDateString();
 }
 
-function magnetWithFileIndex(entry: ActivityFact): string | null {
-  if (!entry.torrentMagnetUrl) return null;
-  const url = new URL(entry.torrentMagnetUrl);
-  if (entry.torrentFileIndex != null) {
-    url.searchParams.set('so', String(entry.torrentFileIndex));
-  }
-  return url.toString();
-}
-
-function TorrentActivityActions({ entry }: { entry: ActivityFact }) {
-  const magnetUrl = magnetWithFileIndex(entry);
-  if (!magnetUrl) return null;
-
-  return (
-    <span className="episode-magnet-actions">
-      <a href={magnetUrl} className="btn btn-secondary episode-magnet-action">
-        Open Magnet Link
-      </a>
-      <button
-        type="button"
-        className="btn btn-secondary episode-magnet-action"
-        onClick={() => {
-          void navigator.clipboard.writeText(magnetUrl);
-        }}
-      >
-        Copy Magnet Link
-      </button>
-    </span>
-  );
-}
-
-function buildResumeState(entry: ActivityFact, playbackKey: string) {
-  return {
-    resumePlayback: {
-      playbackKey,
-      positionSec: entry.positionSec,
-      durationSec: entry.durationSec,
-      watchState: entry.watchState,
-      lastPlayedAt: entry.lastPlayedAt,
-    },
-  };
-}
-
 function formatEpisodeLabel(item: ActivityItem): string | null {
   if (item.seasonNumber == null || item.episodeLabel == null) return null;
   return `S${String(item.seasonNumber).padStart(2, '0')}E${item.episodeLabel}`;
 }
 
 function ActivityItemRow({ item }: { item: ActivityItem }) {
-  const { fact, localEntryId } = item;
+  const { fact, localTarget } = item;
   const progress = fact.durationSec > 0 ? fact.positionSec / fact.durationSec : 0;
   const remaining = fact.durationSec > 0 ? fact.durationSec - fact.positionSec : 0;
   const episodeLabel = formatEpisodeLabel(item);
@@ -118,24 +79,19 @@ function ActivityItemRow({ item }: { item: ActivityItem }) {
             {fact.watchState === 'watched' ? 'Watched' : 'New'}
           </span>
         )}
-        {localEntryId == null && <TorrentActivityActions entry={fact} />}
+        <PlaybackHandoffActions
+          fact={fact}
+          localTarget={localTarget}
+          ambiguous={item.localResolutionStatus === 'ambiguous'}
+        />
       </span>
     </>
   );
-
-  if (localEntryId != null) {
-    return (
-      <Link
-        to={`/play/${localEntryId}`}
-        state={buildResumeState(fact, fact.playbackKey)}
-        className="episode-row"
-      >
-        {content}
-      </Link>
-    );
-  }
-
-  return <div className="episode-row episode-row-missing">{content}</div>;
+  return (
+    <div className={`episode-row${localTarget?.hasLocalFile ? '' : ' episode-row-missing'}`}>
+      {content}
+    </div>
+  );
 }
 
 function chronologicalItems(items: ActivityItem[]): ActivityItem[] {
@@ -234,9 +190,7 @@ function DeviceFilters({
 export function Activity() {
   const { user, loading: authLoading } = useAuth();
   const [facts, setFacts] = useState<ActivityFact[] | null>(null);
-  const [localEntryByPlaybackKey, setLocalEntryByPlaybackKey] = useState<Map<string, number>>(
-    new Map(),
-  );
+  const [localTargetIndex, setLocalTargetIndex] = useState<LocalPlaybackTargetIndex | null>(null);
   const [devices, setDevices] = useState<ActivityDeviceOption[]>([]);
   const [currentDeviceId, setCurrentDeviceId] = useState<string | null>(null);
   const [selectedDeviceId, setSelectedDeviceId] = useState('all');
@@ -252,7 +206,7 @@ export function Activity() {
       try {
         const [
           docs,
-          keyIndex,
+          targetIndex,
           localDeviceId,
           localDeviceLabel,
           localPlayback,
@@ -261,7 +215,7 @@ export function Activity() {
           movieMeta,
         ] = await Promise.all([
           user ? pullAllDeviceDocs(user.uid) : Promise.resolve([]),
-          buildLocalSyncKeyIndex(),
+          loadLocalPlaybackTargetIndex(),
           getDeviceId(),
           getDeviceLabel(),
           db.playback.toArray(),
@@ -316,7 +270,7 @@ export function Activity() {
 
         const allFacts = [...activityFactsFromDeviceDocs(docs), ...localFacts];
         setFacts(allFacts);
-        setLocalEntryByPlaybackKey(keyIndex);
+        setLocalTargetIndex(targetIndex);
         setCurrentDeviceId(localDeviceId);
         setDevices(listActivityDevices(allFacts, localDeviceId, localDeviceLabel));
         setSelectedDeviceId((selected) =>
@@ -343,10 +297,10 @@ export function Activity() {
         ? buildActivityGroups({
             facts,
             deviceId: selectedDeviceId === 'all' ? undefined : selectedDeviceId,
-            localEntryByPlaybackKey,
+            localTargetIndex: localTargetIndex ?? undefined,
           })
         : [],
-    [facts, localEntryByPlaybackKey, selectedDeviceId],
+    [facts, localTargetIndex, selectedDeviceId],
   );
 
   if ((loading || authLoading) && facts == null) {
