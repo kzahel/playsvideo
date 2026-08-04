@@ -10,6 +10,7 @@ import { useSetting } from '../hooks/useSetting';
 import { useFullscreen } from '../hooks/useFullscreen';
 import { useSessionPlayerControlsType } from '../hooks/useSessionPlayerControlsType.js';
 import { getLocalPlayback } from '../local-playback.js';
+import { consumePendingHandoff } from '../handoff/pending-handoffs.js';
 import {
   AUTOPLAY_NEXT_EPISODE_KEY,
 } from '../settings.js';
@@ -25,6 +26,7 @@ interface PlayerRouteState {
   entry?: CatalogEntry | null;
   resumePlayback?: RouteResumePlayback | null;
   startAtBeginning?: boolean;
+  pendingHandoffId?: string;
 }
 
 function isPlayerRouteState(value: unknown): value is PlayerRouteState {
@@ -266,6 +268,12 @@ export function Player() {
     videoElement,
   );
   useFullscreen(controlsType === 'stock' ? videoElement : null, containerEl);
+
+  useEffect(() => {
+    const pendingHandoffId = routeState?.pendingHandoffId;
+    if (phase !== 'ready' || !pendingHandoffId) return;
+    void consumePendingHandoff(pendingHandoffId);
+  }, [phase, routeState?.pendingHandoffId]);
 
   const { previousEpisode, nextEpisode } = useMemo(() => {
     if (!resolvedEntry || entries === undefined) {

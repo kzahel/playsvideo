@@ -14,6 +14,10 @@ import { getDeviceId, getDeviceLabel } from '../device.js';
 import { pullAllDeviceDocs } from '../firebase.js';
 import { useAuth } from '../hooks/useAuth.js';
 import {
+  cleanupExpiredPendingHandoffs,
+  reconcilePendingHandoffs,
+} from '../handoff/pending-handoffs.js';
+import {
   loadLocalPlaybackTargetIndex,
   type LocalPlaybackTargetIndex,
 } from '../playback-identity-resolver.js';
@@ -223,6 +227,10 @@ export function Activity() {
           db.seriesMetadata.toArray(),
           db.movieMetadata.toArray(),
         ]);
+        if (cancelled) return;
+
+        await reconcilePendingHandoffs(targetIndex);
+        await cleanupExpiredPendingHandoffs();
         if (cancelled) return;
 
         const catalogByKey = new Map(

@@ -15,6 +15,7 @@ import {
 } from './folder-provider.js';
 import { parseMediaMetadata } from './media-metadata.js';
 import { refreshCatalogMetadata } from './metadata/client.js';
+import { reconcilePendingHandoffs } from './handoff/pending-handoffs.js';
 import { backfillCatalogAliases } from './playback-identity-resolver.js';
 import { buildPlaybackKeyCandidates } from './playback-key.js';
 
@@ -302,4 +303,5 @@ async function syncCatalog(
 
   await refreshCatalogMetadata({ entries: nextCatalogEntries });
   await backfillCatalogAliases();
+  await reconcilePendingHandoffs();
 }

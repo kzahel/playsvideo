@@ -989,6 +989,11 @@ body {
   font-size: 0.75rem;
 }
 
+.handoff-pending-status {
+  color: #f59e0b;
+  font-size: 0.75rem;
+}
+
 .episode-watch-badge {
   display: inline-flex;
   width: fit-content;

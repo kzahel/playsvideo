@@ -8,6 +8,7 @@ import {
   type SyncEntry,
 } from '../firebase.js';
 import { getDeviceId } from '../device.js';
+import { reconcilePendingHandoffs } from '../handoff/pending-handoffs.js';
 import {
   loadLocalPlaybackTargetIndex,
   resolveLocalPlaybackTarget,
@@ -271,6 +272,8 @@ export function Devices() {
           pullAllDeviceDocs(user!.uid),
           loadLocalPlaybackTargetIndex(),
         ]);
+        if (cancelled) return;
+        await reconcilePendingHandoffs(targetIndex);
         if (cancelled) return;
         setCurrentDeviceId(devId);
         setLocalTargetIndex(targetIndex);

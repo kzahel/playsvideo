@@ -107,6 +107,31 @@ export interface CatalogAliasEntry {
   createdAt: number;
 }
 
+export type PendingHandoffStatus = 'waiting-for-media' | 'ready' | 'consumed' | 'expired';
+
+export interface PendingHandoffEntry {
+  id: string;
+  createdAt: number;
+  updatedAt: number;
+  expiresAt: number;
+  sourceDeviceId: string;
+  sourceDeviceLabel: string;
+  sourcePlaybackKey: string;
+  positionSec: number;
+  durationSec: number;
+  watchState: WatchState;
+  title?: string;
+  contentHash?: string;
+  torrentInfoHash?: string;
+  torrentFileIndex?: number;
+  magnetUrl: string;
+  status: PendingHandoffStatus;
+  targetCatalogId?: number;
+  localPlaybackKey?: string;
+  readyAt?: number;
+  consumedAt?: number;
+}
+
 export interface DirectoryEntry {
   id: number;
   handle?: FileSystemDirectoryHandle;
@@ -244,6 +269,7 @@ class PlaysVideoDB extends Dexie {
   playback!: Table<PlaybackEntry, [string, string]>;
   remotePlayback!: Table<RemotePlaybackEntry, [string, string]>;
   catalogAliases!: Table<CatalogAliasEntry, [number, string]>;
+  pendingHandoffs!: EntityTable<PendingHandoffEntry, 'id'>;
   directories!: EntityTable<DirectoryEntry, 'id'>;
   playlists!: EntityTable<PlaylistEntry, 'id'>;
   settings!: EntityTable<SettingEntry, 'key'>;
@@ -363,6 +389,25 @@ class PlaysVideoDB extends Dexie {
       remotePlayback:
         '[deviceId+playbackKey], deviceId, playbackKey, watchState, lastPlayedAt, updatedAt',
       catalogAliases: '[catalogId+playbackKey], catalogId, playbackKey, source, createdAt',
+      directories: '++id, name',
+      playlists: '++id, name',
+      settings: 'key',
+      seriesMetadata: 'key, tmdbId, fetchedAt, query',
+      movieMetadata: 'key, tmdbId, fetchedAt, query',
+      metadataParseCache: 'key, path, lastModified, parsedAt',
+      metadataSeasonCache: 'key, seriesMetadataKey, tmdbSeriesId, seasonNumber, fetchedAt, status',
+      metadataTransportState: 'key, transport, credentialSlot, status, cooldownUntil, updatedAt',
+      thumbnailCache: 'key, catalogId, source, status, [catalogId+source]',
+    });
+    this.version(12).stores({
+      catalog:
+        '++id, directoryId, path, name, availability, lastSeenAt, firstMissingAt, detectedMediaType, parsedTitle, seriesMetadataKey, movieMetadataKey, canonicalPlaybackKey, contentHash, torrentInfoHash, hasLocalFile, [directoryId+path], [torrentInfoHash+torrentFileIndex]',
+      playback: '[deviceId+playbackKey], deviceId, playbackKey, watchState, lastPlayedAt, updatedAt',
+      remotePlayback:
+        '[deviceId+playbackKey], deviceId, playbackKey, watchState, lastPlayedAt, updatedAt',
+      catalogAliases: '[catalogId+playbackKey], catalogId, playbackKey, source, createdAt',
+      pendingHandoffs:
+        'id, status, sourcePlaybackKey, expiresAt, [torrentInfoHash+torrentFileIndex]',
       directories: '++id, name',
       playlists: '++id, name',
       settings: 'key',

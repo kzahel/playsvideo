@@ -1,4 +1,5 @@
 import { useState } from 'react';
+import { useLiveQuery } from 'dexie-react-hooks';
 import { Link } from 'react-router-dom';
 import type { ActivityFact } from '../activity/activity-view.js';
 import {
@@ -6,6 +7,12 @@ import {
   type HandoffAvailability,
 } from '../activity/handoff-actions.js';
 import type { LocalPlaybackTarget } from '../playback-identity-resolver.js';
+import {
+  dismissPendingHandoff,
+  pendingHandoffId,
+  recordPendingHandoff,
+} from '../handoff/pending-handoffs.js';
+import { db } from '../db.js';
 
 function formatDuration(sec: number): string {
   const h = Math.floor(sec / 3600);
@@ -46,6 +53,11 @@ export function PlaybackHandoffActions({
   const [status, setStatus] = useState('');
   const capabilities = resolveHandoffCapabilities({ fact, localTarget, ambiguous });
   const canShare = typeof navigator.share === 'function';
+  const handoffId = pendingHandoffId(fact);
+  const pendingHandoff = useLiveQuery(
+    () => db.pendingHandoffs.get(handoffId),
+    [handoffId],
+  );
   const resumeState = localTarget
     ? {
         resumePlayback: {
@@ -55,6 +67,9 @@ export function PlaybackHandoffActions({
           watchState: fact.watchState,
           lastPlayedAt: fact.lastPlayedAt,
         },
+        ...(pendingHandoff && pendingHandoff.status !== 'consumed'
+          ? { pendingHandoffId: pendingHandoff.id }
+          : {}),
       }
     : undefined;
 
@@ -70,7 +85,9 @@ export function PlaybackHandoffActions({
             state={resumeState}
             className="btn btn-primary handoff-action"
           >
-            Resume here at {formatDuration(fact.positionSec)}
+            {pendingHandoff?.status === 'ready'
+              ? 'Resume downloaded video'
+              : `Resume here at ${formatDuration(fact.positionSec)}`}
           </Link>
         )}
         {capabilities.magnetUrl && (
@@ -78,8 +95,15 @@ export function PlaybackHandoffActions({
             <a
               href={capabilities.magnetUrl}
               className="btn btn-secondary handoff-action"
-              onClick={() => {
-                void onOpenMagnet?.(capabilities.magnetUrl!);
+              onClick={async (event) => {
+                event.preventDefault();
+                try {
+                  await recordPendingHandoff(fact, capabilities.magnetUrl!);
+                  await onOpenMagnet?.(capabilities.magnetUrl!);
+                  window.location.assign(capabilities.magnetUrl!);
+                } catch {
+                  setStatus('Could not save the resume handoff.');
+                }
               }}
             >
               Open in JSTorrent
@@ -120,6 +144,18 @@ export function PlaybackHandoffActions({
             )}
           </>
         )}
+        {pendingHandoff && pendingHandoff.status !== 'consumed' && (
+          <button
+            type="button"
+            className="btn btn-secondary handoff-action"
+            onClick={async () => {
+              await dismissPendingHandoff(pendingHandoff.id);
+              setStatus('Saved handoff dismissed.');
+            }}
+          >
+            Dismiss handoff
+          </button>
+        )}
         <details className="handoff-details">
           <summary>Details</summary>
           <dl>
@@ -154,6 +190,12 @@ export function PlaybackHandoffActions({
           </dl>
         </details>
       </div>
+      {pendingHandoff?.status === 'waiting-for-media' && (
+        <span className="handoff-pending-status">Resume position saved while download completes.</span>
+      )}
+      {pendingHandoff?.status === 'ready' && (
+        <span className="handoff-pending-status">Downloaded media is ready to resume.</span>
+      )}
       {status && <span className="handoff-action-status">{status}</span>}
     </div>
   );
