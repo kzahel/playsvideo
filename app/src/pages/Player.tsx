@@ -11,6 +11,7 @@ import { useFullscreen } from '../hooks/useFullscreen';
 import { useSessionPlayerControlsType } from '../hooks/useSessionPlayerControlsType.js';
 import { getLocalPlayback } from '../local-playback.js';
 import { consumePendingHandoff } from '../handoff/pending-handoffs.js';
+import { magnetWithFileIndex } from '../torrent-magnet.js';
 import {
   AUTOPLAY_NEXT_EPISODE_KEY,
 } from '../settings.js';
@@ -87,13 +88,6 @@ function isPlaybackForTarget(
     playback.deviceId === input.deviceId &&
     playback.playbackKey === input.playbackKey
   );
-}
-
-function magnetWithFileIndex(entry: CatalogEntry): string {
-  const url = entry.torrentMagnetUrl!;
-  if (entry.torrentFileIndex == null) return url;
-  const sep = url.includes('?') ? '&' : '?';
-  return `${url}${sep}so=${entry.torrentFileIndex}`;
 }
 
 function buildSeriesIdentity(entry: CatalogEntry): string | null {
@@ -386,12 +380,25 @@ export function Player() {
           <p>{missingMessage(resolvedEntry)}</p>
           {resolvedEntry.torrentMagnetUrl ? (
             <div className="player-virtual-magnet">
-              <a href={magnetWithFileIndex(resolvedEntry)} className="btn btn-secondary">Open Magnet Link</a>
+              <a
+                href={magnetWithFileIndex(
+                  resolvedEntry.torrentMagnetUrl,
+                  resolvedEntry.torrentFileIndex,
+                )}
+                className="btn btn-secondary"
+              >
+                Open Magnet Link
+              </a>
               <button
                 type="button"
                 className="btn btn-secondary"
                 onClick={() => {
-                  void navigator.clipboard.writeText(magnetWithFileIndex(resolvedEntry));
+                  void navigator.clipboard.writeText(
+                    magnetWithFileIndex(
+                      resolvedEntry.torrentMagnetUrl!,
+                      resolvedEntry.torrentFileIndex,
+                    ),
+                  );
                 }}
               >
                 Copy Magnet

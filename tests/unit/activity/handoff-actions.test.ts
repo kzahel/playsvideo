@@ -1,6 +1,9 @@
 import { describe, expect, it } from 'vitest';
 import type { ActivityFact } from '../../../app/src/activity/activity-view.js';
-import { resolveHandoffCapabilities } from '../../../app/src/activity/handoff-actions.js';
+import {
+  resolveHandoffCapabilities,
+  resolveHandoffResumePoint,
+} from '../../../app/src/activity/handoff-actions.js';
 import type { CatalogEntry } from '../../../app/src/db.js';
 import type { LocalPlaybackTarget } from '../../../app/src/playback-identity-resolver.js';
 
@@ -72,5 +75,35 @@ describe('handoff capabilities', () => {
       availability: 'ambiguous-local-match',
       canResume: false,
     });
+  });
+
+  it('requires confirmation before resuming a low-confidence local match', () => {
+    const localTarget = { ...target(), confidence: 'low' as const };
+
+    expect(resolveHandoffCapabilities({ fact, localTarget })).toEqual(
+      expect.objectContaining({ canResume: false, requiresConfirmation: true }),
+    );
+    expect(resolveHandoffCapabilities({ fact, localTarget, lowConfidenceConfirmed: true })).toEqual(
+      expect.objectContaining({ canResume: true, requiresConfirmation: false }),
+    );
+  });
+
+  it('scales a medium-confidence resume position when local duration differs materially', () => {
+    const resume = resolveHandoffResumePoint(fact, {
+      ...target(),
+      confidence: 'medium',
+      localDurationSec: 2000,
+    });
+
+    expect(resume).toEqual({ positionSec: 240, durationSec: 2000, translated: true });
+  });
+
+  it('keeps a high-confidence resume position when local duration differs', () => {
+    const resume = resolveHandoffResumePoint(fact, {
+      ...target(),
+      localDurationSec: 2000,
+    });
+
+    expect(resume).toEqual({ positionSec: 120, durationSec: 2000, translated: false });
   });
 });

@@ -2021,6 +2021,21 @@ body {
   color: var(--muted);
   padding: 0.25rem 0;
 }
+button.device-card-more {
+  width: 100%;
+  border: 0;
+  border-radius: 6px;
+  padding: 0.65rem;
+  background: transparent;
+  cursor: pointer;
+  font: inherit;
+  font-size: 0.8rem;
+  color: var(--muted);
+}
+button.device-card-more:hover {
+  background: rgba(128, 128, 128, 0.08);
+  color: var(--fg);
+}
 
 /* Device card entries (expanded) */
 .device-card-entries {

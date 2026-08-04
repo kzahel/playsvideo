@@ -41,7 +41,20 @@ function series(): SeriesMetadataEntry {
 describe('playback identity resolver', () => {
   it('resolves a torrent identity to a file-keyed local catalog entry', () => {
     const entry = catalog({ torrentInfoHash: 'abc', torrentFileIndex: 4 });
-    const index = createLocalPlaybackTargetIndex({ catalogEntries: [entry] });
+    const index = createLocalPlaybackTargetIndex({
+      catalogEntries: [entry],
+      playback: [
+        {
+          deviceId: 'local',
+          playbackKey: entry.canonicalPlaybackKey!,
+          positionSec: 10,
+          durationSec: 1200,
+          watchState: 'in-progress',
+          lastPlayedAt: 10,
+          updatedAt: 10,
+        },
+      ],
+    });
     const result = resolveLocalPlaybackTarget(index, {
       playbackKey: 'torrent:abc:4',
       torrentInfoHash: 'abc',
@@ -52,6 +65,20 @@ describe('playback identity resolver', () => {
     if (result.status !== 'resolved') return;
     expect(result.target.catalogId).toBe(1);
     expect(result.target.localPlaybackKey).toBe('file:Example.S01E03.mkv|1000');
+    expect(result.target.confidence).toBe('high');
+    expect(result.target.localDurationSec).toBe(1200);
+  });
+
+  it('treats an exact canonical file key as high confidence', () => {
+    const entry = catalog();
+    const index = createLocalPlaybackTargetIndex({ catalogEntries: [entry] });
+    const result = resolveLocalPlaybackTarget(index, {
+      playbackKey: entry.canonicalPlaybackKey!,
+    });
+
+    expect(result.status).toBe('resolved');
+    if (result.status !== 'resolved') return;
+    expect(result.target.matchKind).toBe('canonical');
     expect(result.target.confidence).toBe('high');
   });
 

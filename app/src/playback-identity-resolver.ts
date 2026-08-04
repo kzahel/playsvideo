@@ -3,6 +3,7 @@ import {
   type CatalogAliasEntry,
   type CatalogEntry,
   type MovieMetadataEntry,
+  type PlaybackEntry,
   type PlaybackKeySource,
   type SeriesMetadataEntry,
 } from './db.js';
@@ -32,6 +33,7 @@ export interface LocalPlaybackTarget {
   matchKind: 'canonical' | PlaybackKeySource;
   confidence: PlaybackMatchConfidence;
   hasLocalFile: boolean;
+  localDurationSec?: number;
 }
 
 interface IndexedTarget {
@@ -41,6 +43,7 @@ interface IndexedTarget {
 
 export interface LocalPlaybackTargetIndex {
   byPlaybackKey: Map<string, IndexedTarget[]>;
+  playbackByKey: Map<string, PlaybackEntry>;
 }
 
 export type LocalPlaybackResolution =
@@ -99,6 +102,7 @@ export function createLocalPlaybackTargetIndex(input: {
   aliases?: CatalogAliasEntry[];
   seriesMetadata?: SeriesMetadataEntry[];
   movieMetadata?: MovieMetadataEntry[];
+  playback?: PlaybackEntry[];
 }): LocalPlaybackTargetIndex {
   const seriesMetadataByKey = new Map(
     (input.seriesMetadata ?? []).map((entry) => [entry.key, entry]),
@@ -108,6 +112,14 @@ export function createLocalPlaybackTargetIndex(input: {
   );
   const catalogById = new Map(input.catalogEntries.map((entry) => [entry.id, entry]));
   const byPlaybackKey = new Map<string, IndexedTarget[]>();
+  const playbackByKey = new Map<string, PlaybackEntry>();
+
+  for (const playback of input.playback ?? []) {
+    const existing = playbackByKey.get(playback.playbackKey);
+    if (!existing || playback.lastPlayedAt > existing.lastPlayedAt) {
+      playbackByKey.set(playback.playbackKey, playback);
+    }
+  }
 
   for (const entry of input.catalogEntries) {
     for (const candidate of candidatesForCatalogEntry(
@@ -137,7 +149,7 @@ export function createLocalPlaybackTargetIndex(input: {
     });
   }
 
-  return { byPlaybackKey };
+  return { byPlaybackKey, playbackByKey };
 }
 
 export function playbackKeyCandidatesForFact(fact: PlaybackIdentityFact): PlaybackKeyCandidate[] {
@@ -204,10 +216,12 @@ export function resolveLocalPlaybackTarget(
         localPlaybackKey: canonical,
         matchedPlaybackKey: candidate.key,
         matchKind: candidate.key === canonical ? 'canonical' : candidate.source,
-        confidence: confidenceForSource(candidate.source),
+        confidence:
+          candidate.key === canonical ? 'high' : confidenceForSource(candidate.source),
         hasLocalFile:
           match.catalogEntry.availability === 'present' &&
           match.catalogEntry.hasLocalFile !== false,
+        localDurationSec: index.playbackByKey?.get(canonical)?.durationSec,
       },
     };
   }
@@ -272,16 +286,18 @@ export async function backfillCatalogAliases(): Promise<void> {
 
 export async function loadLocalPlaybackTargetIndex(): Promise<LocalPlaybackTargetIndex> {
   await backfillCatalogAliases();
-  const [catalogEntries, aliases, seriesMetadata, movieMetadata] = await Promise.all([
+  const [catalogEntries, aliases, seriesMetadata, movieMetadata, playback] = await Promise.all([
     db.catalog.toArray(),
     db.catalogAliases.toArray(),
     db.seriesMetadata.toArray(),
     db.movieMetadata.toArray(),
+    db.playback.toArray(),
   ]);
   return createLocalPlaybackTargetIndex({
     catalogEntries,
     aliases,
     seriesMetadata,
     movieMetadata,
+    playback,
   });
 }

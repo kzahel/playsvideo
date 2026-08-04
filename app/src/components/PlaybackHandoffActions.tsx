@@ -4,6 +4,7 @@ import { Link } from 'react-router-dom';
 import type { ActivityFact } from '../activity/activity-view.js';
 import {
   resolveHandoffCapabilities,
+  resolveHandoffResumePoint,
   type HandoffAvailability,
 } from '../activity/handoff-actions.js';
 import type { LocalPlaybackTarget } from '../playback-identity-resolver.js';
@@ -51,19 +52,26 @@ export function PlaybackHandoffActions({
   onOpenMagnet?: (magnetUrl: string) => void | Promise<void>;
 }) {
   const [status, setStatus] = useState('');
-  const capabilities = resolveHandoffCapabilities({ fact, localTarget, ambiguous });
+  const [lowConfidenceConfirmed, setLowConfidenceConfirmed] = useState(false);
+  const capabilities = resolveHandoffCapabilities({
+    fact,
+    localTarget,
+    ambiguous,
+    lowConfidenceConfirmed,
+  });
   const canShare = typeof navigator.share === 'function';
   const handoffId = pendingHandoffId(fact);
   const pendingHandoff = useLiveQuery(
     () => db.pendingHandoffs.get(handoffId),
     [handoffId],
   );
-  const resumeState = localTarget
+  const resumePoint = localTarget ? resolveHandoffResumePoint(fact, localTarget) : null;
+  const resumeState = localTarget && resumePoint
     ? {
         resumePlayback: {
           playbackKey: localTarget.localPlaybackKey,
-          positionSec: fact.positionSec,
-          durationSec: fact.durationSec,
+          positionSec: resumePoint.positionSec,
+          durationSec: resumePoint.durationSec,
           watchState: fact.watchState,
           lastPlayedAt: fact.lastPlayedAt,
         },
@@ -79,6 +87,18 @@ export function PlaybackHandoffActions({
         {availabilityLabel(capabilities.availability)}
       </span>
       <div className="handoff-action-buttons">
+        {capabilities.requiresConfirmation && localTarget && (
+          <button
+            type="button"
+            className="btn btn-secondary handoff-action"
+            onClick={() => {
+              setLowConfidenceConfirmed(true);
+              setStatus('Local filename match confirmed.');
+            }}
+          >
+            Confirm local match
+          </button>
+        )}
         {capabilities.canResume && localTarget && (
           <Link
             to={`/play/${localTarget.catalogId}`}
@@ -87,7 +107,7 @@ export function PlaybackHandoffActions({
           >
             {pendingHandoff?.status === 'ready'
               ? 'Resume downloaded video'
-              : `Resume here at ${formatDuration(fact.positionSec)}`}
+              : `Resume here at ${formatDuration(resumePoint?.positionSec ?? fact.positionSec)}`}
           </Link>
         )}
         {capabilities.magnetUrl && (
@@ -100,6 +120,7 @@ export function PlaybackHandoffActions({
                 try {
                   await recordPendingHandoff(fact, capabilities.magnetUrl!);
                   await onOpenMagnet?.(capabilities.magnetUrl!);
+                  setStatus('Opening in JSTorrent…');
                   window.location.assign(capabilities.magnetUrl!);
                 } catch {
                   setStatus('Could not save the resume handoff.');
@@ -179,12 +200,24 @@ export function PlaybackHandoffActions({
                 <dd>{fact.torrentFileIndex}</dd>
               </div>
             )}
+            {fact.deviceLastSyncedAt != null && (
+              <div>
+                <dt>Device last synced</dt>
+                <dd>{new Date(fact.deviceLastSyncedAt).toLocaleString()}</dd>
+              </div>
+            )}
             {localTarget && (
               <div>
                 <dt>Local match</dt>
                 <dd>
                   {localTarget.matchKind} · {localTarget.confidence} confidence
                 </dd>
+              </div>
+            )}
+            {resumePoint?.translated && (
+              <div>
+                <dt>Resume adjustment</dt>
+                <dd>Position scaled to the local file duration</dd>
               </div>
             )}
           </dl>
