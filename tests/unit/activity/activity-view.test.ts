@@ -4,6 +4,7 @@ import {
   activityFactsFromRemotePlayback,
   buildActivityGroups,
   listActivityDevices,
+  summarizeActivityProjection,
   type ActivityFact,
 } from '../../../app/src/activity/activity-view.js';
 import type { RemoteDeviceState } from '../../../app/src/sync-device-doc.js';
@@ -22,6 +23,23 @@ function fact(overrides: Partial<ActivityFact> = {}): ActivityFact {
 }
 
 describe('activity view projection', () => {
+  it('keeps plain file and hash facts without TMDB metadata', () => {
+    const groups = buildActivityGroups({
+      facts: [
+        fact({ playbackKey: 'file:Movie.mkv|500', title: 'File Movie' }),
+        fact({
+          playbackKey: 'hash:content-1',
+          contentHash: 'content-1',
+          title: 'Hash Movie',
+          lastPlayedAt: 2000,
+        }),
+      ],
+    });
+
+    expect(groups.map((group) => group.title)).toEqual(['Hash Movie', 'File Movie']);
+    expect(groups.every((group) => group.type === 'other')).toBe(true);
+  });
+
   it('keeps a torrent-backed episode without TMDB metadata', () => {
     const groups = buildActivityGroups({
       facts: [
@@ -180,5 +198,24 @@ describe('activity view projection', () => {
     );
 
     expect(devices.map((device) => device.deviceId)).toEqual(['current', 'new', 'old']);
+  });
+
+  it('summarizes projection diagnostics without exposing locator values', () => {
+    const groups = buildActivityGroups({
+      facts: [
+        fact({
+          title: 'Ungrouped',
+          torrentMagnetUrl: 'magnet:?xt=urn:btih:private',
+        }),
+      ],
+    });
+
+    expect(summarizeActivityProjection([fact()], groups)).toEqual({
+      inputFactCount: 1,
+      displayedItemCount: 1,
+      unresolvedGroupingCount: 1,
+      localMatchCount: 0,
+      locatorCount: 1,
+    });
   });
 });

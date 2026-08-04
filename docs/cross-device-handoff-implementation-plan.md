@@ -2,9 +2,9 @@
 
 Last reviewed: 2026-08-04
 
-Status: Proposed
+Status: Implemented; web/live-data validation complete within the no-download constraint
 
-Owner: Unassigned
+Owner: playsvideo app
 
 ## Purpose
 
@@ -30,7 +30,7 @@ A signed-in user can:
    media becomes playable.
 7. Open any row on Devices and get the same useful actions and details.
 
-## Verified baseline
+## Verified baseline before implementation
 
 | Area | Current behavior | Consequence |
 |---|---|---|
@@ -186,13 +186,13 @@ interface PendingHandoff {
 
 | Phase | Scope | Status | Exit outcome |
 |---|---|---|---|
-| 0 | Pure projection and regression fixtures | Not started | Cross-device behavior is testable without React or Firestore |
-| 1 | Complete Activity and device filters | Not started | Every valid playback fact is visible and ordered by recency |
-| 2 | Shared row actions and Devices parity | Not started | No remote row is a dead end |
-| 3 | Multi-key identity and alias resolution | Not started | Equivalent local media resolves across canonical-key differences |
-| 4 | Download-and-resume handoff | Not started | Magnet recovery retains the remote resume intent |
-| 5 | Freshness and remote cache completeness | Not started | New handoffs arrive predictably and cached data supports actions |
-| 6 | Hardening, migration, and release validation | Not started | Multi-device scenarios pass automated and manual checks |
+| 0 | Pure projection and regression fixtures | Complete | Cross-device behavior is testable without React or Firestore |
+| 1 | Complete Activity and device filters | Complete | Every valid playback fact is visible and ordered by recency |
+| 2 | Shared row actions and Devices parity | Complete | No remote row is a dead end |
+| 3 | Multi-key identity and alias resolution | Complete | Equivalent local media resolves across canonical-key differences |
+| 4 | Download-and-resume handoff | Complete | Magnet recovery retains the remote resume intent |
+| 5 | Freshness and remote cache completeness | Complete | New handoffs arrive predictably and cached data supports actions |
+| 6 | Hardening, migration, and release validation | Partial validation | Web/live-data and all automated gates pass; protocol launch, actual download, extension, offline, and failure injection remain unrun by constraint |
 
 ### Phase 0: Extract a pure activity projection
 
@@ -200,20 +200,20 @@ Goal: establish one testable path from per-device facts to Activity view models.
 
 Tasks:
 
-- [ ] `H0.1` Add a pure normalizer for Firestore device docs and local playback
+- [x] `H0.1` Add a pure normalizer for Firestore device docs and local playback
   rows.
-- [ ] `H0.2` Preserve one normalized fact per device and playback key.
-- [ ] `H0.3` Add an identity resolver with explicit grouping fallbacks:
+- [x] `H0.2` Preserve one normalized fact per device and playback key.
+- [x] `H0.3` Add an identity resolver with explicit grouping fallbacks:
   torrent identity, content hash, TMDB identity, parsed title/episode, then
   playback key.
-- [ ] `H0.4` Separate grouping identity from local-playability resolution.
-- [ ] `H0.5` Select the newest resumable fact for All devices without losing the
+- [x] `H0.4` Separate grouping identity from local-playability resolution.
+- [x] `H0.5` Select the newest resumable fact for All devices without losing the
   other device facts.
-- [ ] `H0.6` Coalesce optional display/locator metadata field by field so a newer
+- [x] `H0.6` Coalesce optional display/locator metadata field by field so a newer
   sparse fact does not erase an older magnet or TMDB identity.
-- [ ] `H0.7` Add pure unit fixtures for legacy/sparse device docs, torrent keys,
+- [x] `H0.7` Add pure unit fixtures for legacy/sparse device docs, torrent keys,
   file keys, hash keys, and TMDB keys.
-- [ ] `H0.8` Record projection diagnostics: input fact count, displayed item
+- [x] `H0.8` Record projection diagnostics: input fact count, displayed item
   count, unresolved grouping count, local match count, and locator count.
 
 Suggested files:
@@ -240,22 +240,22 @@ visible to the user.
 
 Tasks:
 
-- [ ] `H1.1` Replace `extractTmdbIdentity`/`buildShowGroups` page-local logic
+- [x] `H1.1` Replace `extractTmdbIdentity`/`buildShowGroups` page-local logic
   with the Phase 0 selector.
-- [ ] `H1.2` Add filter controls for **All devices**, **This device**, and each
+- [x] `H1.2` Add filter controls for **All devices**, **This device**, and each
   synced device.
-- [ ] `H1.3` Display the selected source device, playback timestamp, and device
+- [x] `H1.3` Display the selected source device, playback timestamp, and device
   sync freshness on each row or its details surface.
-- [ ] `H1.4` Sort Continue Watching items by `lastPlayedAt` descending.
-- [ ] `H1.5` When grouping a show, order the collapsed preview by recency; keep
+- [x] `H1.4` Sort Continue Watching items by `lastPlayedAt` descending.
+- [x] `H1.5` When grouping a show, order the collapsed preview by recency; keep
   season/episode order only for an expanded episode list.
-- [ ] `H1.6` Add a fallback section for entries that cannot be confidently
+- [x] `H1.6` Add a fallback section for entries that cannot be confidently
   grouped as TV or movies.
-- [ ] `H1.7` Make the signed-out page local-first by projecting IndexedDB
+- [x] `H1.7` Make the signed-out page local-first by projecting IndexedDB
   playback even when Firestore is unavailable.
-- [ ] `H1.8` Add useful empty states for no local activity, no synced activity,
+- [x] `H1.8` Add useful empty states for no local activity, no synced activity,
   and a device filter with no matches.
-- [ ] `H1.9` Keep filter state stable during the session and handle a forgotten
+- [x] `H1.9` Keep filter state stable during the session and handle a forgotten
   device gracefully.
 
 Suggested files:
@@ -283,22 +283,22 @@ both pages.
 
 Tasks:
 
-- [ ] `H2.1` Introduce a pure capability resolver that returns `resume`,
+- [x] `H2.1` Introduce a pure capability resolver that returns `resume`,
   `open-magnet`, `copy-magnet`, `share`, or `unavailable` actions.
-- [ ] `H2.2` Build a shared row details/action component used by Activity and
+- [x] `H2.2` Build a shared row details/action component used by Activity and
   Devices.
-- [ ] `H2.3` Keep the whole row/details trigger interactive even when there is
+- [x] `H2.3` Keep the whole row/details trigger interactive even when there is
   no local catalog match.
-- [ ] `H2.4` Label local availability clearly: **Available here**, **Download
+- [x] `H2.4` Label local availability clearly: **Available here**, **Download
   required**, **Incomplete download**, or **No source on this device**.
-- [ ] `H2.5` Provide **Resume here at H:MM:SS** when a playable local target is
+- [x] `H2.5` Provide **Resume here at H:MM:SS** when a playable local target is
   resolved.
-- [ ] `H2.6` Provide **Open in JSTorrent**, **Copy magnet**, and Web Share when a
+- [x] `H2.6` Provide **Open in JSTorrent**, **Copy magnet**, and Web Share when a
   magnet is available.
-- [ ] `H2.7` Centralize magnet URL handling and set/replace the `so` parameter.
-- [ ] `H2.8` Show success and failure feedback for clipboard, protocol-handler,
+- [x] `H2.7` Centralize magnet URL handling and set/replace the `so` parameter.
+- [x] `H2.8` Show success and failure feedback for clipboard, protocol-handler,
   and share actions.
-- [ ] `H2.9` Expose useful details without dumping sensitive URLs by default:
+- [x] `H2.9` Expose useful details without dumping sensitive URLs by default:
   source device, filename/title, info hash, file index, playback key type, and
   last sync time.
 
@@ -327,23 +327,23 @@ Goal: resume local media even when the remote and local canonical keys differ.
 
 Tasks:
 
-- [ ] `H3.1` Define match precedence and confidence:
+- [x] `H3.1` Define match precedence and confidence:
   exact canonical key; torrent info hash plus file index; content hash; TMDB
   movie/episode; filename plus size.
-- [ ] `H3.2` Populate `catalogAliases` with all known playback-key candidates
+- [x] `H3.2` Populate `catalogAliases` with all known playback-key candidates
   during scan/reconciliation and metadata enrichment.
-- [ ] `H3.3` Preserve aliases when a stronger canonical key becomes available.
-- [ ] `H3.4` Replace `buildLocalSyncKeyIndex()` with a resolver that indexes
+- [x] `H3.3` Preserve aliases when a stronger canonical key becomes available.
+- [x] `H3.4` Replace `buildLocalSyncKeyIndex()` with a resolver that indexes
   canonical and alias keys and returns a `LocalPlaybackTarget`.
-- [ ] `H3.5` Detect ambiguous matches and require confirmation instead of
+- [x] `H3.5` Detect ambiguous matches and require confirmation instead of
   selecting an arbitrary catalog row.
-- [ ] `H3.6` Translate the selected remote position onto the local canonical
+- [x] `H3.6` Translate the selected remote position onto the local canonical
   playback key before navigating to the player.
-- [ ] `H3.7` Compare remote and local durations for medium-confidence matches;
+- [x] `H3.7` Compare remote and local durations for medium-confidence matches;
   define and test fraction-based position translation.
-- [ ] `H3.8` Ensure resuming an alias does not fork subsequent local playback
+- [x] `H3.8` Ensure resuming an alias does not fork subsequent local playback
   history under the remote key.
-- [ ] `H3.9` Add migration/backfill logic for existing catalog rows if aliases
+- [x] `H3.9` Add migration/backfill logic for existing catalog rows if aliases
   are required immediately after upgrade.
 
 Suggested files:
@@ -373,19 +373,19 @@ playable on the current device.
 
 Tasks:
 
-- [ ] `H4.1` Add a `pendingHandoffs` Dexie table with bounded retention.
-- [ ] `H4.2` Before opening a magnet, persist source identity, file index,
+- [x] `H4.1` Add a `pendingHandoffs` Dexie table with bounded retention.
+- [x] `H4.2` Before opening a magnet, persist source identity, file index,
   position, duration, and source device.
-- [ ] `H4.3` After folder scan or JSTorrent manifest ingestion, resolve pending
+- [x] `H4.3` After folder scan or JSTorrent manifest ingestion, resolve pending
   handoffs against newly available catalog entries.
-- [ ] `H4.4` Surface ready handoffs in Activity with **Resume downloaded video**.
-- [ ] `H4.5` Decide whether automatic navigation is ever appropriate; default
+- [x] `H4.4` Surface ready handoffs in Activity with **Resume downloaded video**.
+- [x] `H4.5` Decide whether automatic navigation is ever appropriate; default
   to an explicit user action for the first release.
-- [ ] `H4.6` Mark a handoff consumed after successful player initialization,
+- [x] `H4.6` Mark a handoff consumed after successful player initialization,
   not merely after route navigation.
-- [ ] `H4.7` Expire or dismiss stale handoffs and allow manual cancellation.
-- [ ] `H4.8` Deduplicate repeated clicks for the same torrent/file identity.
-- [ ] `H4.9` Preserve the original remote fact so a failed download does not
+- [x] `H4.7` Expire or dismiss stale handoffs and allow manual cancellation.
+- [x] `H4.8` Deduplicate repeated clicks for the same torrent/file identity.
+- [x] `H4.9` Preserve the original remote fact so a failed download does not
   erase Activity history.
 
 Suggested files:
@@ -412,21 +412,21 @@ becomes unavailable.
 
 Tasks:
 
-- [ ] `H5.1` Expand `RemotePlaybackEntry` or introduce a companion cached media
+- [x] `H5.1` Expand `RemotePlaybackEntry` or introduce a companion cached media
   descriptor so torrent, TMDB, season/episode, and sync-freshness metadata are
   retained locally.
-- [ ] `H5.2` Build Activity from local/cache data first, then merge Firestore
+- [x] `H5.2` Build Activity from local/cache data first, then merge Firestore
   updates without blanking the page.
-- [ ] `H5.3` Add a visible refresh action with last-refreshed feedback.
-- [ ] `H5.4` Evaluate a Firestore snapshot listener while Activity/Devices is
+- [x] `H5.3` Add a visible refresh action with last-refreshed feedback.
+- [x] `H5.4` Evaluate a Firestore snapshot listener while Activity/Devices is
   open; use it only if lifecycle and read costs are acceptable.
-- [ ] `H5.5` Serialize or deduplicate concurrent `mergeAndSync()` calls triggered
+- [x] `H5.5` Serialize or deduplicate concurrent `mergeAndSync()` calls triggered
   by pause, teardown, and multiple auth-hook consumers.
-- [ ] `H5.6` Ensure the source device pushes a final position reliably on pause,
+- [x] `H5.6` Ensure the source device pushes a final position reliably on pause,
   page hide, and app/extension teardown where the platform permits.
-- [ ] `H5.7` Validate Firestore document-size behavior for large histories and
+- [x] `H5.7` Validate Firestore document-size behavior for large histories and
   define pruning or pagination before limits become a problem.
-- [ ] `H5.8` Preserve the last good cache when a refresh fails and show a
+- [x] `H5.8` Preserve the last good cache when a refresh fails and show a
   non-blocking stale-data warning.
 
 Suggested files:
@@ -462,12 +462,17 @@ Tasks:
   to filters and row actions.
 - [ ] `H6.5` Verify clipboard-denied, Web Share unavailable, offline, expired
   auth, and Firestore failure states.
-- [ ] `H6.6` Confirm that copied/shared private magnet URLs are only exposed
+- [x] `H6.6` Confirm that copied/shared private magnet URLs are only exposed
   after an explicit user action and are not written to logs.
-- [ ] `H6.7` Run the full project green gates.
+- [x] `H6.7` Run the full project green gates.
 - [ ] `H6.8` Perform the manual multi-device acceptance matrix below.
-- [ ] `H6.9` Update `docs/app-architecture.md`,
+- [x] `H6.9` Update `docs/app-architecture.md`,
   `docs/data-model-separation.md`, and this status table after implementation.
+
+The unchecked Phase 6 items are validation follow-ups, not missing product
+implementation. The 2026-08-04 run was explicitly constrained to inspecting
+magnet URLs without launching the protocol handler or downloading media, and
+no physical extension device or failure-injection environment was in scope.
 
 Exit criteria:
 
@@ -480,21 +485,21 @@ Exit criteria:
 
 | Scenario | Expected result | Automated | Manual |
 |---|---|---:|---:|
-| Remote torrent entry without TMDB | Visible in All devices and source-device filter | [ ] | [ ] |
-| Remote file/hash entry without TMDB | Visible with title/filename fallback | [ ] | [ ] |
-| Same canonical key available locally | Resume here opens local player at displayed position | [ ] | [ ] |
-| Alias key available locally | Resolves local catalog row and translates to local playback key | [ ] | [ ] |
-| Newer remote fact and older local fact | All devices shows/resumes the newer remote fact | [ ] | [ ] |
-| Specific device selected | Shows and resumes that device's fact | [ ] | [ ] |
-| Five-plus in-progress episodes | Collapsed preview shows most recent episodes | [ ] | [ ] |
-| Missing local file with magnet | Details offers open/copy/share and correct `so` value | [ ] | [ ] |
-| Existing magnet already has `so` | File selection is replaced, not duplicated | [ ] | [ ] |
-| Missing local file without magnet | Details explains unavailability and shows identity | [ ] | [ ] |
-| Sparse newer fact, rich older fact | New position retains useful magnet/display metadata | [ ] | [ ] |
-| Ambiguous weak identity | User confirmation required; no arbitrary playback | [ ] | [ ] |
-| Download initiated then app reloads | Pending handoff remains | [ ] | [ ] |
-| Matching manifest arrives | Pending handoff becomes resumable | [ ] | [ ] |
-| Firestore unavailable | Cached/local Activity remains visible with stale warning | [ ] | [ ] |
+| Remote torrent entry without TMDB | Visible in All devices and source-device filter | [x] | [x] |
+| Remote file/hash entry without TMDB | Visible with title/filename fallback | [x] | [ ] |
+| Same canonical key available locally | Resume here opens local player at displayed position | [x] | [x] URL/state inspected; playback not started |
+| Alias key available locally | Resolves local catalog row and translates to local playback key | [x] | [ ] |
+| Newer remote fact and older local fact | All devices shows/resumes the newer remote fact | [x] | [x] |
+| Specific device selected | Shows and resumes that device's fact | [x] | [x] |
+| Five-plus in-progress episodes | Collapsed preview shows most recent episodes | [x] | [x] |
+| Missing local file with magnet | Details offers open/copy/share and correct `so` value | [x] | [x] URLs inspected only |
+| Existing magnet already has `so` | File selection is replaced, not duplicated | [x] | [x] URLs inspected only |
+| Missing local file without magnet | Details explains unavailability and shows identity | [x] | [x] |
+| Sparse newer fact, rich older fact | New position retains useful magnet/display metadata | [x] | [ ] |
+| Ambiguous weak identity | User confirmation required; no arbitrary playback | [x] | [ ] |
+| Download initiated then app reloads | Pending handoff remains | [x] | [ ] no download by constraint |
+| Matching manifest arrives | Pending handoff becomes resumable | [x] | [ ] no download by constraint |
+| Firestore unavailable | Cached/local Activity remains visible with stale warning | [x] cache projection | [ ] |
 | Signed out | Local Activity remains useful; device-only controls are explained | [ ] | [ ] |
 | Clipboard/share denied | Non-destructive error feedback appears | [ ] | [ ] |
 
@@ -544,6 +549,26 @@ For physical Chromebook/ChromeOS validation, follow the project-required
 ChromeOS testbed skill and the PlaysVideo-specific offline media runbook before
 operating the device.
 
+### 2026-08-04 live-data validation record
+
+- Validated the signed-in web app at `https://localhost:9300/app`; the active
+  development server was on port 9300 rather than the anticipated port 9000.
+- Activity exposed All devices, This device, Android, and four Mac filters.
+- The Android filter isolated its facts and showed nine recent Pluribus
+  episodes in recency order without requiring TMDB for inclusion.
+- This device resolved Alien Earth to local `/app/play/4` and `/app/play/2`
+  routes with the displayed positions.
+- Devices showed six device documents; expanding Android exposed open, copy,
+  share, and details actions on all 20 entries.
+- Inspected 12 visible live magnet URLs without activating them. Every URL had
+  exactly one `so` parameter and the expected torrent info hash/file selector.
+- Activity and Devices refreshes completed with updated freshness feedback and
+  retained the selected Activity device filter.
+- Details showed source, playback identity, info hash, file index, local-match
+  confidence, and remote device sync freshness.
+- No protocol handler was launched, no magnet link was clicked, and no media
+  was downloaded.
+
 ## Risks and mitigations
 
 | Risk | Mitigation |
@@ -552,7 +577,7 @@ operating the device.
 | Filename fallback matches the wrong episode | Require confirmation for low-confidence or ambiguous matches |
 | Newer sparse facts erase locators | Merge playback facts by recency and optional metadata field by field |
 | Magnet links contain private tracker information | Reveal/copy/share only through explicit actions; never log full magnets |
-| One Firestore document grows with unbounded history | Measure serialized size; define pruning/pagination before the limit is approached |
+| One Firestore document grows with unbounded history | Keep only the 500 most recently played valid entries per device document |
 | Multiple sync triggers race | Serialize/deduplicate sync and test last-write ordering |
 | Pending handoffs accumulate | Deduplicate, expire, and allow dismissal |
 | Player writes history under a remote alias | Translate to local canonical key before navigation/save |
@@ -562,14 +587,16 @@ operating the device.
 
 Record decisions here before or during implementation.
 
-- [ ] Retention period for consumed and unconsumed pending handoffs.
-- [ ] Whether Web Share belongs in the first action slice or a follow-up.
-- [ ] Whether Activity filters persist across browser restarts or only the
-  current session.
-- [ ] Whether medium-confidence duration differences use proportional seeking
-  automatically or prompt first.
-- [ ] Firestore history retention/pruning policy.
-- [ ] Snapshot listener versus manual/background refresh strategy.
+- [x] Retain waiting handoffs for 30 days and consumed handoffs for 7 days.
+- [x] Include Web Share in the first action slice when the API is supported.
+- [x] Keep Activity filters for the current mounted session; do not persist
+  them across browser restarts.
+- [x] Scale medium-confidence positions proportionally when durations differ by
+  more than the larger of 30 seconds or 5 percent.
+- [x] Retain the 500 most recently played valid entries per Firestore device
+  document.
+- [x] Use cache-first rendering plus explicit/background one-shot refreshes;
+  do not add a snapshot listener in this slice because of lifecycle/read cost.
 
 ## Completion definition
 

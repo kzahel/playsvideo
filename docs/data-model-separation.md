@@ -36,6 +36,8 @@ What exists today:
 - scan reconciles into `catalog` and marks unseen items as `missing`
 - `playback` stores local per-device playback state
 - `remotePlayback` caches playback facts pulled from other devices
+- `catalogAliases` stores every known cross-device identity for a catalog row
+- `pendingHandoffs` retains download-to-resume intent until media is playable
 - sync pushes local `playback` facts and does not merge remote state into local media rows
 - player resume/save behavior uses `catalogId -> canonicalPlaybackKey -> playback`
 - catalog, movie, and TV pages derive local progress from `catalog + playback`
@@ -185,11 +187,16 @@ Suggested fields:
 | `playbackKey` | cross-device identity |
 | `deviceId` | remote device id |
 | `deviceLabel` | display label |
+| `deviceLastSyncedAt` | source device freshness |
 | `positionSec` | remote last known position |
 | `durationSec` | remote duration |
 | `watchState` | remote watch state |
 | `lastPlayedAt` | remote playback timestamp |
 | `title` | display fallback from sync doc |
+| `seasonNumber`, `episodeNumber` | grouping/display fallback |
+| `contentHash` | local resolution locator |
+| `torrentInfoHash`, `torrentFileIndex`, `torrentMagnetUrl`, `torrentComplete` | torrent resolution and recovery |
+| `tmdbId`, `tmdbMediaType` | optional grouping/resolution locator |
 | `updatedAt` | when cache was refreshed |
 
 This is read-only from the app's perspective except for sync refreshes.
@@ -204,9 +211,9 @@ It should not gain new responsibilities.
 It should not be treated as durable truth.
 It should remain, at most, a short-lived projection while the remaining read paths move to `catalog`.
 
-### Optional: `catalogAliases`
+### `catalogAliases`
 
-If we want key upgrades to be explicit instead of destructive, add an alias table:
+Key upgrades are explicit rather than destructive. The alias table stores:
 
 | Field | Purpose |
 |-------|---------|
@@ -215,9 +222,28 @@ If we want key upgrades to be explicit instead of destructive, add an alias tabl
 | `source` | `file`, `hash`, `torrent`, `tmdb` |
 | `createdAt` | first seen |
 
-This lets one catalog item accumulate multiple known identities over time.
+This lets one catalog item accumulate multiple known identities over time
+without rewriting playback rows. Scan reconciliation and resolver startup
+backfill aliases for existing catalog rows.
 
-That may be cleaner than rewriting `playbackKey` rows in place whenever identity improves.
+### `pendingHandoffs`
+
+Durable resume intent created before a torrent protocol handoff.
+
+| Field | Purpose |
+|-------|---------|
+| `id` | stable torrent/file or playback identity used for deduplication |
+| `sourceDeviceId`, `sourceDeviceLabel`, `sourcePlaybackKey` | provenance |
+| `positionSec`, `durationSec`, `watchState` | intended resume state |
+| `contentHash`, `torrentInfoHash`, `torrentFileIndex`, `magnetUrl` | local reconciliation locators |
+| `status` | `waiting-for-media`, `ready`, `consumed`, or `expired` |
+| `targetCatalogId`, `localPlaybackKey` | resolved local target when ready |
+| `createdAt`, `updatedAt`, `expiresAt`, `readyAt`, `consumedAt` | lifecycle timestamps |
+
+Waiting entries expire after 30 days; consumed entries are retained for 7 days.
+Repeated actions for the same torrent/file identity update one row. Scans mark a
+matching locally playable target ready, and the player marks it consumed only
+after engine initialization succeeds.
 
 ## Identity Strategy
 

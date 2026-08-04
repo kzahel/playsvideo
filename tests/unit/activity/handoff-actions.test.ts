@@ -60,6 +60,19 @@ describe('handoff capabilities', () => {
     expect(result.magnetUrl?.match(/(?:\?|&)so=/g)).toHaveLength(1);
   });
 
+  it('explains when unavailable media has no recovery locator', () => {
+    const result = resolveHandoffCapabilities({
+      fact: {
+        ...fact,
+        torrentInfoHash: undefined,
+        torrentFileIndex: undefined,
+        torrentMagnetUrl: undefined,
+      },
+    });
+
+    expect(result).toEqual({ availability: 'no-source', canResume: false });
+  });
+
   it('distinguishes incomplete local torrent entries', () => {
     const result = resolveHandoffCapabilities({
       fact,

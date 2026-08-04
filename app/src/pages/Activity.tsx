@@ -4,6 +4,7 @@ import {
   activityFactsFromRemotePlayback,
   buildActivityGroups,
   listActivityDevices,
+  summarizeActivityProjection,
   type ActivityDeviceOption,
   type ActivityFact,
   type ActivityGroup,
@@ -330,17 +331,21 @@ export function Activity() {
     };
   }, [user, refreshNonce]);
 
-  const groups = useMemo(
-    () =>
-      facts
-        ? buildActivityGroups({
+  const projection = useMemo(() => {
+    const scopedFacts =
+      facts?.filter(
+        (fact) => selectedDeviceId === 'all' || fact.deviceId === selectedDeviceId,
+      ) ?? [];
+    const groups = facts
+      ? buildActivityGroups({
             facts,
             deviceId: selectedDeviceId === 'all' ? undefined : selectedDeviceId,
             localTargetIndex: localTargetIndex ?? undefined,
           })
-        : [],
-    [facts, localTargetIndex, selectedDeviceId],
-  );
+      : [];
+    return { groups, diagnostics: summarizeActivityProjection(scopedFacts, groups) };
+  }, [facts, localTargetIndex, selectedDeviceId]);
+  const { groups } = projection;
 
   if ((loading || authLoading) && facts == null) {
     return (
@@ -366,7 +371,14 @@ export function Activity() {
   );
 
   return (
-    <div className="detail-page activity-page">
+    <div
+      className="detail-page activity-page"
+      data-activity-input-facts={projection.diagnostics.inputFactCount}
+      data-activity-displayed-items={projection.diagnostics.displayedItemCount}
+      data-activity-unresolved-items={projection.diagnostics.unresolvedGroupingCount}
+      data-activity-local-matches={projection.diagnostics.localMatchCount}
+      data-activity-locators={projection.diagnostics.locatorCount}
+    >
       {!user && !authLoading && (
         <div className="activity-local-notice">
           Showing activity from this device. Sign in to include other devices.

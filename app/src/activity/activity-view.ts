@@ -54,6 +54,14 @@ export interface ActivityDeviceOption {
   lastSyncedAt?: number;
 }
 
+export interface ActivityProjectionDiagnostics {
+  inputFactCount: number;
+  displayedItemCount: number;
+  unresolvedGroupingCount: number;
+  localMatchCount: number;
+  locatorCount: number;
+}
+
 interface TmdbIdentity {
   type: 'tv' | 'movie';
   tmdbId: number;
@@ -343,4 +351,20 @@ export function buildActivityGroups(input: {
     group.items.sort((left, right) => right.fact.lastPlayedAt - left.fact.lastPlayedAt);
   }
   return sorted;
+}
+
+export function summarizeActivityProjection(
+  facts: ActivityFact[],
+  groups: ActivityGroup[],
+): ActivityProjectionDiagnostics {
+  const items = groups.flatMap((group) => group.items);
+  return {
+    inputFactCount: facts.length,
+    displayedItemCount: items.length,
+    unresolvedGroupingCount: groups
+      .filter((group) => group.type === 'other')
+      .reduce((count, group) => count + group.items.length, 0),
+    localMatchCount: items.filter((item) => item.localTarget != null).length,
+    locatorCount: items.filter((item) => item.fact.torrentMagnetUrl != null).length,
+  };
 }

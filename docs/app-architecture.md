@@ -24,6 +24,8 @@ The app is organized around a few clear responsibilities:
 - `catalog`: durable media records and local identity
 - `playback`: local per-device playback facts
 - `remotePlayback`: cached playback facts from other devices
+- `catalogAliases`: accumulated cross-device identity candidates for local media
+- `pendingHandoffs`: durable download-to-resume intent
 - scan pipeline: reconciles local files into `catalog`
 - metadata pipeline: parses filenames and optionally enriches catalog rows via TMDB
 - sync pipeline: pushes/pulls playback facts only
@@ -35,6 +37,7 @@ The key design rule is separation of ownership:
 - metadata owns enrichment fields
 - player owns local playback updates
 - sync owns replication of playback facts
+- handoff resolution owns matching remote facts to local catalog targets
 
 No single row is supposed to be the merge target for everything.
 
@@ -130,8 +133,11 @@ Behavior:
 
 - only playback facts are synced
 - local `catalog` rows are not merged or overwritten by remote devices
-- pulled remote state is cached in `remotePlayback`
-- the app can later use local and remote playback facts together when choosing resume suggestions
+- each device document is bounded to its 500 most recently played entries
+- pulled remote state, including torrent/TMDB locators and device freshness, is cached in `remotePlayback`
+- concurrent sync triggers are serialized and repeated pulls are deduplicated
+- Activity paints from local/cache data first and refreshes Firestore in place
+- pause, page hide, end, and player teardown request a final sync
 
 Important property:
 
@@ -148,7 +154,8 @@ Main tables:
 - `catalog`: durable media records
 - `playback`: this device's playback state
 - `remotePlayback`: cached playback from other devices
-- `catalogAliases`: optional identity accumulation for playback key upgrades
+- `catalogAliases`: identity accumulation for playback key upgrades
+- `pendingHandoffs`: expiring resume intents for media being acquired
 
 Identity split:
 
@@ -170,6 +177,7 @@ Main pages:
 - [app/src/pages/TvShow.tsx](/Users/kgraehl/code/playsvideo/app/src/pages/TvShow.tsx)
 - [app/src/pages/Movie.tsx](/Users/kgraehl/code/playsvideo/app/src/pages/Movie.tsx)
 - [app/src/pages/Player.tsx](/Users/kgraehl/code/playsvideo/app/src/pages/Player.tsx)
+- [app/src/pages/Activity.tsx](/Users/kgraehl/code/playsvideo/app/src/pages/Activity.tsx)
 - [app/src/pages/Devices.tsx](/Users/kgraehl/code/playsvideo/app/src/pages/Devices.tsx)
 - [app/src/pages/Settings.tsx](/Users/kgraehl/code/playsvideo/app/src/pages/Settings.tsx)
 
@@ -177,6 +185,27 @@ Grouping/selectors:
 
 - [app/src/catalog-groups.ts](/Users/kgraehl/code/playsvideo/app/src/catalog-groups.ts)
 - [app/src/local-playback-views.ts](/Users/kgraehl/code/playsvideo/app/src/local-playback-views.ts)
+- [app/src/activity/activity-view.ts](/Users/kgraehl/code/playsvideo/app/src/activity/activity-view.ts)
+- [app/src/playback-identity-resolver.ts](/Users/kgraehl/code/playsvideo/app/src/playback-identity-resolver.ts)
+
+### Cross-device activity and handoff
+
+Activity is the primary cross-device history. It preserves per-device facts,
+filters before selecting a recommended fact, and never requires TMDB metadata.
+The All devices view selects the newest position while enriching sparse facts
+field by field from equivalent older facts.
+
+Activity and Devices share the same handoff action component. The resolver
+matches exact canonical, torrent/file-index, content-hash, TMDB, and file alias
+identities in confidence order. Exact, torrent, and hash matches resume
+directly; ambiguous matches do not select a target; weak file aliases require
+confirmation. Material duration differences on medium-confidence matches scale
+the resume point by watched fraction.
+
+If media is unavailable but has a torrent locator, the shared actions can open,
+copy, or share a magnet with exactly one `so` file selector. Opening it first
+stores a `pendingHandoffs` row. A later scan reconciles that intent against the
+catalog, and successful player initialization consumes it.
 
 The UI should generally treat `catalog` as source data and use selectors/helpers to derive display state, rather than storing duplicated UI-specific rows.
 
