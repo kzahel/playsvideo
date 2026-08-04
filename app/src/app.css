@@ -1742,6 +1742,44 @@ body {
   margin: 0 auto;
   padding: 1.5rem 1rem;
 }
+.activity-page {
+  padding-top: 1.25rem;
+}
+.activity-device-filters {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+  margin-bottom: 1.25rem;
+}
+.activity-filter-btn {
+  min-height: 44px;
+  border: 1px solid rgba(128, 128, 128, 0.3);
+  border-radius: 999px;
+  padding: 0.55rem 0.9rem;
+  background: transparent;
+  color: var(--muted);
+  cursor: pointer;
+  font: inherit;
+  font-size: 0.85rem;
+  font-weight: 600;
+}
+.activity-filter-btn:hover {
+  background: rgba(128, 128, 128, 0.1);
+  color: var(--fg);
+}
+.activity-filter-btn.active {
+  border-color: var(--accent);
+  background: var(--accent);
+  color: #fff;
+}
+.activity-local-notice {
+  margin-bottom: 1rem;
+  border: 1px solid rgba(128, 128, 128, 0.25);
+  border-radius: 8px;
+  padding: 0.75rem 1rem;
+  color: var(--muted);
+  font-size: 0.9rem;
+}
 .devices-title {
   font-size: 1.25rem;
   font-weight: 600;

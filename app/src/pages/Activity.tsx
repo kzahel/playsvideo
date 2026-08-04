@@ -1,49 +1,18 @@
-import { useState, useEffect } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { Link } from 'react-router-dom';
-import { useAuth } from '../hooks/useAuth.js';
+import {
+  activityFactsFromDeviceDocs,
+  buildActivityGroups,
+  listActivityDevices,
+  type ActivityDeviceOption,
+  type ActivityFact,
+  type ActivityGroup,
+  type ActivityItem,
+} from '../activity/activity-view.js';
 import { db } from '../db.js';
 import { getDeviceId, getDeviceLabel } from '../device.js';
-import {
-  pullAllDeviceDocs,
-  buildLocalSyncKeyIndex,
-  mergeDeviceDocs,
-} from '../firebase.js';
-import type { MergedRemotePlaybackEntry } from '../sync-device-doc.js';
-
-interface TmdbIdentity {
-  type: 'tv' | 'movie';
-  tmdbId: number;
-  season: number;
-  episode: string; // "03" or "01-02" for ranges, "0" for movies
-}
-
-function extractTmdbIdentity(syncKey: string, entry: MergedRemotePlaybackEntry): TmdbIdentity | null {
-  // First try the sync entry metadata (covers torrent-keyed entries with TMDB resolution)
-  if (entry.tmdbId != null && entry.tmdbMediaType != null) {
-    return {
-      type: entry.tmdbMediaType,
-      tmdbId: entry.tmdbId,
-      season: entry.seasonNumber ?? 0,
-      episode: entry.episodeNumber != null ? String(entry.episodeNumber).padStart(2, '0') : '0',
-    };
-  }
-
-  // Fall back to parsing the sync key itself
-  const tvMatch = syncKey.match(/^tmdb:tv:(\d+):s(\d+):e(\d+(?:-\d+)?)$/);
-  if (tvMatch) {
-    return {
-      type: 'tv',
-      tmdbId: Number(tvMatch[1]),
-      season: Number(tvMatch[2]),
-      episode: tvMatch[3],
-    };
-  }
-  const movieMatch = syncKey.match(/^tmdb:movie:(\d+)$/);
-  if (movieMatch) {
-    return { type: 'movie', tmdbId: Number(movieMatch[1]), season: 0, episode: '0' };
-  }
-  return null;
-}
+import { buildLocalSyncKeyIndex, pullAllDeviceDocs } from '../firebase.js';
+import { useAuth } from '../hooks/useAuth.js';
 
 function formatDuration(sec: number): string {
   const h = Math.floor(sec / 3600);
@@ -65,14 +34,16 @@ function formatTimeAgo(ts: number): string {
   return new Date(ts).toLocaleDateString();
 }
 
-function magnetWithFileIndex(entry: MergedRemotePlaybackEntry): string | null {
+function magnetWithFileIndex(entry: ActivityFact): string | null {
   if (!entry.torrentMagnetUrl) return null;
-  if (entry.torrentFileIndex == null) return entry.torrentMagnetUrl;
-  const sep = entry.torrentMagnetUrl.includes('?') ? '&' : '?';
-  return `${entry.torrentMagnetUrl}${sep}so=${entry.torrentFileIndex}`;
+  const url = new URL(entry.torrentMagnetUrl);
+  if (entry.torrentFileIndex != null) {
+    url.searchParams.set('so', String(entry.torrentFileIndex));
+  }
+  return url.toString();
 }
 
-function TorrentActivityActions({ entry }: { entry: MergedRemotePlaybackEntry }) {
+function TorrentActivityActions({ entry }: { entry: ActivityFact }) {
   const magnetUrl = magnetWithFileIndex(entry);
   if (!magnetUrl) return null;
 
@@ -94,117 +65,42 @@ function TorrentActivityActions({ entry }: { entry: MergedRemotePlaybackEntry })
   );
 }
 
-interface ShowGroup {
-  tmdbId: number;
-  title: string;
-  type: 'tv' | 'movie';
-  mostRecentAt: number;
-  episodes: EpisodeEntry[];
-}
-
-interface EpisodeEntry {
-  syncKey: string;
-  season: number;
-  episode: string;
-  entry: MergedRemotePlaybackEntry;
-  localEntryId?: number;
-}
-
-function buildResumeState(entry: MergedRemotePlaybackEntry) {
+function buildResumeState(entry: ActivityFact, playbackKey: string) {
   return {
     resumePlayback: {
-      playbackKey: entry.playbackKey,
-      positionSec: entry.position,
+      playbackKey,
+      positionSec: entry.positionSec,
       durationSec: entry.durationSec,
       watchState: entry.watchState,
-      lastPlayedAt: entry.watchedAt,
+      lastPlayedAt: entry.lastPlayedAt,
     },
   };
 }
 
-function buildShowGroups(
-  merged: Map<string, MergedRemotePlaybackEntry>,
-  localEntryBySyncKey: Map<string, number>,
-): ShowGroup[] {
-  const groups = new Map<string, ShowGroup>();
-
-  for (const [syncKey, entry] of merged) {
-    const identity = extractTmdbIdentity(syncKey, entry);
-    if (!identity) continue;
-
-    const groupKey = `${identity.type}:${identity.tmdbId}`;
-    let group = groups.get(groupKey);
-    if (!group) {
-      group = {
-        tmdbId: identity.tmdbId,
-        title: entry.title ?? syncKey,
-        type: identity.type,
-        mostRecentAt: 0,
-        episodes: [],
-      };
-      groups.set(groupKey, group);
-    }
-
-    if (entry.watchedAt > group.mostRecentAt) {
-      group.mostRecentAt = entry.watchedAt;
-      if (entry.title) group.title = entry.title;
-    }
-
-    const ep: EpisodeEntry = {
-      syncKey,
-      season: identity.season,
-      episode: identity.episode,
-      entry,
-      localEntryId: localEntryBySyncKey.get(syncKey),
-    };
-    group.episodes.push(ep);
-  }
-
-  // Sort groups by most recent activity
-  const sorted = [...groups.values()].sort((a, b) => b.mostRecentAt - a.mostRecentAt);
-
-  // Sort episodes within each group by season, then episode
-  for (const group of sorted) {
-    group.episodes.sort((a, b) => {
-      if (a.season !== b.season) return a.season - b.season;
-      const aEp = Number(a.episode.split('-')[0]);
-      const bEp = Number(b.episode.split('-')[0]);
-      return aEp - bEp;
-    });
-  }
-
-  return sorted;
+function formatEpisodeLabel(item: ActivityItem): string | null {
+  if (item.seasonNumber == null || item.episodeLabel == null) return null;
+  return `S${String(item.seasonNumber).padStart(2, '0')}E${item.episodeLabel}`;
 }
 
-function EpisodeRow({ ep }: { ep: EpisodeEntry }) {
-  const { entry, localEntryId } = ep;
-  const progress = entry.durationSec > 0 ? entry.position / entry.durationSec : 0;
-  const remaining = entry.durationSec > 0 ? entry.durationSec - entry.position : 0;
-
-  const episodeLabel = ep.episode.includes('-')
-    ? `S${String(ep.season).padStart(2, '0')}E${ep.episode}`
-    : `S${String(ep.season).padStart(2, '0')}E${String(Number(ep.episode)).padStart(2, '0')}`;
-
+function ActivityItemRow({ item }: { item: ActivityItem }) {
+  const { fact, localEntryId } = item;
+  const progress = fact.durationSec > 0 ? fact.positionSec / fact.durationSec : 0;
+  const remaining = fact.durationSec > 0 ? fact.durationSec - fact.positionSec : 0;
+  const episodeLabel = formatEpisodeLabel(item);
   const content = (
     <>
-      <span className="episode-code">{episodeLabel}</span>
+      {episodeLabel && <span className="episode-code">{episodeLabel}</span>}
       <span className="episode-body">
-        <span className="episode-name">
-          {entry.title ?? ep.syncKey}
-        </span>
+        <span className="episode-name">{fact.title ?? fact.playbackKey}</span>
         <span className="episode-file-meta">
-          {entry.watchState === 'in-progress' && remaining > 0 && (
+          {fact.watchState === 'in-progress' && remaining > 0 && (
             <>{formatDuration(remaining)} remaining</>
           )}
-          {entry.watchState === 'watched' && 'Watched'}
-          {entry.watchedAt > 0 && (
-            <> &middot; {formatTimeAgo(entry.watchedAt)}</>
-          )}
-          {entry.sourceDeviceLabel && (
-            <> &middot; {entry.sourceDeviceLabel}</>
-          )}
+          {fact.watchState === 'watched' && 'Watched'}
+          {fact.lastPlayedAt > 0 && <> &middot; {formatTimeAgo(fact.lastPlayedAt)}</>}
+          {fact.deviceLabel && <> &middot; {fact.deviceLabel}</>}
         </span>
-        {entry.watchState === 'in-progress' && entry.durationSec > 0 && (
+        {fact.watchState === 'in-progress' && fact.durationSec > 0 && (
           <span className="episode-progress-block">
             <span className="episode-progress-bar">
               <span
@@ -213,23 +109,27 @@ function EpisodeRow({ ep }: { ep: EpisodeEntry }) {
               />
             </span>
             <span className="episode-progress-time">
-              {formatDuration(entry.position)} / {formatDuration(entry.durationSec)}
+              {formatDuration(fact.positionSec)} / {formatDuration(fact.durationSec)}
             </span>
           </span>
         )}
-        {entry.watchState !== 'in-progress' && (
-          <span className={`episode-watch-badge ${entry.watchState}`}>
-            {entry.watchState === 'watched' ? 'Watched' : 'New'}
+        {fact.watchState !== 'in-progress' && (
+          <span className={`episode-watch-badge ${fact.watchState}`}>
+            {fact.watchState === 'watched' ? 'Watched' : 'New'}
           </span>
         )}
-        {localEntryId == null && <TorrentActivityActions entry={entry} />}
+        {localEntryId == null && <TorrentActivityActions entry={fact} />}
       </span>
     </>
   );
 
   if (localEntryId != null) {
     return (
-      <Link to={`/play/${localEntryId}`} state={buildResumeState(entry)} className="episode-row">
+      <Link
+        to={`/play/${localEntryId}`}
+        state={buildResumeState(fact, fact.playbackKey)}
+        className="episode-row"
+      >
         {content}
       </Link>
     );
@@ -238,112 +138,52 @@ function EpisodeRow({ ep }: { ep: EpisodeEntry }) {
   return <div className="episode-row episode-row-missing">{content}</div>;
 }
 
-function MovieRow({ group }: { group: ShowGroup }) {
-  const ep = group.episodes[0];
-  if (!ep) return null;
-  const { entry, localEntryId } = ep;
-  const progress = entry.durationSec > 0 ? entry.position / entry.durationSec : 0;
-  const remaining = entry.durationSec > 0 ? entry.durationSec - entry.position : 0;
-
-  const content = (
-    <span className="episode-body">
-      <span className="episode-name">{group.title}</span>
-      <span className="episode-file-meta">
-        {entry.watchState === 'in-progress' && remaining > 0 && (
-          <>{formatDuration(remaining)} remaining</>
-        )}
-        {entry.watchState === 'watched' && 'Watched'}
-        {entry.watchedAt > 0 && (
-          <> &middot; {formatTimeAgo(entry.watchedAt)}</>
-        )}
-        {entry.sourceDeviceLabel && (
-          <> &middot; {entry.sourceDeviceLabel}</>
-        )}
-      </span>
-      {entry.watchState === 'in-progress' && entry.durationSec > 0 && (
-        <span className="episode-progress-block">
-          <span className="episode-progress-bar">
-            <span
-              className="episode-progress-fill"
-              style={{ width: `${Math.min(100, progress * 100)}%` }}
-            />
-          </span>
-          <span className="episode-progress-time">
-            {formatDuration(entry.position)} / {formatDuration(entry.durationSec)}
-          </span>
-        </span>
-      )}
-      {entry.watchState !== 'in-progress' && (
-        <span className={`episode-watch-badge ${entry.watchState}`}>
-          {entry.watchState === 'watched' ? 'Watched' : 'New'}
-        </span>
-      )}
-      {localEntryId == null && <TorrentActivityActions entry={entry} />}
-    </span>
-  );
-
-  if (localEntryId != null) {
+function chronologicalItems(items: ActivityItem[]): ActivityItem[] {
+  return [...items].sort((left, right) => {
+    const seasonDiff =
+      (left.seasonNumber ?? Number.MAX_SAFE_INTEGER) -
+      (right.seasonNumber ?? Number.MAX_SAFE_INTEGER);
+    if (seasonDiff !== 0) return seasonDiff;
     return (
-      <Link to={`/play/${localEntryId}`} state={buildResumeState(entry)} className="episode-row">
-        {content}
-      </Link>
+      Number(left.episodeLabel ?? Number.MAX_SAFE_INTEGER) -
+      Number(right.episodeLabel ?? Number.MAX_SAFE_INTEGER)
     );
-  }
-
-  return <div className="episode-row episode-row-missing">{content}</div>;
+  });
 }
 
-function ShowGroupCard({ group }: { group: ShowGroup }) {
+function ActivityGroupCard({ group }: { group: ActivityGroup }) {
   const [expanded, setExpanded] = useState(false);
-
-  if (group.type === 'movie') {
-    return (
-      <section className="season-section">
-        <div className="season-heading">
-          <h2>{group.title}</h2>
-          <span className="season-count">Movie</span>
-        </div>
-        <div className="episode-list">
-          <MovieRow group={group} />
-        </div>
-      </section>
-    );
-  }
-
-  const inProgress = group.episodes.filter((ep) => ep.entry.watchState === 'in-progress');
-  const watched = group.episodes.filter((ep) => ep.entry.watchState === 'watched');
-  const unwatched = group.episodes.filter(
-    (ep) => ep.entry.watchState !== 'in-progress' && ep.entry.watchState !== 'watched',
-  );
-
-  // Show in-progress episodes by default, full list when expanded
-  const previewEpisodes = expanded ? group.episodes : inProgress.slice(0, 5);
-  const hasMore = !expanded && (inProgress.length > 5 || watched.length > 0 || unwatched.length > 0);
+  const inProgress = group.items.filter((item) => item.fact.watchState === 'in-progress');
+  const watched = group.items.filter((item) => item.fact.watchState === 'watched');
+  const preview = inProgress.length > 0 ? inProgress.slice(0, 5) : watched.slice(0, 5);
+  const displayItems = expanded ? chronologicalItems(group.items) : preview;
+  const hasMore = !expanded && displayItems.length < group.items.length;
 
   return (
     <section className="season-section">
       <div className="season-heading">
         <h2>{group.title}</h2>
         <span className="season-count">
-          {inProgress.length > 0 && `${inProgress.length} in progress`}
-          {inProgress.length > 0 && watched.length > 0 && ', '}
-          {watched.length > 0 && `${watched.length} watched`}
-          {' '}
-          &middot; {group.episodes.length} total
+          {group.type === 'movie' && 'Movie'}
+          {group.type === 'other' && 'Other media'}
+          {group.type === 'tv' && (
+            <>
+              {inProgress.length > 0 && `${inProgress.length} in progress`}
+              {inProgress.length > 0 && watched.length > 0 && ', '}
+              {watched.length > 0 && `${watched.length} watched`}
+              {' · '}
+              {group.items.length} total
+            </>
+          )}
         </span>
       </div>
       <div className="episode-list">
-        {previewEpisodes.map((ep) => (
-          <EpisodeRow key={ep.syncKey} ep={ep} />
+        {displayItems.map((item) => (
+          <ActivityItemRow key={item.id} item={item} />
         ))}
         {hasMore && (
-          <button
-            type="button"
-            className="device-card-more"
-            onClick={() => setExpanded(true)}
-            style={{ cursor: 'pointer', background: 'none', border: 'none', padding: '0.5rem', color: 'inherit', textAlign: 'left' }}
-          >
-            Show all {group.episodes.length} episodes
+          <button type="button" className="device-card-more" onClick={() => setExpanded(true)}>
+            Show all {group.items.length} episodes
           </button>
         )}
       </div>
@@ -351,89 +191,139 @@ function ShowGroupCard({ group }: { group: ShowGroup }) {
   );
 }
 
+function DeviceFilters({
+  devices,
+  currentDeviceId,
+  selectedDeviceId,
+  onChange,
+}: {
+  devices: ActivityDeviceOption[];
+  currentDeviceId: string | null;
+  selectedDeviceId: string;
+  onChange: (deviceId: string) => void;
+}) {
+  return (
+    <div className="activity-device-filters" aria-label="Activity device filter">
+      <button
+        type="button"
+        className={`activity-filter-btn${selectedDeviceId === 'all' ? ' active' : ''}`}
+        aria-pressed={selectedDeviceId === 'all'}
+        onClick={() => onChange('all')}
+      >
+        All devices
+      </button>
+      {devices.map((device) => {
+        const isCurrent = device.deviceId === currentDeviceId;
+        return (
+          <button
+            type="button"
+            key={device.deviceId}
+            className={`activity-filter-btn${selectedDeviceId === device.deviceId ? ' active' : ''}`}
+            aria-pressed={selectedDeviceId === device.deviceId}
+            title={isCurrent ? device.label : undefined}
+            onClick={() => onChange(device.deviceId)}
+          >
+            {isCurrent ? 'This device' : device.label}
+          </button>
+        );
+      })}
+    </div>
+  );
+}
+
 export function Activity() {
-  const { user } = useAuth();
-  const [groups, setGroups] = useState<ShowGroup[] | null>(null);
+  const { user, loading: authLoading } = useAuth();
+  const [facts, setFacts] = useState<ActivityFact[] | null>(null);
+  const [localEntryByPlaybackKey, setLocalEntryByPlaybackKey] = useState<Map<string, number>>(
+    new Map(),
+  );
+  const [devices, setDevices] = useState<ActivityDeviceOption[]>([]);
+  const [currentDeviceId, setCurrentDeviceId] = useState<string | null>(null);
+  const [selectedDeviceId, setSelectedDeviceId] = useState('all');
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
-    if (!user) {
-      setLoading(false);
-      return;
-    }
     let cancelled = false;
 
     async function load() {
+      setLoading(true);
+      setError(null);
       try {
-        const [docs, keyIndex, localDeviceId, localDeviceLabel, localPlayback, catalogEntries, seriesMeta, movieMeta] =
-          await Promise.all([
-            pullAllDeviceDocs(user!.uid),
-            buildLocalSyncKeyIndex(),
-            getDeviceId(),
-            getDeviceLabel(),
-            db.playback.toArray(),
-            db.catalog.toArray(),
-            db.seriesMetadata.toArray(),
-            db.movieMetadata.toArray(),
-          ]);
+        const [
+          docs,
+          keyIndex,
+          localDeviceId,
+          localDeviceLabel,
+          localPlayback,
+          catalogEntries,
+          seriesMeta,
+          movieMeta,
+        ] = await Promise.all([
+          user ? pullAllDeviceDocs(user.uid) : Promise.resolve([]),
+          buildLocalSyncKeyIndex(),
+          getDeviceId(),
+          getDeviceLabel(),
+          db.playback.toArray(),
+          db.catalog.toArray(),
+          db.seriesMetadata.toArray(),
+          db.movieMetadata.toArray(),
+        ]);
         if (cancelled) return;
 
-        // Merge all remote devices — most recent wins
-        const merged = mergeDeviceDocs(docs);
-
-        // Build catalog metadata lookup for local entries
-        const catalogByKey = new Map<string, (typeof catalogEntries)[number]>();
-        for (const entry of catalogEntries) {
-          if (entry.canonicalPlaybackKey) {
-            catalogByKey.set(entry.canonicalPlaybackKey, entry);
-          }
-        }
-        const seriesMetaByKey = new Map(seriesMeta.map((m) => [m.key, m]));
-        const movieMetaByKey = new Map(movieMeta.map((m) => [m.key, m]));
-
-        // Merge local playback entries (may be newer than last Firestore sync)
-        for (const pb of localPlayback) {
-          if (pb.deviceId !== localDeviceId || pb.durationSec <= 0) continue;
-
-          const existing = merged.get(pb.playbackKey);
-          if (existing && existing.watchedAt >= pb.lastPlayedAt) continue;
-
-          const cat = catalogByKey.get(pb.playbackKey);
-          let tmdbId: number | undefined;
-          let tmdbMediaType: 'tv' | 'movie' | undefined;
-          if (cat?.seriesMetadataKey) {
-            const series = seriesMetaByKey.get(cat.seriesMetadataKey);
-            if (series?.status === 'resolved' && series.tmdbId != null) {
-              tmdbId = series.tmdbId;
-              tmdbMediaType = 'tv';
-            }
-          } else if (cat?.movieMetadataKey) {
-            const movie = movieMetaByKey.get(cat.movieMetadataKey);
-            if (movie?.status === 'resolved' && movie.tmdbId != null) {
-              tmdbId = movie.tmdbId;
-              tmdbMediaType = 'movie';
-            }
-          }
-
-          merged.set(pb.playbackKey, {
-            position: pb.positionSec,
-            watchState: pb.watchState,
-            durationSec: pb.durationSec,
-            watchedAt: pb.lastPlayedAt,
-            title: cat?.parsedTitle ?? cat?.name,
-            seasonNumber: cat?.seasonNumber,
-            episodeNumber: cat?.episodeNumber,
-            tmdbId,
-            tmdbMediaType,
-            playbackKey: pb.playbackKey,
-            sourceDeviceId: localDeviceId,
-            sourceDeviceLabel: localDeviceLabel,
+        const catalogByKey = new Map(
+          catalogEntries
+            .filter((entry) => entry.canonicalPlaybackKey)
+            .map((entry) => [entry.canonicalPlaybackKey!, entry]),
+        );
+        const seriesMetaByKey = new Map(seriesMeta.map((entry) => [entry.key, entry]));
+        const movieMetaByKey = new Map(movieMeta.map((entry) => [entry.key, entry]));
+        const localFacts: ActivityFact[] = [];
+        for (const playback of localPlayback) {
+          if (playback.deviceId !== localDeviceId || playback.durationSec <= 0) continue;
+          const catalogEntry = catalogByKey.get(playback.playbackKey);
+          const series = catalogEntry?.seriesMetadataKey
+            ? seriesMetaByKey.get(catalogEntry.seriesMetadataKey)
+            : undefined;
+          const movie = catalogEntry?.movieMetadataKey
+            ? movieMetaByKey.get(catalogEntry.movieMetadataKey)
+            : undefined;
+          localFacts.push({
+            deviceId: localDeviceId,
+            deviceLabel: localDeviceLabel,
+            playbackKey: playback.playbackKey,
+            positionSec: playback.positionSec,
+            durationSec: playback.durationSec,
+            watchState: playback.watchState,
+            lastPlayedAt: playback.lastPlayedAt,
+            title: catalogEntry?.parsedTitle ?? catalogEntry?.name,
+            seasonNumber: catalogEntry?.seasonNumber,
+            episodeNumber: catalogEntry?.episodeNumber,
+            contentHash: catalogEntry?.contentHash,
+            torrentInfoHash: catalogEntry?.torrentInfoHash,
+            torrentFileIndex: catalogEntry?.torrentFileIndex,
+            torrentMagnetUrl: catalogEntry?.torrentMagnetUrl,
+            torrentComplete: catalogEntry?.torrentComplete,
+            tmdbId: series?.status === 'resolved' ? series.tmdbId : movie?.tmdbId,
+            tmdbMediaType:
+              series?.status === 'resolved'
+                ? 'tv'
+                : movie?.status === 'resolved'
+                  ? 'movie'
+                  : undefined,
           });
         }
 
-        const showGroups = buildShowGroups(merged, keyIndex);
-        setGroups(showGroups);
+        const allFacts = [...activityFactsFromDeviceDocs(docs), ...localFacts];
+        setFacts(allFacts);
+        setLocalEntryByPlaybackKey(keyIndex);
+        setCurrentDeviceId(localDeviceId);
+        setDevices(listActivityDevices(allFacts, localDeviceId, localDeviceLabel));
+        setSelectedDeviceId((selected) =>
+          selected === 'all' || allFacts.some((fact) => fact.deviceId === selected)
+            ? selected
+            : 'all',
+        );
       } catch (err) {
         if (!cancelled) setError(err instanceof Error ? err.message : String(err));
       } finally {
@@ -441,21 +331,25 @@ export function Activity() {
       }
     }
 
-    load();
+    void load();
     return () => {
       cancelled = true;
     };
   }, [user]);
 
-  if (!user) {
-    return (
-      <div className="devices-page">
-        <div className="devices-sign-in">Sign in to see your activity across devices.</div>
-      </div>
-    );
-  }
+  const groups = useMemo(
+    () =>
+      facts
+        ? buildActivityGroups({
+            facts,
+            deviceId: selectedDeviceId === 'all' ? undefined : selectedDeviceId,
+            localEntryByPlaybackKey,
+          })
+        : [],
+    [facts, localEntryByPlaybackKey, selectedDeviceId],
+  );
 
-  if (loading) {
+  if ((loading || authLoading) && facts == null) {
     return (
       <div className="devices-page">
         <div className="devices-loading">Loading activity...</div>
@@ -463,7 +357,7 @@ export function Activity() {
     );
   }
 
-  if (error) {
+  if (error && facts == null) {
     return (
       <div className="devices-page">
         <div className="devices-error">Failed to load activity: {error}</div>
@@ -471,46 +365,62 @@ export function Activity() {
     );
   }
 
-  if (!groups || groups.length === 0) {
-    return (
-      <div className="devices-page">
-        <div className="devices-empty">
-          No watch activity yet. Play a video and your history will appear here.
-        </div>
-      </div>
-    );
-  }
-
-  const inProgressGroups = groups.filter((g) =>
-    g.episodes.some((ep) => ep.entry.watchState === 'in-progress'),
+  const inProgressGroups = groups.filter((group) =>
+    group.items.some((item) => item.fact.watchState === 'in-progress'),
   );
   const watchedOnlyGroups = groups.filter(
-    (g) => !g.episodes.some((ep) => ep.entry.watchState === 'in-progress'),
+    (group) => !group.items.some((item) => item.fact.watchState === 'in-progress'),
   );
 
   return (
-    <div className="detail-page">
-      {inProgressGroups.length > 0 && (
-        <>
-          <h2 className="devices-title">Continue Watching</h2>
-          <div className="season-list">
-            {inProgressGroups.map((group) => (
-              <ShowGroupCard key={`${group.type}:${group.tmdbId}`} group={group} />
-            ))}
-          </div>
-        </>
+    <div className="detail-page activity-page">
+      {!user && !authLoading && (
+        <div className="activity-local-notice">
+          Showing activity from this device. Sign in to include other devices.
+        </div>
       )}
-
-      {watchedOnlyGroups.length > 0 && (
+      {user && (
+        <DeviceFilters
+          devices={devices}
+          currentDeviceId={currentDeviceId}
+          selectedDeviceId={selectedDeviceId}
+          onChange={setSelectedDeviceId}
+        />
+      )}
+      {error && <div className="devices-error">Could not refresh synced activity: {error}</div>}
+      {groups.length === 0 ? (
+        <div className="devices-empty">
+          {selectedDeviceId === 'all'
+            ? 'No watch activity yet. Play a video and your history will appear here.'
+            : 'No watch activity for this device.'}
+        </div>
+      ) : (
         <>
-          <h2 className="devices-title" style={{ marginTop: inProgressGroups.length > 0 ? '2rem' : 0 }}>
-            Recently Watched
-          </h2>
-          <div className="season-list">
-            {watchedOnlyGroups.map((group) => (
-              <ShowGroupCard key={`${group.type}:${group.tmdbId}`} group={group} />
-            ))}
-          </div>
+          {inProgressGroups.length > 0 && (
+            <>
+              <h2 className="devices-title">Continue Watching</h2>
+              <div className="season-list">
+                {inProgressGroups.map((group) => (
+                  <ActivityGroupCard key={group.id} group={group} />
+                ))}
+              </div>
+            </>
+          )}
+          {watchedOnlyGroups.length > 0 && (
+            <>
+              <h2
+                className="devices-title"
+                style={{ marginTop: inProgressGroups.length > 0 ? '2rem' : 0 }}
+              >
+                Recently Watched
+              </h2>
+              <div className="season-list">
+                {watchedOnlyGroups.map((group) => (
+                  <ActivityGroupCard key={group.id} group={group} />
+                ))}
+              </div>
+            </>
+          )}
         </>
       )}
     </div>
