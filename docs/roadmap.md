@@ -32,6 +32,10 @@ The app has a library with folder scanning and watch state. These features make 
 - **Responsive sidebar** — permanent on desktop, hamburger drawer on mobile.
 - **Recently played** — quick access to the last N files without navigating the full library.
 - **Series grouping** — auto-detect episode numbering and group files into series. "Continue watching" for the next episode.
+- **Cross-device resume and handoff** — make Activity complete across devices,
+  add device filters and shared recovery actions, resolve equivalent media
+  identities, and retain resume intent through torrent download. See the
+  [cross-device Activity and handoff implementation plan](cross-device-handoff-implementation-plan.md).
 
 ## Subtitle & Audio
 
