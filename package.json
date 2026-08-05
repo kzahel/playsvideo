@@ -43,6 +43,7 @@
     "deploy": "pnpm run deploy:site",
     "prepublishOnly": "pnpm run build:lib",
     "firebase:emulators": "JAVA_HOME=/opt/homebrew/opt/openjdk@21/libexec/openjdk.jdk/Contents/Home firebase emulators:start --only firestore,auth",
+    "firebase:deploy-rules": "firebase deploy --only firestore:rules",
     "test:sync": "FIRESTORE_EMULATOR_HOST=127.0.0.1:8080 FIREBASE_AUTH_EMULATOR_HOST=127.0.0.1:9099 vitest run tests/unit/sync"
   },
   "dependencies": {

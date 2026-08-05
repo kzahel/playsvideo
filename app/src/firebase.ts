@@ -399,7 +399,7 @@ export async function saveLogicalDeviceGroup(input: {
   for (const client of input.clients) {
     batch.set(
       doc(firestore, 'sync', input.uid, 'clientMeta', client.deviceId),
-      { ...clientMetadataSeed(client), groupId },
+      client.isLegacy ? { ...clientMetadataSeed(client), groupId } : { groupId },
       { merge: true },
     );
   }
@@ -419,7 +419,9 @@ export async function setDeviceClientStatus(input: {
 }): Promise<void> {
   await setDoc(
     doc(firestore, 'sync', input.uid, 'clientMeta', input.client.deviceId),
-    { ...clientMetadataSeed(input.client), status: input.status },
+    input.client.isLegacy
+      ? { ...clientMetadataSeed(input.client), status: input.status }
+      : { status: input.status },
     { merge: true },
   );
 }
@@ -435,7 +437,9 @@ export async function forgetDeviceClient(input: {
   batch.delete(doc(firestore, 'sync', input.uid, 'devices', input.client.deviceId));
   batch.set(
     doc(firestore, 'sync', input.uid, 'clientMeta', input.client.deviceId),
-    { ...clientMetadataSeed(input.client), status: 'forgotten' },
+    input.client.isLegacy
+      ? { ...clientMetadataSeed(input.client), status: 'forgotten' }
+      : { status: 'forgotten' },
     { merge: true },
   );
   await batch.commit();

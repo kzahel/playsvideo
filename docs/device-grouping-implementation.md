@@ -196,7 +196,11 @@ it is not required for this rollout.
 
 Firestore rules add owner-only access for `clientMeta` and `deviceGroups` under
 the existing user sync namespace. Rules must be deployed before a production
-app starts writing the new collections.
+app starts writing the new collections:
+
+```bash
+pnpm -w run firebase:deploy-rules
+```
 
 There is no bulk schema or playback-data migration. Deployment consists of:
 
