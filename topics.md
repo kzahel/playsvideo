@@ -8,4 +8,13 @@ Append a topic when its first commit is created. Do not reconstruct historical
 topics unless doing so is useful. Keep each string exact across its commit
 series so `git log --grep "Topic: ..."` finds the whole chain.
 
-No commit topics are registered under this convention yet.
+- `device-identity-and-grouping` — origin-scoped client identity, logical-device
+  presentation, diagnostics, compatibility, and cleanup.
+- `cross-device-handoff` — cross-client Activity, content matching, local
+  resume, acquisition intent, and freshness.
+- `playback-compatibility` — direct/remux selection, codec evidence, segment
+  processing, audio transcode, and unsupported-video direction.
+- `local-library-and-file-access` — folder capabilities, permission recovery,
+  durable scan reconciliation, file reacquisition, and offline access.
+- `metadata-and-media-identity` — local parse identity, optional TMDB
+  enrichment, worker-owned transport, cache/credential policy, and aliases.

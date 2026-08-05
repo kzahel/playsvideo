@@ -42,35 +42,20 @@ register that exact string in the root `topics.md` file.
   work starts from the right boundaries.
 - Create a sibling topic instead of turning an existing topic into a catch-all.
 
-## Initial Adoption Candidates
-
-These are candidates, not empty placeholder docs. Draft one when work next
-touches it or when consolidating its current status would immediately help:
-
-- `device-identity-and-grouping.md` — client-instance identity, logical device
-  grouping, legacy records, diagnostics, and operational cleanup. Start from
-  [`device-grouping-implementation.md`](../device-grouping-implementation.md).
-- `cross-device-handoff.md` — content identity, playback aliases, handoff
-  matching, and compatibility between independently deployed clients. Start
-  from
-  [`cross-device-handoff-implementation-plan.md`](../cross-device-handoff-implementation-plan.md)
-  and [`data-model-separation.md`](../data-model-separation.md).
-- `playback-compatibility.md` — passthrough versus remux/transcode decisions,
-  browser-specific evidence, and the next unsupported media cases. Start from
-  [`codec-architecture.md`](../codec-architecture.md),
-  [`supported-media.md`](../supported-media.md), and
-  [`mediabunny-integration.md`](../mediabunny-integration.md).
-- `local-library-and-file-access.md` — persisted file handles, directory
-  scanning, permission recovery, offline use, and extension-specific storage.
-  Start from
-  [`file-system-access-persistence.md`](../file-system-access-persistence.md),
-  [`app-architecture.md`](../app-architecture.md), and
-  [`chromebook-offline-kids-plan.md`](../chromebook-offline-kids-plan.md).
-- `metadata-and-media-identity.md` — TMDB matching, local metadata ownership,
-  artwork, and identity boundaries between media, files, and playback. Start
-  from [`tmdb-metadata-architecture.md`](../tmdb-metadata-architecture.md) and
-  [`data-model-separation.md`](../data-model-separation.md).
-
 ## Current Topics
 
-No focused topic docs have been created under this convention yet.
+- [`device-identity-and-grouping.md`](device-identity-and-grouping.md) —
+  implemented client-instance registry and user-managed logical-device
+  presentation; production rollout and mixed-surface manual validation remain.
+- [`cross-device-handoff.md`](cross-device-handoff.md) — implemented Activity,
+  identity resolution, local resume, magnet acquisition, and durable pending
+  handoffs; extension/download/offline/failure validation remains.
+- [`playback-compatibility.md`](playback-compatibility.md) — current direct and
+  remux/HLS selection, audio transcode contract, mediabunny boundary, and
+  unsupported-video direction.
+- [`local-library-and-file-access.md`](local-library-and-file-access.md) —
+  durable catalog scanning, browser permission boundaries, file reacquisition,
+  offline extension behavior, and remaining hardware validation.
+- [`metadata-and-media-identity.md`](metadata-and-media-identity.md) — optional
+  TMDB enrichment, local/external/playback identity boundaries, shared host
+  transport, cache policy, and packaging/retention gaps.
