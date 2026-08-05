@@ -87,6 +87,15 @@ If you are working on the app rather than the core playback engine, start with:
 - [docs/app-architecture.md](docs/app-architecture.md)
 - [docs/data-model-separation.md](docs/data-model-separation.md)
 
+### Project documentation
+
+- [Topics](docs/topics/README.md) are living records of focused continuing
+  concerns.
+- [Tacticals](docs/tactical/README.md) are numbered, bounded implementation
+  plans and execution records.
+
+The convention is forward-looking; existing docs remain valid where they are.
+
 ### Roadmap
 
 See [docs/roadmap.md](docs/roadmap.md) for the full list. Highlights:
