@@ -214,15 +214,15 @@ versions. Old versions simply continue showing raw client records.
 
 ## Implementation slices
 
-- [ ] Pure client/group types, legacy projection, and unit tests
-- [ ] Firestore client metadata/group CRUD and current-client registration
-- [ ] Owner-only Firestore rules for new collections
-- [ ] Group-aware Activity filters and fact scoping
-- [ ] Grouped Devices page with client diagnostics
-- [ ] Rename, merge, split, archive, restore, and forget operations
-- [ ] Unit tests for grouping, legacy fallback, management transformations, and
+- [x] Pure client/group types, legacy projection, and unit tests
+- [x] Firestore client metadata/group CRUD and current-client registration
+- [x] Owner-only Firestore rules for new collections
+- [x] Group-aware Activity filters and fact scoping
+- [x] Grouped Devices page with client diagnostics
+- [x] Rename, merge, split, archive, restore, and forget operations
+- [x] Unit tests for grouping, legacy fallback, management transformations, and
       archived/forgotten visibility
-- [ ] Typecheck, unit tests, lint, formatting, and production builds
+- [x] Typecheck, unit tests, lint, formatting, and production builds
 
 ## Acceptance criteria
 
@@ -235,3 +235,14 @@ versions. Old versions simply continue showing raw client records.
 - Forgotten non-current clients stay suppressed if an old client resyncs.
 - Old clients cannot overwrite group names, membership, or management status.
 - The current client cannot be forgotten.
+
+## Verification record
+
+Verified locally on 2026-08-05:
+
+- Firestore rules compiled and loaded in the Firebase Firestore emulator.
+- TypeScript typecheck passed.
+- All 242 unit tests passed.
+- Biome lint passed with two pre-existing warnings outside this feature.
+- Biome formatting completed with no remaining changes.
+- The library build and production app build passed.

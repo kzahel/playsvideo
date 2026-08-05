@@ -141,10 +141,7 @@ describe('logical device projection', () => {
     };
     const split = projectLogicalDevices({ devices, registry: splitRegistry });
     expect(split.map((device) => device.name)).toEqual(['Development Mac', 'My Mac']);
-    expect(split.flatMap((device) => device.deviceIds).sort()).toEqual([
-      'localhost',
-      'production',
-    ]);
+    expect(split.flatMap((device) => device.deviceIds).sort()).toEqual(['localhost', 'production']);
   });
 
   it('omits archived and forgotten clients normally but reveals their tombstones', () => {

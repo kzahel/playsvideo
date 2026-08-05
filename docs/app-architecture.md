@@ -26,6 +26,7 @@ The app is organized around a few clear responsibilities:
 - `remotePlayback`: cached playback facts from other devices
 - `catalogAliases`: accumulated cross-device identity candidates for local media
 - `pendingHandoffs`: durable download-to-resume intent
+- client registry: groups origin-scoped sync clients into user-facing devices
 - scan pipeline: reconciles local files into `catalog`
 - metadata pipeline: parses filenames and optionally enriches catalog rows via TMDB
 - sync pipeline: pushes/pulls playback facts only
@@ -37,6 +38,7 @@ The key design rule is separation of ownership:
 - metadata owns enrichment fields
 - player owns local playback updates
 - sync owns replication of playback facts
+- device management owns client grouping, names, and visibility
 - handoff resolution owns matching remote facts to local catalog targets
 
 No single row is supposed to be the merge target for everything.
@@ -134,6 +136,11 @@ Behavior:
 - only playback facts are synced
 - local `catalog` rows are not merged or overwritten by remote devices
 - each device document is bounded to its 500 most recently played entries
+- each device document is actually one origin/profile-specific client snapshot;
+  its existing `deviceId` remains the immutable sync key
+- additive `clientMeta` and `deviceGroups` collections group those snapshots
+  without rewriting playback facts or allowing old clients to overwrite
+  management state
 - pulled remote state, including torrent/TMDB locators and device freshness, is cached in `remotePlayback`
 - concurrent sync triggers are serialized and repeated pulls are deduplicated
 - Activity paints from local/cache data first and refreshes Firestore in place
@@ -186,14 +193,23 @@ Grouping/selectors:
 - [app/src/catalog-groups.ts](/Users/kgraehl/code/playsvideo/app/src/catalog-groups.ts)
 - [app/src/local-playback-views.ts](/Users/kgraehl/code/playsvideo/app/src/local-playback-views.ts)
 - [app/src/activity/activity-view.ts](/Users/kgraehl/code/playsvideo/app/src/activity/activity-view.ts)
+- [app/src/device-groups.ts](/Users/kgraehl/code/playsvideo/app/src/device-groups.ts)
 - [app/src/playback-identity-resolver.ts](/Users/kgraehl/code/playsvideo/app/src/playback-identity-resolver.ts)
 
 ### Cross-device activity and handoff
 
-Activity is the primary cross-device history. It preserves per-device facts,
-filters before selecting a recommended fact, and never requires TMDB metadata.
-The All devices view selects the newest position while enriching sparse facts
-field by field from equivalent older facts.
+Activity is the primary cross-device history. It preserves per-client facts,
+groups clients into logical user-facing devices, filters before selecting a
+recommended fact, and never requires TMDB metadata. Identically labeled legacy
+clients form a reversible default group until the user manages them. The All
+devices view selects the newest position while enriching sparse facts field by
+field from equivalent older facts.
+
+Devices is the management surface for the separate presentation layer. It can
+rename and merge logical devices, split a client into its own device, archive a
+client without losing facts, or forget a non-current client while retaining a
+tombstone. The raw `deviceId` snapshots and local playback compound keys are not
+migrated.
 
 Activity and Devices share the same handoff action component. The resolver
 matches exact canonical, torrent/file-index, content-hash, TMDB, and file alias
