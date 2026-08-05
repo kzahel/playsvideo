@@ -1,5 +1,14 @@
 import { initializeApp } from 'firebase/app';
-import { getFirestore, connectFirestoreEmulator, doc, setDoc, getDocs, collection } from 'firebase/firestore';
+import {
+  collection,
+  connectFirestoreEmulator,
+  doc,
+  getDocs,
+  getFirestore,
+  runTransaction,
+  setDoc,
+  writeBatch,
+} from 'firebase/firestore';
 import {
   getAuth,
   connectAuthEmulator,
@@ -22,6 +31,18 @@ import {
 } from './db.js';
 import { isExtension } from './context.js';
 import { getDeviceId, getDeviceLabel } from './device.js';
+import {
+  buildObservedClientMetadata,
+  clientMetadataSeed,
+  isVirtualDeviceGroupId,
+  type ClientMetadataDoc,
+  type ClientStatus,
+  type DeviceClient,
+  type DeviceGroupDoc,
+  type DeviceRegistryState,
+  type RemoteClientMetadataState,
+  type RemoteDeviceGroupState,
+} from './device-groups.js';
 import { buildPlaybackKeyCandidates } from './playback-key.js';
 import {
   buildDeviceSyncDoc,
@@ -103,6 +124,19 @@ export function onAuthChange(callback: (user: User | null) => void): () => void 
 
 export type SyncEntry = DeviceSyncEntry;
 export type { DeviceSyncDoc, RemoteDeviceState };
+export type {
+  ClientMetadataDoc,
+  ClientStatus,
+  DeviceGroupDoc,
+  DeviceRegistryState,
+  RemoteClientMetadataState,
+  RemoteDeviceGroupState,
+};
+
+export interface RemoteDeviceSyncState {
+  devices: RemoteDeviceState[];
+  registry: DeviceRegistryState;
+}
 
 // --- Sync key builders ---
 
@@ -223,6 +257,53 @@ async function pullAllDeviceDocs(uid: string): Promise<RemoteDeviceState[]> {
   return results;
 }
 
+async function pullAllClientMetadata(uid: string): Promise<RemoteClientMetadataState[]> {
+  const snap = await getDocs(collection(firestore, 'sync', uid, 'clientMeta'));
+  return snap.docs.map((entry) => ({
+    deviceId: entry.id,
+    doc: entry.data() as ClientMetadataDoc,
+  }));
+}
+
+async function pullAllDeviceGroups(uid: string): Promise<RemoteDeviceGroupState[]> {
+  const snap = await getDocs(collection(firestore, 'sync', uid, 'deviceGroups'));
+  return snap.docs.map((entry) => ({
+    groupId: entry.id,
+    doc: entry.data() as DeviceGroupDoc,
+  }));
+}
+
+async function pullAllDeviceSyncState(uid: string): Promise<RemoteDeviceSyncState> {
+  const [devices, clients, groups] = await Promise.all([
+    pullAllDeviceDocs(uid),
+    pullAllClientMetadata(uid),
+    pullAllDeviceGroups(uid),
+  ]);
+  return { devices, registry: { clients, groups } };
+}
+
+async function registerCurrentClientMetadata(
+  uid: string,
+  deviceId: string,
+  deviceDoc: DeviceSyncDoc,
+): Promise<void> {
+  const ref = doc(firestore, 'sync', uid, 'clientMeta', deviceId);
+  await runTransaction(firestore, async (transaction) => {
+    const snapshot = await transaction.get(ref);
+    const existing = snapshot.exists() ? (snapshot.data() as ClientMetadataDoc) : undefined;
+    const metadata = buildObservedClientMetadata({
+      deviceId,
+      generatedLabel: deviceDoc.label,
+      ...(typeof location !== 'undefined' && location.origin ? { origin: location.origin } : {}),
+      kind: isExtension() ? 'extension' : 'web',
+      channel: import.meta.env?.DEV ? 'development' : 'production',
+      observedAt: deviceDoc.lastSyncedAt,
+      existing,
+    });
+    transaction.set(ref, metadata, { merge: true });
+  });
+}
+
 export function mergeDeviceDocs(
   devices: RemoteDeviceState[],
 ): ReturnType<typeof mergeRemoteDeviceDocs> {
@@ -245,15 +326,15 @@ export async function buildDeviceDoc(): Promise<DeviceSyncDoc> {
   });
 }
 
-const remotePullsByUser = new Map<string, Promise<RemoteDeviceState[]>>();
+const remotePullsByUser = new Map<string, Promise<RemoteDeviceSyncState>>();
 
-export function pullAndCacheDeviceDocs(uid: string): Promise<RemoteDeviceState[]> {
+export function pullAndCacheDeviceSyncState(uid: string): Promise<RemoteDeviceSyncState> {
   const existing = remotePullsByUser.get(uid);
   if (existing) return existing;
 
   const run = (async () => {
-    const [deviceId, allDeviceDocs] = await Promise.all([getDeviceId(), pullAllDeviceDocs(uid)]);
-    const remotePlaybackRows = flattenRemoteDeviceDocs(allDeviceDocs, {
+    const [deviceId, state] = await Promise.all([getDeviceId(), pullAllDeviceSyncState(uid)]);
+    const remotePlaybackRows = flattenRemoteDeviceDocs(state.devices, {
       excludeDeviceId: deviceId,
       updatedAt: Date.now(),
     });
@@ -264,7 +345,7 @@ export function pullAndCacheDeviceDocs(uid: string): Promise<RemoteDeviceState[]
         await db.remotePlayback.bulkPut(remotePlaybackRows);
       }
     });
-    return allDeviceDocs;
+    return state;
   })();
 
   remotePullsByUser.set(uid, run);
@@ -275,9 +356,89 @@ export function pullAndCacheDeviceDocs(uid: string): Promise<RemoteDeviceState[]
   return run;
 }
 
+export async function pullAndCacheDeviceDocs(uid: string): Promise<RemoteDeviceState[]> {
+  return (await pullAndCacheDeviceSyncState(uid)).devices;
+}
+
 export async function mergeAndSync(uid: string): Promise<void> {
-  const [deviceId] = await Promise.all([getDeviceId(), pullAndCacheDeviceDocs(uid)]);
-  await pushDeviceDoc(uid, deviceId, await buildDeviceDoc());
+  const [deviceId] = await Promise.all([getDeviceId(), pullAndCacheDeviceSyncState(uid)]);
+  const deviceDoc = await buildDeviceDoc();
+  await pushDeviceDoc(uid, deviceId, deviceDoc);
+  try {
+    await registerCurrentClientMetadata(uid, deviceId, deviceDoc);
+  } catch (err) {
+    console.warn('Client metadata registration failed:', err);
+  }
+}
+
+export async function saveLogicalDeviceGroup(input: {
+  uid: string;
+  groupId?: string;
+  name: string;
+  clients: DeviceClient[];
+  deleteGroupIds?: string[];
+}): Promise<string> {
+  const trimmedName = input.name.trim();
+  if (!trimmedName) throw new Error('Device name is required');
+  if (input.clients.length === 0) throw new Error('A device group requires at least one client');
+
+  const groupId =
+    input.groupId && !isVirtualDeviceGroupId(input.groupId)
+      ? input.groupId
+      : crypto.randomUUID();
+  const now = Date.now();
+  const updatesExistingGroup = input.groupId === groupId;
+  const batch = writeBatch(firestore);
+  batch.set(
+    doc(firestore, 'sync', input.uid, 'deviceGroups', groupId),
+    updatesExistingGroup
+      ? { v: 1, name: trimmedName, updatedAt: now }
+      : ({ v: 1, name: trimmedName, createdAt: now, updatedAt: now } satisfies DeviceGroupDoc),
+    { merge: true },
+  );
+  for (const client of input.clients) {
+    batch.set(
+      doc(firestore, 'sync', input.uid, 'clientMeta', client.deviceId),
+      { ...clientMetadataSeed(client), groupId },
+      { merge: true },
+    );
+  }
+  for (const sourceGroupId of input.deleteGroupIds ?? []) {
+    if (sourceGroupId !== groupId && !isVirtualDeviceGroupId(sourceGroupId)) {
+      batch.delete(doc(firestore, 'sync', input.uid, 'deviceGroups', sourceGroupId));
+    }
+  }
+  await batch.commit();
+  return groupId;
+}
+
+export async function setDeviceClientStatus(input: {
+  uid: string;
+  client: DeviceClient;
+  status: Exclude<ClientStatus, 'forgotten'>;
+}): Promise<void> {
+  await setDoc(
+    doc(firestore, 'sync', input.uid, 'clientMeta', input.client.deviceId),
+    { ...clientMetadataSeed(input.client), status: input.status },
+    { merge: true },
+  );
+}
+
+export async function forgetDeviceClient(input: {
+  uid: string;
+  client: DeviceClient;
+}): Promise<void> {
+  if (input.client.deviceId === (await getDeviceId())) {
+    throw new Error('The current client cannot be forgotten');
+  }
+  const batch = writeBatch(firestore);
+  batch.delete(doc(firestore, 'sync', input.uid, 'devices', input.client.deviceId));
+  batch.set(
+    doc(firestore, 'sync', input.uid, 'clientMeta', input.client.deviceId),
+    { ...clientMetadataSeed(input.client), status: 'forgotten' },
+    { merge: true },
+  );
+  await batch.commit();
 }
 
 let syncRequested = false;
