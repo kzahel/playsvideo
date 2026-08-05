@@ -115,7 +115,7 @@ export function Settings() {
           value={controlsType}
           onChange={(event) => setControlsType(event.target.value as PlayerControlsType)}
         >
-          <option value="videojs">Video.js 10 controls (experimental)</option>
+          <option value="videojs">Video.js 10 controls (default)</option>
           <option value="stock">Native browser controls</option>
         </select>
         <p className="settings-card-copy">
