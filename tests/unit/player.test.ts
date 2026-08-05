@@ -5,13 +5,19 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 import type { CatalogEntry, PlaybackEntry } from '../../app/src/db.js';
 import { Player } from '../../app/src/pages/Player.js';
 
-const { useLiveQueryMock, useEngineMock, useSettingMock, listSiblingSubtitleFilesMock } =
-  vi.hoisted(() => ({
-    useLiveQueryMock: vi.fn(),
-    useEngineMock: vi.fn(),
-    useSettingMock: vi.fn((_: string, defaultValue: unknown) => [defaultValue, vi.fn()]),
-    listSiblingSubtitleFilesMock: vi.fn().mockResolvedValue([]),
-  }));
+const {
+  useLiveQueryMock,
+  useEngineMock,
+  useSettingMock,
+  useFocusedMediaDiscoveryMock,
+  listSiblingSubtitleFilesMock,
+} = vi.hoisted(() => ({
+  useLiveQueryMock: vi.fn(),
+  useEngineMock: vi.fn(),
+  useSettingMock: vi.fn((_: string, defaultValue: unknown) => [defaultValue, vi.fn()]),
+  useFocusedMediaDiscoveryMock: vi.fn(),
+  listSiblingSubtitleFilesMock: vi.fn().mockResolvedValue([]),
+}));
 
 vi.mock('dexie-react-hooks', () => ({
   useLiveQuery: useLiveQueryMock,
@@ -31,6 +37,10 @@ vi.mock('../../app/src/hooks/useSessionPlayerControlsType.js', () => ({
 
 vi.mock('../../app/src/hooks/useFullscreen.js', () => ({
   useFullscreen: vi.fn(),
+}));
+
+vi.mock('../../app/src/hooks/useFocusedMediaDiscovery.js', () => ({
+  useFocusedMediaDiscovery: useFocusedMediaDiscoveryMock,
 }));
 
 vi.mock('../../app/src/folder-provider.js', () => ({
@@ -78,6 +88,7 @@ describe('Player', () => {
     useLiveQueryMock.mockReset();
     useEngineMock.mockReset();
     useSettingMock.mockClear();
+    useFocusedMediaDiscoveryMock.mockClear();
     listSiblingSubtitleFilesMock.mockClear();
     useEngineMock.mockReturnValue({
       videoRef: { current: null },
@@ -122,6 +133,7 @@ describe('Player', () => {
     expect(html).not.toContain('Loading...');
     expect(html.match(/<video/g)).toHaveLength(1);
     expect(html).not.toContain('Video.js controls');
+    expect(useFocusedMediaDiscoveryMock).toHaveBeenCalledWith(entry);
     expect(useEngineMock).toHaveBeenCalledWith(
       {
         kind: 'entry',

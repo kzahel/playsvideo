@@ -10,12 +10,14 @@ import { folderProvider, type SiblingSubtitleFile } from '../folder-provider.js'
 import { useSetting } from '../hooks/useSetting';
 import { useFullscreen } from '../hooks/useFullscreen';
 import { useSessionPlayerControlsType } from '../hooks/useSessionPlayerControlsType.js';
+import { useFocusedMediaDiscovery } from '../hooks/useFocusedMediaDiscovery.js';
 import { getLocalPlayback } from '../local-playback.js';
 import { consumePendingHandoff } from '../handoff/pending-handoffs.js';
 import { magnetWithFileIndex } from '../torrent-magnet.js';
 import {
   AUTOPLAY_NEXT_EPISODE_KEY,
 } from '../settings.js';
+import { catalogSeriesIdentity } from '../scanning/focused-discovery.js';
 
 const PLAYER_QUERY_PENDING = Symbol('player-query-pending');
 
@@ -89,18 +91,6 @@ function isPlaybackForTarget(
     playback.deviceId === input.deviceId &&
     playback.playbackKey === input.playbackKey
   );
-}
-
-function buildSeriesIdentity(entry: CatalogEntry): string | null {
-  if (entry.detectedMediaType !== 'tv' || !entry.parsedTitle) {
-    return null;
-  }
-
-  if (entry.seriesMetadataKey) {
-    return entry.seriesMetadataKey;
-  }
-
-  return `tv-local:${entry.parsedTitle}:${entry.parsedYear ?? ''}`;
 }
 
 function compareEpisodeEntries(left: CatalogEntry, right: CatalogEntry): number {
@@ -184,6 +174,7 @@ export function Player() {
   const entryLookupPending =
     entry === PLAYER_QUERY_PENDING || (entry != null && entry.id !== entryId);
   const resolvedEntry = entryLookupPending ? routeEntry : entry;
+  useFocusedMediaDiscovery(resolvedEntry);
   const deviceIdPending = deviceId === PLAYER_QUERY_PENDING || deviceId === '';
   const resolvedDeviceId = deviceIdPending ? null : deviceId;
   const playbackKey = resolvedEntry?.canonicalPlaybackKey ?? null;
@@ -275,7 +266,7 @@ export function Player() {
       return { previousEpisode: null, nextEpisode: null };
     }
 
-    const seriesIdentity = buildSeriesIdentity(resolvedEntry);
+    const seriesIdentity = catalogSeriesIdentity(resolvedEntry);
     if (!seriesIdentity || resolvedEntry.seasonNumber == null || resolvedEntry.episodeNumber == null) {
       return { previousEpisode: null, nextEpisode: null };
     }
@@ -283,7 +274,7 @@ export function Player() {
     const siblings = entries
       .filter((candidate) => candidate.id !== resolvedEntry.id)
       .filter((candidate) => candidate.hasLocalFile !== false)
-      .filter((candidate) => buildSeriesIdentity(candidate) === seriesIdentity)
+      .filter((candidate) => catalogSeriesIdentity(candidate) === seriesIdentity)
       .filter(
         (candidate) => candidate.seasonNumber != null && candidate.episodeNumber != null,
       )

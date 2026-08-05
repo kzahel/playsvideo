@@ -24,5 +24,7 @@ the tactical from that topic.
 
 ## Index
 
-No tacticals have been created under this convention yet. The next one is
-`000-{subject}.md`.
+- [`000-focused-media-discovery.md`](000-focused-media-discovery.md) — bounded,
+  additions-only discovery for newly completed episodes from the player.
+
+The next tactical is `001-{subject}.md`.

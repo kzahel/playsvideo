@@ -44,6 +44,9 @@ register that exact string in the root `topics.md` file.
 
 ## Current Topics
 
+- [`filesystem-scanning-and-reconciliation.md`](filesystem-scanning-and-reconciliation.md)
+  — focused discovery versus authoritative reconciliation, scan scope,
+  budgets, concurrency, and mutation safety.
 - [`device-identity-and-grouping.md`](device-identity-and-grouping.md) —
   implemented client-instance registry and user-managed logical-device
   presentation; production rollout and mixed-surface manual validation remain.
@@ -54,8 +57,8 @@ register that exact string in the root `topics.md` file.
   remux/HLS selection, audio transcode contract, mediabunny boundary, and
   unsupported-video direction.
 - [`local-library-and-file-access.md`](local-library-and-file-access.md) —
-  durable catalog scanning, browser permission boundaries, file reacquisition,
-  offline extension behavior, and remaining hardware validation.
+  browser permission boundaries, file reacquisition, offline extension
+  behavior, and remaining hardware validation.
 - [`metadata-and-media-identity.md`](metadata-and-media-identity.md) — optional
   TMDB enrichment, local/external/playback identity boundaries, shared host
   transport, cache policy, and packaging/retention gaps.

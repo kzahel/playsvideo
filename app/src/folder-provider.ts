@@ -53,6 +53,17 @@ export interface FolderResult {
   manifests: ScannedManifest[];
 }
 
+export interface FocusedFolderDiscoveryOptions {
+  scopePath: string;
+  maxEntries: number;
+}
+
+export interface FocusedFolderResult extends FolderResult {
+  scopePath: string;
+  inspectedEntryCount: number;
+  truncated: boolean;
+}
+
 export interface SiblingSubtitleFile {
   file: File;
   name: string;
@@ -87,33 +98,14 @@ export interface FolderProvider {
   pickFolder(): Promise<FolderResult>;
   getFile(entry: CatalogEntry, options?: FileAccessOptions): Promise<File>;
   listSiblingSubtitleFiles(entry: CatalogEntry): Promise<SiblingSubtitleFile[]>;
+  discover(
+    directoryId: number,
+    options: FocusedFolderDiscoveryOptions,
+  ): Promise<FocusedFolderResult>;
   rescan(directoryId?: number, options?: FolderRescanOptions): Promise<FolderResult>;
 }
 
 // --- File System Access API provider (Chromium) ---
-
-async function* walkDirectory(
-  handle: FileSystemDirectoryHandle,
-  pathPrefix = '',
-): AsyncGenerator<ScannedFile> {
-  for await (const entry of handle.values()) {
-    const entryPath = pathPrefix ? `${pathPrefix}/${entry.name}` : entry.name;
-    if (entry.kind === 'file') {
-      if (isVideoFile(entry.name)) {
-        const fileHandle = entry as FileSystemFileHandle;
-        const file = await fileHandle.getFile();
-        yield {
-          name: entry.name,
-          path: entryPath,
-          size: file.size,
-          lastModified: file.lastModified,
-        };
-      }
-    } else if (entry.kind === 'directory') {
-      yield* walkDirectory(entry as FileSystemDirectoryHandle, entryPath);
-    }
-  }
-}
 
 async function ensurePermission(
   handle: FileSystemDirectoryHandle,
@@ -139,41 +131,85 @@ async function ensurePermission(
   }
 }
 
-async function collectFiles(handle: FileSystemDirectoryHandle): Promise<ScannedFile[]> {
-  const files: ScannedFile[] = [];
-  for await (const f of walkDirectory(handle)) {
-    files.push(f);
-  }
-  return files;
-}
-
 const MANIFEST_PATTERN = /^\.[0-9a-f]{40}\.jstorrent\.json$/i;
 
-async function collectManifests(
+interface DirectorySnapshotState {
+  files: ScannedFile[];
+  manifests: ScannedManifest[];
+  inspectedEntryCount: number;
+  maxEntries: number;
+  truncated: boolean;
+}
+
+async function readManifest(
+  handle: FileSystemFileHandle,
+  path: string,
+): Promise<ScannedManifest | null> {
+  try {
+    const file = await handle.getFile();
+    const text = await file.text();
+    const data = JSON.parse(text) as JSTorrentManifest;
+    return data.infohash && data.files ? { path, data } : null;
+  } catch {
+    return null;
+  }
+}
+
+async function collectDirectorySnapshotInto(
   handle: FileSystemDirectoryHandle,
-  pathPrefix = '',
-): Promise<ScannedManifest[]> {
-  const manifests: ScannedManifest[] = [];
-  for await (const entry of handle.values()) {
+  pathPrefix: string,
+  state: DirectorySnapshotState,
+): Promise<void> {
+  const entries: FileSystemHandle[] = [];
+  for await (const entry of handle.values()) entries.push(entry);
+  entries.sort((left, right) => left.name.localeCompare(right.name));
+
+  for (const entry of entries) {
+    if (state.inspectedEntryCount >= state.maxEntries) {
+      state.truncated = true;
+      return;
+    }
+    state.inspectedEntryCount += 1;
     const entryPath = pathPrefix ? `${pathPrefix}/${entry.name}` : entry.name;
-    if (entry.kind === 'file' && MANIFEST_PATTERN.test(entry.name)) {
-      try {
-        const fileHandle = entry as FileSystemFileHandle;
+    if (entry.kind === 'file') {
+      const fileHandle = entry as FileSystemFileHandle;
+      if (MANIFEST_PATTERN.test(entry.name)) {
+        const manifest = await readManifest(fileHandle, entryPath);
+        if (manifest) state.manifests.push(manifest);
+      } else if (isVideoFile(entry.name)) {
         const file = await fileHandle.getFile();
-        const text = await file.text();
-        const data = JSON.parse(text) as JSTorrentManifest;
-        if (data.infohash && data.files) {
-          manifests.push({ path: entryPath, data });
-        }
-      } catch {
-        // Skip unparseable manifests
+        state.files.push({
+          name: entry.name,
+          path: entryPath,
+          size: file.size,
+          lastModified: file.lastModified,
+        });
       }
     } else if (entry.kind === 'directory') {
-      const sub = await collectManifests(entry as FileSystemDirectoryHandle, entryPath);
-      manifests.push(...sub);
+      await collectDirectorySnapshotInto(
+        entry as FileSystemDirectoryHandle,
+        entryPath,
+        state,
+      );
+      if (state.truncated) return;
     }
   }
-  return manifests;
+}
+
+async function collectDirectorySnapshot(
+  handle: FileSystemDirectoryHandle,
+  pathPrefix = '',
+  maxEntries = Number.POSITIVE_INFINITY,
+): Promise<DirectorySnapshotState> {
+  const state: DirectorySnapshotState = {
+    files: [],
+    manifests: [],
+    inspectedEntryCount: 0,
+    maxEntries,
+    truncated: false,
+  };
+  await collectDirectorySnapshotInto(handle, pathPrefix, state);
+  return state;
 }
 
 class FsAccessProvider implements FolderProvider {
@@ -220,8 +256,13 @@ class FsAccessProvider implements FolderProvider {
       lastScannedAt: Date.now(),
     } as Parameters<typeof db.directories.add>[0]);
     this.grantedHandles.set(directoryId as number, handle);
-    const [files, manifests] = await Promise.all([collectFiles(handle), collectManifests(handle)]);
-    return { directoryId: directoryId as number, name: handle.name, files, manifests };
+    const snapshot = await collectDirectorySnapshot(handle);
+    return {
+      directoryId: directoryId as number,
+      name: handle.name,
+      files: snapshot.files,
+      manifests: snapshot.manifests,
+    };
   }
 
   private async resolveHandle(directoryId: number): Promise<FileSystemDirectoryHandle> {
@@ -290,6 +331,53 @@ class FsAccessProvider implements FolderProvider {
     return siblings;
   }
 
+  async discover(
+    directoryId: number,
+    options: FocusedFolderDiscoveryOptions,
+  ): Promise<FocusedFolderResult> {
+    const dir = await db.directories.get(directoryId);
+    if (!dir?.handle) throw new Error('No directory available');
+    const rootHandle = this.grantedHandles.get(dir.id) ?? dir.handle;
+    await ensurePermission(rootHandle);
+    this.grantedHandles.set(dir.id, rootHandle);
+
+    let scopedHandle = rootHandle;
+    const normalizedScope = options.scopePath.replace(/^\/+|\/+$/g, '');
+    try {
+      for (const segment of normalizedScope.split('/').filter(Boolean)) {
+        scopedHandle = await scopedHandle.getDirectoryHandle(segment);
+      }
+    } catch (error) {
+      if (error instanceof DOMException && error.name === 'NotFoundError') {
+        return {
+          directoryId,
+          name: dir.name,
+          scopePath: normalizedScope,
+          files: [],
+          manifests: [],
+          inspectedEntryCount: 0,
+          truncated: false,
+        };
+      }
+      throw error;
+    }
+
+    const snapshot = await collectDirectorySnapshot(
+      scopedHandle,
+      normalizedScope,
+      options.maxEntries,
+    );
+    return {
+      directoryId,
+      name: dir.name,
+      scopePath: normalizedScope,
+      files: snapshot.files,
+      manifests: snapshot.manifests,
+      inspectedEntryCount: snapshot.inspectedEntryCount,
+      truncated: snapshot.truncated,
+    };
+  }
+
   async rescan(directoryId?: number, options: FolderRescanOptions = {}): Promise<FolderResult> {
     const dir = directoryId
       ? await db.directories.get(directoryId)
@@ -298,8 +386,13 @@ class FsAccessProvider implements FolderProvider {
     const handle = this.grantedHandles.get(dir.id) ?? dir.handle;
     await ensurePermission(handle, options);
     this.grantedHandles.set(dir.id, handle);
-    const [files, manifests] = await Promise.all([collectFiles(handle), collectManifests(handle)]);
-    return { directoryId: dir.id, name: dir.name, files, manifests };
+    const snapshot = await collectDirectorySnapshot(handle);
+    return {
+      directoryId: dir.id,
+      name: dir.name,
+      files: snapshot.files,
+      manifests: snapshot.manifests,
+    };
   }
 }
 
@@ -384,6 +477,10 @@ class WebkitDirectoryProvider implements FolderProvider {
 
     siblings.sort((left, right) => left.name.localeCompare(right.name));
     return siblings;
+  }
+
+  async discover(): Promise<FocusedFolderResult> {
+    throw new FileAccessPermissionError('Select the folder again to discover new files');
   }
 
   async rescan(): Promise<FolderResult> {

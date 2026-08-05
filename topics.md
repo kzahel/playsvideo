@@ -18,3 +18,5 @@ series so `git log --grep "Topic: ..."` finds the whole chain.
   durable scan reconciliation, file reacquisition, and offline access.
 - `metadata-and-media-identity` — local parse identity, optional TMDB
   enrichment, worker-owned transport, cache/credential policy, and aliases.
+- `filesystem-scanning-and-reconciliation` — focused discovery, authoritative
+  reconciliation, scope, budgets, concurrency, and catalog mutation safety.

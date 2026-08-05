@@ -14,6 +14,9 @@ scan reconciliation, file reacquisition for playback/subtitles, offline
 availability, and the distinction between durable catalog data and ephemeral
 file access.
 
+Detailed scan modes, scope, concurrency, and mutation authority now live in
+[filesystem scanning and reconciliation](filesystem-scanning-and-reconciliation.md).
+
 It does not own codec compatibility or cross-device playback matching.
 
 ## Provider Boundary
@@ -24,6 +27,7 @@ rather than calling browser-specific folder APIs directly. The contract covers:
 - picking a folder;
 - reporting whether a rescan can run now or needs a user gesture;
 - rescanning one stored directory;
+- bounded discovery inside a stored directory without prompting for access;
 - reacquiring the `File` for a catalog entry;
 - listing sibling subtitle files.
 

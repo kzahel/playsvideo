@@ -1,37 +1,34 @@
 import {
   db,
   type CatalogEntry,
-  type DetectedMediaType,
-  type MovieMetadataEntry,
-  type SeriesMetadataEntry,
 } from './db.js';
-import { matchScannedCatalogItems, type ScannedCatalogItem } from './catalog-match.js';
 import {
   folderProvider,
   type FileAccessOptions,
   type FolderRescanOptions,
+  isFileAccessPermissionError,
   type ScannedFile,
   type ScannedManifest,
 } from './folder-provider.js';
-import { parseMediaMetadata } from './media-metadata.js';
 import { refreshCatalogMetadata } from './metadata/client.js';
 import { reconcilePendingHandoffs } from './handoff/pending-handoffs.js';
 import { backfillCatalogAliases } from './playback-identity-resolver.js';
-import { buildPlaybackKeyCandidates } from './playback-key.js';
+import {
+  buildMissingCatalogEntry,
+  planFocusedCatalogUpdates,
+  planFullCatalogReconciliation,
+} from './scanning/catalog-reconciliation.js';
+import {
+  buildFocusedDiscoveryPlan,
+  emptyFocusedDiscoveryResult,
+  FocusedDiscoveryCoordinator,
+  focusedDiscoveryPlanKey,
+  type FocusedDiscoveryResult,
+} from './scanning/focused-discovery.js';
+import { DirectoryScanCoordinator } from './scanning/scan-coordinator.js';
 
 export { type ScannedFile } from './folder-provider.js';
 export { refreshCatalogMetadata } from './metadata/client.js';
-
-const VIDEO_EXTENSIONS = new Set([
-  '.mp4', '.mkv', '.avi', '.webm', '.mov', '.m4v',
-  '.ts', '.mts', '.flv', '.wmv', '.ogv', '.3gp',
-]);
-
-function isVideoFileName(name: string): boolean {
-  const dot = name.lastIndexOf('.');
-  if (dot === -1) return false;
-  return VIDEO_EXTENSIONS.has(name.slice(dot).toLowerCase());
-}
 
 export interface ScanResult {
   fileCount: number;
@@ -47,9 +44,15 @@ export async function rescanFolder(
   directoryId?: number,
   options?: FolderRescanOptions,
 ): Promise<ScanResult> {
-  const result = await folderProvider.rescan(directoryId, options);
-  await syncCatalog(result.directoryId, result.files, result.manifests);
-  return { fileCount: result.files.length };
+  const resolvedDirectoryId =
+    directoryId ?? (await db.directories.toCollection().first())?.id;
+  if (resolvedDirectoryId == null) throw new Error('No directory to rescan');
+
+  return directoryScanCoordinator.run(resolvedDirectoryId, async () => {
+    const result = await folderProvider.rescan(resolvedDirectoryId, options);
+    await syncCatalog(result.directoryId, result.files, result.manifests);
+    return { fileCount: result.files.length };
+  });
 }
 
 export async function rescanAllFolders(options?: FolderRescanOptions): Promise<ScanResult> {
@@ -79,183 +82,59 @@ export async function getFile(entry: CatalogEntry, options?: FileAccessOptions):
   return folderProvider.getFile(entry, options);
 }
 
-function manifestDir(manifestPath: string): string {
-  const slash = manifestPath.lastIndexOf('/');
-  return slash === -1 ? '' : manifestPath.slice(0, slash);
-}
+const focusedDiscoveryCoordinator = new FocusedDiscoveryCoordinator();
+const directoryScanCoordinator = new DirectoryScanCoordinator();
 
-interface ScannedCatalogRecord extends ScannedCatalogItem {
-  directoryId: number;
-  hasLocalFile: boolean;
-  detectedMediaType: DetectedMediaType;
-  parsedTitle?: string;
-  parsedYear?: number;
-  seasonNumber?: number;
-  episodeNumber?: number;
-  endingEpisodeNumber?: number;
-  seriesMetadataKey?: string;
-  movieMetadataKey?: string;
-  torrentMagnetUrl?: string;
-  torrentComplete?: boolean;
-}
+export async function discoverFocusedMediaForEntry(
+  currentEntry: CatalogEntry,
+): Promise<FocusedDiscoveryResult> {
+  const catalogEntries = await db.catalog.toArray();
+  const discovery = buildFocusedDiscoveryPlan(currentEntry, catalogEntries);
+  if (!discovery) return emptyFocusedDiscoveryResult('unsupported');
 
-function torrentKey(entry: {
-  torrentInfoHash?: string;
-  torrentFileIndex?: number;
-}): string | null {
-  return entry.torrentInfoHash != null && entry.torrentFileIndex != null
-    ? `${entry.torrentInfoHash}:${entry.torrentFileIndex}`
-    : null;
-}
-
-function mergeDetectedMediaType(
-  nextType: DetectedMediaType,
-  existingType?: DetectedMediaType,
-): DetectedMediaType {
-  return nextType !== 'unknown' ? nextType : existingType ?? 'unknown';
-}
-
-function chooseCatalogPlaybackKey(
-  entry: CatalogEntry,
-  seriesMetadataByKey: Map<string, SeriesMetadataEntry>,
-  movieMetadataByKey: Map<string, MovieMetadataEntry>,
-): string {
-  const candidates = buildPlaybackKeyCandidates(
-    {
-      name: entry.name,
-      size: entry.size,
-      detectedMediaType: entry.detectedMediaType,
-      seriesMetadataKey: entry.seriesMetadataKey,
-      movieMetadataKey: entry.movieMetadataKey,
-      seasonNumber: entry.seasonNumber,
-      episodeNumber: entry.episodeNumber,
-      endingEpisodeNumber: entry.endingEpisodeNumber,
-      contentHash: entry.contentHash,
-      torrentInfoHash: entry.torrentInfoHash,
-      torrentFileIndex: entry.torrentFileIndex,
-    },
-    {
-      seriesMetadataByKey,
-      movieMetadataByKey,
-    },
-  );
-
-  if (entry.canonicalPlaybackKey) {
-    const existing = candidates.find((candidate) => candidate.key === entry.canonicalPlaybackKey);
-    if (existing) {
-      return existing.key;
-    }
-  }
-
-  return candidates[0].key;
-}
-
-function buildScannedCatalogRecords(
-  directoryId: number,
-  files: ScannedFile[],
-  manifests: ScannedManifest[],
-): ScannedCatalogRecord[] {
-  const records: ScannedCatalogRecord[] = files.map((file) => ({
-    directoryId,
-    name: file.name,
-    path: file.path,
-    size: file.size,
-    lastModified: file.lastModified,
-    hasLocalFile: true,
-    ...parseMediaMetadata(file.path),
-  }));
-
-  const recordByPath = new Map(records.map((record) => [record.path, record]));
-  for (const manifest of manifests) {
-    const dir = manifestDir(manifest.path);
-    for (const [fileName, fileData] of Object.entries(manifest.data.files)) {
-      if (!isVideoFileName(fileName)) continue;
-
-      const filePath = dir ? `${dir}/${fileName}` : fileName;
-      const torrentFields = {
-        torrentInfoHash: manifest.data.infohash,
-        torrentFileIndex: fileData.index,
-        torrentMagnetUrl: manifest.data.magnet,
-        torrentComplete: fileData.complete,
-      };
-
-      const localRecord = recordByPath.get(filePath);
-      if (localRecord) {
-        Object.assign(localRecord, torrentFields);
-        continue;
+  return focusedDiscoveryCoordinator.run(focusedDiscoveryPlanKey(discovery), () =>
+    directoryScanCoordinator.run(discovery.directoryId, async () => {
+      let result;
+      try {
+        result = await folderProvider.discover(discovery.directoryId, {
+          scopePath: discovery.scopePath,
+          maxEntries: discovery.maxEntries,
+        });
+      } catch (error) {
+        return emptyFocusedDiscoveryResult(
+          isFileAccessPermissionError(error) ? 'permission-required' : 'failed',
+          discovery,
+        );
       }
 
-      const virtualRecord: ScannedCatalogRecord = {
-        directoryId,
-        name: fileName,
-        path: filePath,
-        size: 0,
-        lastModified: 0,
-        hasLocalFile: false,
-        ...torrentFields,
-        ...parseMediaMetadata(filePath),
+      const [latestCatalogEntries, seriesMetadata, movieMetadata] = await Promise.all([
+        db.catalog.toArray(),
+        db.seriesMetadata.toArray(),
+        db.movieMetadata.toArray(),
+      ]);
+      const updatePlan = planFocusedCatalogUpdates({
+        discovery,
+        files: result.files,
+        manifests: result.manifests,
+        allCatalogEntries: latestCatalogEntries,
+        seriesMetadata,
+        movieMetadata,
+        scannedAt: Date.now(),
+      });
+      if (updatePlan.updates.length > 0) {
+        await db.catalog.bulkPut(updatePlan.updates);
+      }
+
+      return {
+        status: updatePlan.updates.length > 0 ? 'updated' : 'unchanged',
+        scopePath: discovery.scopePath,
+        inspectedEntryCount: result.inspectedEntryCount,
+        relevantFileCount: updatePlan.relevantFileCount,
+        updatedEntryCount: updatePlan.updates.length,
+        truncated: result.truncated,
       };
-      records.push(virtualRecord);
-      recordByPath.set(filePath, virtualRecord);
-    }
-  }
-
-  return records;
-}
-
-function buildCatalogEntry(
-  record: ScannedCatalogRecord,
-  existing: CatalogEntry | null,
-  scannedAt: number,
-  seriesMetadataByKey: Map<string, SeriesMetadataEntry>,
-  movieMetadataByKey: Map<string, MovieMetadataEntry>,
-): CatalogEntry {
-  const nextEntry: CatalogEntry = {
-    ...(existing?.id != null ? { id: existing.id } : {}),
-    createdAt: existing?.createdAt ?? scannedAt,
-    updatedAt: scannedAt,
-    name: record.name,
-    path: record.path,
-    directoryId: record.directoryId,
-    size: record.size,
-    lastModified: record.lastModified,
-    availability: 'present',
-    hasLocalFile: record.hasLocalFile,
-    lastSeenAt: scannedAt,
-    firstMissingAt: undefined,
-    detectedMediaType: mergeDetectedMediaType(record.detectedMediaType, existing?.detectedMediaType),
-    parsedTitle: record.parsedTitle ?? existing?.parsedTitle,
-    parsedYear: record.parsedYear ?? existing?.parsedYear,
-    seasonNumber: record.seasonNumber ?? existing?.seasonNumber,
-    episodeNumber: record.episodeNumber ?? existing?.episodeNumber,
-    endingEpisodeNumber: record.endingEpisodeNumber,
-    seriesMetadataKey: record.seriesMetadataKey ?? existing?.seriesMetadataKey,
-    movieMetadataKey: record.movieMetadataKey ?? existing?.movieMetadataKey,
-    contentHash: existing?.contentHash,
-    torrentInfoHash: record.torrentInfoHash ?? existing?.torrentInfoHash,
-    torrentFileIndex: record.torrentFileIndex ?? existing?.torrentFileIndex,
-    torrentMagnetUrl: record.torrentMagnetUrl ?? existing?.torrentMagnetUrl,
-    torrentComplete: record.torrentComplete ?? existing?.torrentComplete,
-    canonicalPlaybackKey: existing?.canonicalPlaybackKey,
-  };
-
-  nextEntry.canonicalPlaybackKey = chooseCatalogPlaybackKey(
-    nextEntry,
-    seriesMetadataByKey,
-    movieMetadataByKey,
+    }),
   );
-
-  return nextEntry;
-}
-
-function buildMissingCatalogEntry(existing: CatalogEntry, scannedAt: number): CatalogEntry {
-  return {
-    ...existing,
-    availability: 'missing',
-    hasLocalFile: false,
-    updatedAt: scannedAt,
-    firstMissingAt: existing.firstMissingAt ?? scannedAt,
-  };
 }
 
 async function syncCatalog(
@@ -264,31 +143,20 @@ async function syncCatalog(
   manifests: ScannedManifest[],
 ): Promise<void> {
   const scannedAt = Date.now();
-  const scannedRecords = buildScannedCatalogRecords(directoryId, files, manifests);
   const [allCatalogEntries, seriesMetadata, movieMetadata] = await Promise.all([
     db.catalog.toArray(),
     db.seriesMetadata.toArray(),
     db.movieMetadata.toArray(),
   ]);
-  const seriesMetadataByKey = new Map(seriesMetadata.map((entry) => [entry.key, entry]));
-  const movieMetadataByKey = new Map(movieMetadata.map((entry) => [entry.key, entry]));
-  const { matches } = matchScannedCatalogItems(allCatalogEntries, scannedRecords);
-  const matchedCatalogIds = new Set(
-    matches.flatMap((match) => (match.existing ? [match.existing.id] : [])),
-  );
-  const missingCatalogEntries = allCatalogEntries
-    .filter((entry) => entry.directoryId === directoryId)
-    .filter((entry) => !matchedCatalogIds.has(entry.id))
-    .map((entry) => buildMissingCatalogEntry(entry, scannedAt));
-  const nextCatalogEntries = matches.map((match) =>
-    buildCatalogEntry(
-      match.scanned as ScannedCatalogRecord,
-      match.existing,
-      scannedAt,
-      seriesMetadataByKey,
-      movieMetadataByKey,
-    ),
-  );
+  const { nextCatalogEntries, missingCatalogEntries } = planFullCatalogReconciliation({
+    directoryId,
+    files,
+    manifests,
+    allCatalogEntries,
+    seriesMetadata,
+    movieMetadata,
+    scannedAt,
+  });
 
   await db.transaction('rw', db.catalog, db.directories, async () => {
     if (nextCatalogEntries.length > 0) {
