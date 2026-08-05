@@ -5,6 +5,7 @@ import { db, type CatalogEntry, type PlaybackEntry } from '../db';
 import { getDeviceId } from '../device.js';
 import { useEngine } from '../hooks/useEngine';
 import { PlaybackVideo } from '../components/PlaybackVideo.js';
+import { MagnetLink } from '../components/MagnetLink.js';
 import { folderProvider, type SiblingSubtitleFile } from '../folder-provider.js';
 import { useSetting } from '../hooks/useSetting';
 import { useFullscreen } from '../hooks/useFullscreen';
@@ -380,29 +381,12 @@ export function Player() {
           <p>{missingMessage(resolvedEntry)}</p>
           {resolvedEntry.torrentMagnetUrl ? (
             <div className="player-virtual-magnet">
-              <a
+              <MagnetLink
                 href={magnetWithFileIndex(
                   resolvedEntry.torrentMagnetUrl,
                   resolvedEntry.torrentFileIndex,
                 )}
-                className="btn btn-secondary"
-              >
-                Open Magnet Link
-              </a>
-              <button
-                type="button"
-                className="btn btn-secondary"
-                onClick={() => {
-                  void navigator.clipboard.writeText(
-                    magnetWithFileIndex(
-                      resolvedEntry.torrentMagnetUrl!,
-                      resolvedEntry.torrentFileIndex,
-                    ),
-                  );
-                }}
-              >
-                Copy Magnet
-              </button>
+              />
             </div>
           ) : null}
         </div>

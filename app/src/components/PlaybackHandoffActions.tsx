@@ -14,6 +14,7 @@ import {
   recordPendingHandoff,
 } from '../handoff/pending-handoffs.js';
 import { db } from '../db.js';
+import { MagnetLink } from './MagnetLink.js';
 
 function formatDuration(sec: number): string {
   const h = Math.floor(sec / 3600);
@@ -112,37 +113,21 @@ export function PlaybackHandoffActions({
         )}
         {capabilities.magnetUrl && (
           <>
-            <a
+            <MagnetLink
               href={capabilities.magnetUrl}
-              className="btn btn-secondary handoff-action"
+              className="handoff-action"
               onClick={async (event) => {
                 event.preventDefault();
                 try {
                   await recordPendingHandoff(fact, capabilities.magnetUrl!);
                   await onOpenMagnet?.(capabilities.magnetUrl!);
-                  setStatus('Opening in JSTorrent…');
+                  setStatus('Opening magnet link…');
                   window.location.assign(capabilities.magnetUrl!);
                 } catch {
                   setStatus('Could not save the resume handoff.');
                 }
               }}
-            >
-              Open in JSTorrent
-            </a>
-            <button
-              type="button"
-              className="btn btn-secondary handoff-action"
-              onClick={async () => {
-                try {
-                  await navigator.clipboard.writeText(capabilities.magnetUrl!);
-                  setStatus('Magnet link copied.');
-                } catch {
-                  setStatus('Could not copy the magnet link.');
-                }
-              }}
-            >
-              Copy magnet
-            </button>
+            />
             {canShare && (
               <button
                 type="button"

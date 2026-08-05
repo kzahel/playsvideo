@@ -856,6 +856,19 @@ body {
   margin-top: 1rem;
 }
 
+.magnet-link {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.4rem;
+  text-decoration: none;
+}
+
+.magnet-link-icon {
+  width: 1rem;
+  height: 1rem;
+  flex: none;
+}
+
 .player-episode-nav {
   display: flex;
   justify-content: space-between;

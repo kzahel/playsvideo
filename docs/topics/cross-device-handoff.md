@@ -80,15 +80,18 @@ navigation from the local catalog retains the normal local resume policy.
 Activity and Devices use the same action component and availability states:
 
 - `Available here` offers a local resume action;
-- `Download required` offers open, copy, and supported Web Share actions;
+- `Download required` offers a native magnet link and supported Web Share;
 - `Incomplete download` explains why playback is not ready;
 - ambiguous matches do not auto-resume;
 - missing media without a locator remains inspectable instead of becoming a
   dead row.
 
 Magnet handling sets or replaces exactly one `so` file-selection parameter.
-Full magnets are revealed, copied, shared, or opened only after an explicit
-user action and are not logged.
+The UI describes this honestly as a magnet link rather than claiming a
+particular application will open it. Its native anchor supports browser
+context-menu or long-press copying without a redundant clipboard button. Full
+magnets are revealed, shared, or opened only after an explicit user action and
+are not logged.
 
 Opening a magnet first stores a deduplicated `pendingHandoffs` row containing
 source identity, provenance, resume position, and torrent locators. A later scan
