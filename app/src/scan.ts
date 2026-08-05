@@ -148,7 +148,7 @@ async function syncCatalog(
     db.seriesMetadata.toArray(),
     db.movieMetadata.toArray(),
   ]);
-  const { nextCatalogEntries, missingCatalogEntries } = planFullCatalogReconciliation({
+  const { presentUpdates, missingUpdates } = planFullCatalogReconciliation({
     directoryId,
     files,
     manifests,
@@ -157,19 +157,24 @@ async function syncCatalog(
     movieMetadata,
     scannedAt,
   });
+  const catalogChanged = presentUpdates.length > 0 || missingUpdates.length > 0;
 
   await db.transaction('rw', db.catalog, db.directories, async () => {
-    if (nextCatalogEntries.length > 0) {
-      await db.catalog.bulkPut(nextCatalogEntries);
+    if (presentUpdates.length > 0) {
+      await db.catalog.bulkPut(presentUpdates);
     }
-    if (missingCatalogEntries.length > 0) {
-      await db.catalog.bulkPut(missingCatalogEntries);
+    if (missingUpdates.length > 0) {
+      await db.catalog.bulkPut(missingUpdates);
     }
 
     await db.directories.update(directoryId, { lastScannedAt: scannedAt });
   });
 
-  await refreshCatalogMetadata({ entries: nextCatalogEntries });
-  await backfillCatalogAliases();
-  await reconcilePendingHandoffs();
+  if (presentUpdates.length > 0) {
+    await refreshCatalogMetadata({ entries: presentUpdates });
+  }
+  if (catalogChanged) {
+    await backfillCatalogAliases();
+    await reconcilePendingHandoffs();
+  }
 }

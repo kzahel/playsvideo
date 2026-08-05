@@ -61,9 +61,10 @@ Behavior:
 - provider returns scanned files and JSTorrent manifests
 - scan parses filenames into media hints
 - scan matches new results against existing `catalog` rows
-- matched rows are updated in place
-- unseen rows from that directory are marked `missing`
-- scan triggers metadata refresh for the affected catalog rows
+- materially changed matched rows are updated in place
+- newly unseen rows from that directory are marked `missing`
+- unchanged rows are not rewritten merely to advance scan timestamps
+- scan triggers metadata refresh for changed present rows
 
 Important property:
 
@@ -172,6 +173,26 @@ Identity split:
 This split is what keeps routing stable while still allowing best-effort cross-device matching.
 
 ## UI Structure
+
+### State model
+
+The app does not use Zustand, Redux, or another global in-memory store.
+
+- Dexie/IndexedDB is the durable local application store. Components use
+  `useLiveQuery` from `dexie-react-hooks`, so relevant database writes rerun the
+  query and render the new result.
+- React `useState`, refs, and effects own ephemeral component state such as
+  open menus, pending actions, player status, and transient messages.
+- React Router owns route identity and short-lived navigation state.
+- `useEngine` adapts the imperative `PlaysVideoEngine` and media element events
+  into React-facing playback state.
+- Firebase is a remote replication boundary, not the frontend state store. Its
+  results are normalized into Dexie before ordinary UI projection.
+
+Pages generally query durable source tables and use pure grouping/view helpers
+to derive display models. This avoids a second global cache, but broad
+`toArray()` live queries make unnecessary writes visible to more components;
+change-aware reconciliation therefore avoids rewriting identical catalog rows.
 
 Routes:
 

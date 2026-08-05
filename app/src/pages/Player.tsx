@@ -174,7 +174,6 @@ export function Player() {
   const entryLookupPending =
     entry === PLAYER_QUERY_PENDING || (entry != null && entry.id !== entryId);
   const resolvedEntry = entryLookupPending ? routeEntry : entry;
-  useFocusedMediaDiscovery(resolvedEntry);
   const deviceIdPending = deviceId === PLAYER_QUERY_PENDING || deviceId === '';
   const resolvedDeviceId = deviceIdPending ? null : deviceId;
   const playbackKey = resolvedEntry?.canonicalPlaybackKey ?? null;
@@ -291,6 +290,10 @@ export function Player() {
       nextEpisode: siblings[currentIndex + 1] ?? null,
     };
   }, [entries, resolvedEntry]);
+  useFocusedMediaDiscovery(resolvedEntry, {
+    nextEpisodeKnown: nextEpisode != null,
+    videoElement,
+  });
 
   useEffect(() => {
     if (!hasEnded || !autoplayNextEpisode || !nextEpisode) {

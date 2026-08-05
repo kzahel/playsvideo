@@ -2,6 +2,48 @@ import type { CatalogEntry } from '../db.js';
 
 export const FOCUSED_DISCOVERY_MAX_ENTRIES = 2_000;
 export const FOCUSED_DISCOVERY_COOLDOWN_MS = 15_000;
+export const FOCUSED_DISCOVERY_INTERVAL_MS = 3 * 60_000;
+export const FOCUSED_DISCOVERY_NEAR_END_SEC = 15 * 60;
+
+export type FocusedDiscoveryTrigger =
+  | 'mount'
+  | 'window-focus'
+  | 'page-visible'
+  | 'periodic-playback'
+  | 'near-end'
+  | 'fullscreen-exit';
+
+export interface FocusedDiscoveryTriggerState {
+  hasNextEpisode: boolean;
+  pageVisible: boolean;
+  fullscreen: boolean;
+  playbackActive: boolean;
+  currentTimeSec?: number;
+  durationSec?: number;
+}
+
+export function shouldRunFocusedDiscovery(
+  trigger: FocusedDiscoveryTrigger,
+  state: FocusedDiscoveryTriggerState,
+): boolean {
+  if (state.hasNextEpisode || !state.pageVisible || state.fullscreen) return false;
+
+  if (trigger === 'periodic-playback' && !state.playbackActive) return false;
+  if (trigger !== 'near-end') return true;
+  if (!state.playbackActive) return false;
+
+  const currentTimeSec = state.currentTimeSec;
+  const durationSec = state.durationSec;
+  return (
+    currentTimeSec != null &&
+    durationSec != null &&
+    Number.isFinite(currentTimeSec) &&
+    Number.isFinite(durationSec) &&
+    durationSec > 0 &&
+    currentTimeSec >= 0 &&
+    durationSec - currentTimeSec <= FOCUSED_DISCOVERY_NEAR_END_SEC
+  );
+}
 
 export interface FocusedDiscoveryPlan {
   directoryId: number;

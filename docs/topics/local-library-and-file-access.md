@@ -79,7 +79,8 @@ against the durable `catalog` table.
 
 Normal scan rules are:
 
-- a matched file keeps its stable `catalog.id` and updates file facts in place;
+- a matched file keeps its stable `catalog.id` and updates file facts in place
+  only when material catalog fields changed;
 - a new file creates a new catalog row;
 - an unseen prior row becomes `availability = missing` instead of being
   deleted;
@@ -96,7 +97,8 @@ and file facts such as name, size, and modification time. The scan chooses and
 persists a current canonical playback key but then backfills all known aliases.
 
 After the catalog transaction, a scan refreshes optional metadata, backfills
-aliases, and reconciles pending handoffs.
+aliases, and reconciles pending handoffs when the catalog changes. A successful
+no-op full scan updates only the configured directory's `lastScannedAt`.
 
 ## Playback and Subtitle Reacquisition
 

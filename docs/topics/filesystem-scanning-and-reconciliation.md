@@ -2,8 +2,9 @@
 
 Topic: `filesystem-scanning-and-reconciliation`
 
-Status: focused player discovery and full authoritative reconciliation are
-implemented; broader triggers and large-library evidence remain open.
+Status: focused player discovery, adaptive playback triggers, and change-aware
+authoritative reconciliation are implemented; large-library and end-to-end
+filesystem evidence remain open.
 
 ## Scope
 
@@ -23,9 +24,9 @@ PlaysVideo has two intentionally different operations:
 
 - **Focused discovery** finds relevant additions or material changes from a
   bounded subtree. Partial evidence can never prove absence.
-- **Full reconciliation** walks a complete configured directory, refreshes
-  observed rows, marks unseen rows missing, and runs post-scan metadata, alias,
-  and pending-handoff work.
+- **Full reconciliation** walks a complete configured directory, persists
+  materially changed observed rows, marks newly unseen rows missing, and runs
+  only the post-scan work justified by those changes.
 
 Both operations require an existing configured directory. Background focused
 discovery uses only already-granted access and never requests permission.
@@ -48,26 +49,44 @@ unbounded because only they may draw conclusions about absence.
   snapshots cannot race catalog writes.
 - Scope, filtering, and catalog mutation decisions are pure functions with
   deterministic unit coverage.
+- Every successful full scan advances `directories.lastScannedAt`; unchanged
+  catalog rows retain their timestamps and do not invalidate live queries.
 
 ## Current Trigger Model
 
 - Folder selection and the header Rescan action run full reconciliation.
 - TV-show and movie detail pages may run full reconciliation on mount when the
   setting is enabled and access is already granted.
-- Episode-player mount will run focused discovery for its current series and
-  configured directory.
+- When the next episode is unknown, the player requests focused discovery on
+  mount, window focus, page visibility, fullscreen exit, every three minutes of
+  active playback, and once playback enters its final fifteen minutes.
+- Opportunistic player checks require a visible, non-fullscreen document.
 
-There is no continuous filesystem watcher. Further triggers such as window
-focus or a final end-of-episode check require separate product decisions and
-must reuse the same coordinator rather than creating component-local scans.
+There is no continuous filesystem watcher. Browser event and timer triggers
+reuse the same coordinator rather than creating component-local scan paths.
+
+## Change-aware Full Reconciliation
+
+The filesystem enumeration and catalog reads required by a full scan are
+unchanged. After matching, the pure planner compares only material catalog
+fields. New, restored, changed, and newly missing rows are persisted; identical
+present rows and already-missing rows are not rewritten.
+
+Metadata refresh receives only changed present rows. Alias and pending-handoff
+reconciliation run when any catalog row changes. A true no-op scan writes only
+the directory's successful-scan timestamp. This adds no filesystem I/O and
+avoids database writes, reactive query churn, and post-processing that cannot
+observe a new catalog state.
 
 ## Evidence
 
-Pure unit coverage owns scope selection, additions-only mutation rules,
-known-incomplete torrent safety, full-reconciliation authority, request
-coalescing, cooldown, and per-directory serialization. The 2026-08-05 green
-run passed all 258 unit tests and both builds. A signed-in localhost player
-reload retained its Next Episode action without browser console errors.
+Pure unit coverage owns scope selection, trigger eligibility, additions-only
+mutation rules, known-incomplete torrent safety, change-aware full
+reconciliation, request coalescing, cooldown, and per-directory serialization.
+The 2026-08-05 green run passed all 266 unit tests and both builds. A signed-in
+localhost player reload retained its Next Episode action without browser
+console errors before the adaptive trigger follow-up; the trigger policy itself
+is covered deterministically rather than with wall-clock browser waits.
 
 ## Code and Documentation Map
 
@@ -81,19 +100,17 @@ reload retained its Next Episode action without browser console errors.
 - `app/src/hooks/useFocusedMediaDiscovery.ts` — player-facing lifecycle.
 - [`000-focused-media-discovery.md`](../tactical/000-focused-media-discovery.md)
   — bounded implementation record.
+- [`001-adaptive-scan-scheduling.md`](../tactical/001-adaptive-scan-scheduling.md)
+  — playback-trigger and no-op-reconciliation implementation record.
 
 ## Known Gaps and Next Work
 
 - Validate discovery across same-season, new-season, root-level, extension
   multi-folder, and retained-permission layouts.
-- Decide whether a missing next episode should trigger one final discovery when
-  playback ends.
-- Consider a throttled window-focus trigger for downloads completed while the
-  player remains mounted.
+- Tune the three-minute interval and fifteen-minute near-end threshold from
+  observed scan cost and download workflows.
 - Measure large-library enumeration and tune the deterministic entry budget
   from evidence.
-- Make full reconciliation change-aware and avoid post-scan work when the
-  catalog did not materially change.
 - Serialize folder replacement and removal with scans that target the same
   configured directory.
 - Add an end-to-end filesystem fixture that completes a JSTorrent download

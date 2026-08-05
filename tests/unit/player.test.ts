@@ -133,7 +133,10 @@ describe('Player', () => {
     expect(html).not.toContain('Loading...');
     expect(html.match(/<video/g)).toHaveLength(1);
     expect(html).not.toContain('Video.js controls');
-    expect(useFocusedMediaDiscoveryMock).toHaveBeenCalledWith(entry);
+    expect(useFocusedMediaDiscoveryMock).toHaveBeenCalledWith(entry, {
+      nextEpisodeKnown: false,
+      videoElement: null,
+    });
     expect(useEngineMock).toHaveBeenCalledWith(
       {
         kind: 'entry',

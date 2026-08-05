@@ -161,7 +161,7 @@ describe('focused catalog reconciliation', () => {
 });
 
 describe('full catalog reconciliation planning', () => {
-  it('remains authoritative for missing rows after the pure extraction', () => {
+  it('writes only the missing transition when an observed row is unchanged', () => {
     const observed = existingEpisode(1, 1);
     const unseen = existingEpisode(2, 2);
     const result = planFullCatalogReconciliation({
@@ -174,10 +174,8 @@ describe('full catalog reconciliation planning', () => {
       scannedAt: 500,
     });
 
-    expect(result.nextCatalogEntries).toEqual([
-      expect.objectContaining({ id: 1, availability: 'present', lastSeenAt: 500 }),
-    ]);
-    expect(result.missingCatalogEntries).toEqual([
+    expect(result.presentUpdates).toEqual([]);
+    expect(result.missingUpdates).toEqual([
       expect.objectContaining({
         id: 2,
         availability: 'missing',
@@ -185,5 +183,67 @@ describe('full catalog reconciliation planning', () => {
         firstMissingAt: 500,
       }),
     ]);
+  });
+
+  it('produces no catalog writes for an identical complete scan', () => {
+    const observed = existingEpisode(1, 1);
+
+    expect(
+      planFullCatalogReconciliation({
+        directoryId: 4,
+        files: [scannedEpisode(1)],
+        manifests: [],
+        allCatalogEntries: [observed],
+        seriesMetadata: [],
+        movieMetadata: [],
+        scannedAt: 500,
+      }),
+    ).toEqual({ presentUpdates: [], missingUpdates: [] });
+    expect(observed).toEqual(expect.objectContaining({ updatedAt: 1, lastSeenAt: 1 }));
+  });
+
+  it('writes a materially changed observed row with fresh timestamps', () => {
+    const observed = existingEpisode(1, 1);
+    const changed = { ...scannedEpisode(1), size: 2_000, lastModified: 20 };
+    const result = planFullCatalogReconciliation({
+      directoryId: 4,
+      files: [changed],
+      manifests: [],
+      allCatalogEntries: [observed],
+      seriesMetadata: [],
+      movieMetadata: [],
+      scannedAt: 500,
+    });
+
+    expect(result.presentUpdates).toEqual([
+      expect.objectContaining({
+        id: 1,
+        size: 2_000,
+        lastModified: 20,
+        updatedAt: 500,
+        lastSeenAt: 500,
+      }),
+    ]);
+    expect(result.missingUpdates).toEqual([]);
+  });
+
+  it('does not rewrite a row that is already missing', () => {
+    const missing = existingEpisode(2, 2, {
+      availability: 'missing',
+      hasLocalFile: false,
+      firstMissingAt: 100,
+    });
+
+    expect(
+      planFullCatalogReconciliation({
+        directoryId: 4,
+        files: [],
+        manifests: [],
+        allCatalogEntries: [missing],
+        seriesMetadata: [],
+        movieMetadata: [],
+        scannedAt: 500,
+      }),
+    ).toEqual({ presentUpdates: [], missingUpdates: [] });
   });
 });

@@ -6,6 +6,8 @@ import {
   commonDirectoryPath,
   emptyFocusedDiscoveryResult,
   FocusedDiscoveryCoordinator,
+  FOCUSED_DISCOVERY_NEAR_END_SEC,
+  shouldRunFocusedDiscovery,
 } from '../../app/src/scanning/focused-discovery.js';
 import { DirectoryScanCoordinator } from '../../app/src/scanning/scan-coordinator.js';
 
@@ -152,5 +154,77 @@ describe('focused discovery coordination', () => {
     finishFirst();
     await expect(Promise.all([first, second])).resolves.toEqual(['first', 'second']);
     expect(events).toEqual(['first-start', 'first-end', 'second-start']);
+  });
+});
+
+describe('focused discovery trigger policy', () => {
+  const eligible = {
+    hasNextEpisode: false,
+    pageVisible: true,
+    fullscreen: false,
+    playbackActive: true,
+    currentTimeSec: 2_000,
+    durationSec: 2_500,
+  };
+
+  it('allows mount and focus checks when the next episode is unknown', () => {
+    expect(shouldRunFocusedDiscovery('mount', eligible)).toBe(true);
+    expect(shouldRunFocusedDiscovery('window-focus', eligible)).toBe(true);
+  });
+
+  it('skips every opportunistic trigger when the next episode is known', () => {
+    expect(
+      shouldRunFocusedDiscovery('periodic-playback', {
+        ...eligible,
+        hasNextEpisode: true,
+      }),
+    ).toBe(false);
+  });
+
+  it('skips scans while the page is hidden or playback is fullscreen', () => {
+    expect(
+      shouldRunFocusedDiscovery('window-focus', {
+        ...eligible,
+        pageVisible: false,
+      }),
+    ).toBe(false);
+    expect(
+      shouldRunFocusedDiscovery('periodic-playback', {
+        ...eligible,
+        fullscreen: true,
+      }),
+    ).toBe(false);
+  });
+
+  it('requires active playback for periodic and near-end checks', () => {
+    expect(
+      shouldRunFocusedDiscovery('periodic-playback', {
+        ...eligible,
+        playbackActive: false,
+      }),
+    ).toBe(false);
+    expect(
+      shouldRunFocusedDiscovery('near-end', {
+        ...eligible,
+        playbackActive: false,
+      }),
+    ).toBe(false);
+  });
+
+  it('starts the near-end window with fifteen minutes remaining', () => {
+    expect(
+      shouldRunFocusedDiscovery('near-end', {
+        ...eligible,
+        currentTimeSec: 1_600,
+        durationSec: 1_600 + FOCUSED_DISCOVERY_NEAR_END_SEC,
+      }),
+    ).toBe(true);
+    expect(
+      shouldRunFocusedDiscovery('near-end', {
+        ...eligible,
+        currentTimeSec: 1_599,
+        durationSec: 1_600 + FOCUSED_DISCOVERY_NEAR_END_SEC,
+      }),
+    ).toBe(false);
   });
 });

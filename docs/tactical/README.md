@@ -26,5 +26,7 @@ the tactical from that topic.
 
 - [`000-focused-media-discovery.md`](000-focused-media-discovery.md) — bounded,
   additions-only discovery for newly completed episodes from the player.
+- [`001-adaptive-scan-scheduling.md`](001-adaptive-scan-scheduling.md) —
+  visible playback triggers and no-op suppression for full reconciliation.
 
-The next tactical is `001-{subject}.md`.
+The next tactical is `002-{subject}.md`.

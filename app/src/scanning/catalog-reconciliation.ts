@@ -215,8 +215,8 @@ export function buildMissingCatalogEntry(
 }
 
 export interface FullCatalogReconciliationPlan {
-  nextCatalogEntries: CatalogEntry[];
-  missingCatalogEntries: CatalogEntry[];
+  presentUpdates: CatalogEntry[];
+  missingUpdates: CatalogEntry[];
 }
 
 export function planFullCatalogReconciliation(input: {
@@ -238,25 +238,34 @@ export function planFullCatalogReconciliation(input: {
   const matchedCatalogIds = new Set(
     matches.flatMap((match) => (match.existing ? [match.existing.id] : [])),
   );
+  const presentUpdates = matches.flatMap((match) => {
+    const next = buildCatalogEntry(
+      match.scanned as ScannedCatalogRecord,
+      match.existing,
+      input.scannedAt,
+      seriesMetadataByKey,
+      movieMetadataByKey,
+    );
+    if (match.existing && !catalogEntryNeedsMaterialUpdate(match.existing as CatalogEntry, next)) {
+      return [];
+    }
+    return [next];
+  });
+  const missingUpdates = input.allCatalogEntries
+    .filter((entry) => entry.directoryId === input.directoryId)
+    .filter((entry) => !matchedCatalogIds.has(entry.id))
+    .flatMap((entry) => {
+      const next = buildMissingCatalogEntry(entry, input.scannedAt);
+      return catalogEntryNeedsMaterialUpdate(entry, next) ? [next] : [];
+    });
 
   return {
-    missingCatalogEntries: input.allCatalogEntries
-      .filter((entry) => entry.directoryId === input.directoryId)
-      .filter((entry) => !matchedCatalogIds.has(entry.id))
-      .map((entry) => buildMissingCatalogEntry(entry, input.scannedAt)),
-    nextCatalogEntries: matches.map((match) =>
-      buildCatalogEntry(
-        match.scanned as ScannedCatalogRecord,
-        match.existing,
-        input.scannedAt,
-        seriesMetadataByKey,
-        movieMetadataByKey,
-      ),
-    ),
+    presentUpdates,
+    missingUpdates,
   };
 }
 
-const FOCUSED_MATERIAL_FIELDS = [
+const CATALOG_MATERIAL_FIELDS = [
   'name',
   'path',
   'directoryId',
@@ -281,11 +290,11 @@ const FOCUSED_MATERIAL_FIELDS = [
   'canonicalPlaybackKey',
 ] as const satisfies ReadonlyArray<keyof CatalogEntry>;
 
-export function catalogEntryNeedsFocusedUpdate(
+export function catalogEntryNeedsMaterialUpdate(
   existing: CatalogEntry,
   next: CatalogEntry,
 ): boolean {
-  return FOCUSED_MATERIAL_FIELDS.some((field) => existing[field] !== next[field]);
+  return CATALOG_MATERIAL_FIELDS.some((field) => existing[field] !== next[field]);
 }
 
 export interface FocusedCatalogUpdatePlan {
@@ -327,7 +336,7 @@ export function planFocusedCatalogUpdates(input: {
     );
     if (next.torrentComplete === false) return [];
     relevantFileCount += 1;
-    if (!match.existing || catalogEntryNeedsFocusedUpdate(match.existing as CatalogEntry, next)) {
+    if (!match.existing || catalogEntryNeedsMaterialUpdate(match.existing as CatalogEntry, next)) {
       return [next];
     }
     return [];
