@@ -2,8 +2,8 @@
 
 Topic: `device-identity-and-grouping`
 
-Status: implemented on `main` and locally verified; production rules/app
-rollout and mixed-surface manual validation remain pending.
+Status: implemented on `main`; live rules and localhost web route verified.
+Production app rollout and mixed-surface manual validation remain pending.
 
 ## Scope
 
@@ -101,6 +101,12 @@ Old clients continue reading and replacing only their own
 overwrite group names, membership, or management status. Rolling the UI back
 leaves all historical playback documents intact.
 
+Modern readers independently tolerate `permission-denied` on the two additive
+registry collections and use legacy label projection. This keeps device and
+playback reads working if app code reaches an environment before its new rules.
+The repository pins Firebase CLI operations to `playsvideo-b6648` so deployment
+does not rely on a workstation's active-project state.
+
 There is no bulk backfill. Inactive records remain legacy records until a user
 manages them or the corresponding client syncs with the new app.
 
@@ -108,18 +114,22 @@ manages them or the corresponding client syncs with the new app.
 
 The implementation has pure unit coverage for legacy grouping, persisted
 membership, reversible splitting, hidden/tombstoned clients, metadata seeding,
-and managed-state preservation. On 2026-08-05:
+managed-state preservation, and registry rollout-error classification. On
+2026-08-05:
 
 - Firestore rules compiled in the local emulator;
-- all 242 unit tests passed;
+- all 244 unit tests passed;
 - typecheck, formatting, lint, library build, and app build passed.
+- live browser validation caught missing production rules after the initial
+  implementation; the rollout was corrected and `/app/devices` was rechecked
+  against the signed-in localhost session.
 
 The implementation record is
 [`device-grouping-implementation.md`](../device-grouping-implementation.md).
 
 ## Known Gaps and Next Work
 
-1. Deploy the additive Firestore rules before deploying the app changes.
+1. Deploy the production app changes after final review.
 2. Validate one account across production web, localhost, and the extension,
    confirming that origin/channel diagnostics explain the separate clients.
 3. Exercise rename, merge, split, archive, restore, and forget against live

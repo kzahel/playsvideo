@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import {
+  isDeviceRegistryUnavailableError,
   mergeDeviceDocs,
   type RemoteDeviceState,
   type SyncEntry,
@@ -115,5 +116,17 @@ describe('mergeDeviceDocs', () => {
     expect(entry.torrentFileIndex).toBe(5);
     expect(entry.torrentMagnetUrl).toContain('magnet:');
     expect(entry.title).toBe('Big Buck Bunny');
+  });
+});
+
+describe('device registry rollout compatibility', () => {
+  it('recognizes Firestore permission errors from either public code shape', () => {
+    expect(isDeviceRegistryUnavailableError({ code: 'permission-denied' })).toBe(true);
+    expect(isDeviceRegistryUnavailableError({ code: 'firestore/permission-denied' })).toBe(true);
+  });
+
+  it('does not hide unrelated registry failures', () => {
+    expect(isDeviceRegistryUnavailableError({ code: 'unavailable' })).toBe(false);
+    expect(isDeviceRegistryUnavailableError(new Error('network failed'))).toBe(false);
   });
 });

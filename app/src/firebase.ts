@@ -257,20 +257,45 @@ async function pullAllDeviceDocs(uid: string): Promise<RemoteDeviceState[]> {
   return results;
 }
 
+export function isDeviceRegistryUnavailableError(error: unknown): boolean {
+  if (!error || typeof error !== 'object' || !('code' in error)) return false;
+  const code = (error as { code?: unknown }).code;
+  return code === 'permission-denied' || code === 'firestore/permission-denied';
+}
+
+async function pullOptionalDeviceRegistryCollection<T>(
+  collectionName: 'clientMeta' | 'deviceGroups',
+  read: () => Promise<T[]>,
+): Promise<T[]> {
+  try {
+    return await read();
+  } catch (error) {
+    if (!isDeviceRegistryUnavailableError(error)) throw error;
+    console.warn(
+      `Device registry collection ${collectionName} is unavailable; using legacy device projection.`,
+    );
+    return [];
+  }
+}
+
 async function pullAllClientMetadata(uid: string): Promise<RemoteClientMetadataState[]> {
-  const snap = await getDocs(collection(firestore, 'sync', uid, 'clientMeta'));
-  return snap.docs.map((entry) => ({
-    deviceId: entry.id,
-    doc: entry.data() as ClientMetadataDoc,
-  }));
+  return pullOptionalDeviceRegistryCollection('clientMeta', async () => {
+    const snap = await getDocs(collection(firestore, 'sync', uid, 'clientMeta'));
+    return snap.docs.map((entry) => ({
+      deviceId: entry.id,
+      doc: entry.data() as ClientMetadataDoc,
+    }));
+  });
 }
 
 async function pullAllDeviceGroups(uid: string): Promise<RemoteDeviceGroupState[]> {
-  const snap = await getDocs(collection(firestore, 'sync', uid, 'deviceGroups'));
-  return snap.docs.map((entry) => ({
-    groupId: entry.id,
-    doc: entry.data() as DeviceGroupDoc,
-  }));
+  return pullOptionalDeviceRegistryCollection('deviceGroups', async () => {
+    const snap = await getDocs(collection(firestore, 'sync', uid, 'deviceGroups'));
+    return snap.docs.map((entry) => ({
+      groupId: entry.id,
+      doc: entry.data() as DeviceGroupDoc,
+    }));
+  });
 }
 
 async function pullAllDeviceSyncState(uid: string): Promise<RemoteDeviceSyncState> {

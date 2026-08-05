@@ -202,6 +202,13 @@ app starts writing the new collections:
 pnpm -w run firebase:deploy-rules
 ```
 
+The repository's `.firebaserc` pins that command to `playsvideo-b6648`; the
+deployment must not depend on a developer's machine-global active project.
+Modern readers also treat permission denial for only the additive registry
+collections as an old-rules rollout state and fall back to legacy projection.
+Other Firestore errors still surface normally. Management writes require the
+new rules and remain unavailable until the rules deployment succeeds.
+
 There is no bulk schema or playback-data migration. Deployment consists of:
 
 1. Deploy additive Firestore rules.
@@ -246,3 +253,15 @@ Verified locally on 2026-08-05:
 - Biome lint passed with two pre-existing warnings outside this feature.
 - Biome formatting completed with no remaining changes.
 - The library build and production app build passed.
+
+Live rollout correction on 2026-08-05:
+
+- Browser validation against `https://localhost:9300/app/devices` initially
+  exposed undeployed registry rules; the page failed with `permission-denied`.
+- The Firebase project target is now checked in rather than machine-global.
+- The owner-only rules were deployed successfully to `playsvideo-b6648`.
+- Registry reads now degrade to legacy projection when only the additive
+  collections are forbidden, preventing an app/rules ordering mismatch from
+  blanking the Devices page.
+- The signed-in page then loaded without new warnings and showed the current
+  client as `https://localhost:9300` on the development channel.
