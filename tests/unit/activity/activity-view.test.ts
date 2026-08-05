@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import {
+  applyLogicalDevicePresentation,
   activityFactsFromDeviceDocs,
   activityFactsFromRemotePlayback,
   buildActivityGroups,
@@ -8,6 +9,7 @@ import {
   type ActivityFact,
 } from '../../../app/src/activity/activity-view.js';
 import type { RemoteDeviceState } from '../../../app/src/sync-device-doc.js';
+import type { DeviceRegistryState } from '../../../app/src/device-groups.js';
 
 function fact(overrides: Partial<ActivityFact> = {}): ActivityFact {
   return {
@@ -187,7 +189,7 @@ describe('activity view projection', () => {
     ]);
   });
 
-  it('lists the current device first and remote devices by sync time', () => {
+  it('lists logical devices with the current group first and remote groups by sync time', () => {
     const devices = listActivityDevices(
       [
         fact({ deviceId: 'old', deviceLabel: 'Old', deviceLastSyncedAt: 100 }),
@@ -197,7 +199,88 @@ describe('activity view projection', () => {
       'Current',
     );
 
-    expect(devices.map((device) => device.deviceId)).toEqual(['current', 'new', 'old']);
+    expect(devices.map((device) => device.deviceIds)).toEqual([['current'], ['new'], ['old']]);
+  });
+
+  it('collapses identically labeled legacy clients into one Activity device', () => {
+    const devices = listActivityDevices(
+      [
+        fact({ deviceId: 'production', deviceLastSyncedAt: 100 }),
+        fact({ deviceId: 'localhost', deviceLastSyncedAt: 200 }),
+      ],
+      'localhost',
+      'Mac · Chrome',
+    );
+
+    expect(devices).toEqual([
+      expect.objectContaining({
+        label: 'Mac · Chrome',
+        deviceIds: ['localhost', 'production'],
+        isCurrent: true,
+      }),
+    ]);
+    expect(
+      buildActivityGroups({
+        facts: [
+          fact({ deviceId: 'production', positionSec: 100, lastPlayedAt: 100 }),
+          fact({ deviceId: 'localhost', positionSec: 200, lastPlayedAt: 200 }),
+          fact({ deviceId: 'phone', positionSec: 300, lastPlayedAt: 300 }),
+        ],
+        deviceIds: devices[0].deviceIds,
+      })[0].items[0].fact.positionSec,
+    ).toBe(200);
+  });
+
+  it('applies persisted group names and hides archived clients from Activity', () => {
+    const registry: DeviceRegistryState = {
+      clients: [
+        {
+          deviceId: 'mac',
+          doc: {
+            v: 1,
+            deviceId: 'mac',
+            generatedLabel: 'Mac · Chrome',
+            groupId: 'group',
+            kind: 'web',
+            channel: 'production',
+            registeredAt: 1,
+            lastSeenAt: 10,
+            status: 'active',
+          },
+        },
+        {
+          deviceId: 'old',
+          doc: {
+            v: 1,
+            deviceId: 'old',
+            generatedLabel: 'Mac · Chrome',
+            kind: 'web',
+            channel: 'production',
+            registeredAt: 1,
+            lastSeenAt: 5,
+            status: 'archived',
+          },
+        },
+      ],
+      groups: [
+        {
+          groupId: 'group',
+          doc: { v: 1, name: "Kyle's MacBook", createdAt: 1, updatedAt: 2 },
+        },
+      ],
+    };
+    const facts = [
+      fact({ deviceId: 'mac', lastPlayedAt: 10 }),
+      fact({ deviceId: 'old', lastPlayedAt: 5 }),
+    ];
+    const devices = listActivityDevices(facts, 'mac', 'Mac · Chrome', registry);
+
+    expect(devices).toEqual([
+      expect.objectContaining({ label: "Kyle's MacBook", deviceIds: ['mac'] }),
+    ]);
+    expect(applyLogicalDevicePresentation(facts, devices)).toEqual([
+      expect.objectContaining({ deviceId: 'mac', deviceLabel: "Kyle's MacBook" }),
+    ]);
   });
 
   it('summarizes projection diagnostics without exposing locator values', () => {

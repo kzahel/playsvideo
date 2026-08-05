@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useState } from 'react';
 import {
+  applyLogicalDevicePresentation,
   activityFactsFromDeviceDocs,
   activityFactsFromRemotePlayback,
   buildActivityGroups,
@@ -13,7 +14,8 @@ import {
 import { PlaybackHandoffActions } from '../components/PlaybackHandoffActions.js';
 import { db } from '../db.js';
 import { getDeviceId, getDeviceLabel } from '../device.js';
-import { pullAndCacheDeviceDocs } from '../firebase.js';
+import type { DeviceRegistryState } from '../device-groups.js';
+import { pullAndCacheDeviceSyncState } from '../firebase.js';
 import { useAuth } from '../hooks/useAuth.js';
 import {
   cleanupExpiredPendingHandoffs,
@@ -155,12 +157,10 @@ function ActivityGroupCard({ group }: { group: ActivityGroup }) {
 
 function DeviceFilters({
   devices,
-  currentDeviceId,
   selectedDeviceId,
   onChange,
 }: {
   devices: ActivityDeviceOption[];
-  currentDeviceId: string | null;
   selectedDeviceId: string;
   onChange: (deviceId: string) => void;
 }) {
@@ -175,23 +175,22 @@ function DeviceFilters({
         All devices
       </button>
       {devices.map((device) => {
-        const isCurrent = device.deviceId === currentDeviceId;
         return (
           <button
             type="button"
-            key={device.deviceId}
-            className={`activity-filter-btn${selectedDeviceId === device.deviceId ? ' active' : ''}`}
-            aria-pressed={selectedDeviceId === device.deviceId}
+            key={device.id}
+            className={`activity-filter-btn${selectedDeviceId === device.id ? ' active' : ''}`}
+            aria-pressed={selectedDeviceId === device.id}
             title={
-              isCurrent
+              device.isCurrent
                 ? device.label
                 : device.lastSyncedAt
                   ? `Last synced ${formatTimeAgo(device.lastSyncedAt)}`
                   : undefined
             }
-            onClick={() => onChange(device.deviceId)}
+            onClick={() => onChange(device.id)}
           >
-            {isCurrent ? 'This device' : device.label}
+            {device.isCurrent ? 'This device' : device.label}
           </button>
         );
       })}
@@ -204,7 +203,6 @@ export function Activity() {
   const [facts, setFacts] = useState<ActivityFact[] | null>(null);
   const [localTargetIndex, setLocalTargetIndex] = useState<LocalPlaybackTargetIndex | null>(null);
   const [devices, setDevices] = useState<ActivityDeviceOption[]>([]);
-  const [currentDeviceId, setCurrentDeviceId] = useState<string | null>(null);
   const [selectedDeviceId, setSelectedDeviceId] = useState('all');
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
@@ -287,11 +285,17 @@ export function Activity() {
           });
         }
 
-        const applyFacts = (allFacts: ActivityFact[]) => {
-          setFacts(allFacts);
-          setDevices(listActivityDevices(allFacts, localDeviceId, localDeviceLabel));
+        const applyFacts = (allFacts: ActivityFact[], registry?: DeviceRegistryState) => {
+          const nextDevices = listActivityDevices(
+            allFacts,
+            localDeviceId,
+            localDeviceLabel,
+            registry,
+          );
+          setFacts(applyLogicalDevicePresentation(allFacts, nextDevices));
+          setDevices(nextDevices);
           setSelectedDeviceId((selected) =>
-            selected === 'all' || allFacts.some((fact) => fact.deviceId === selected)
+            selected === 'all' || nextDevices.some((device) => device.id === selected)
               ? selected
               : 'all',
           );
@@ -299,18 +303,17 @@ export function Activity() {
 
         applyFacts([...activityFactsFromRemotePlayback(cachedRemotePlayback), ...localFacts]);
         setLocalTargetIndex(targetIndex);
-        setCurrentDeviceId(localDeviceId);
         setLoading(false);
 
         if (user) {
           setRefreshing(true);
           try {
-            const docs = await pullAndCacheDeviceDocs(user.uid);
+            const state = await pullAndCacheDeviceSyncState(user.uid);
             if (cancelled) return;
             const remoteFacts = activityFactsFromDeviceDocs(
-              docs.filter((device) => device.deviceId !== localDeviceId),
+              state.devices.filter((device) => device.deviceId !== localDeviceId),
             );
-            applyFacts([...remoteFacts, ...localFacts]);
+            applyFacts([...remoteFacts, ...localFacts], state.registry);
             setLastRefreshedAt(Date.now());
           } catch (err) {
             if (!cancelled) setError(err instanceof Error ? err.message : String(err));
@@ -332,19 +335,24 @@ export function Activity() {
   }, [user, refreshNonce]);
 
   const projection = useMemo(() => {
+    const selectedDevice =
+      selectedDeviceId === 'all'
+        ? undefined
+        : devices.find((device) => device.id === selectedDeviceId);
+    const selectedDeviceIds = selectedDevice ? new Set(selectedDevice.deviceIds) : undefined;
     const scopedFacts =
       facts?.filter(
-        (fact) => selectedDeviceId === 'all' || fact.deviceId === selectedDeviceId,
+        (fact) => selectedDeviceIds == null || selectedDeviceIds.has(fact.deviceId),
       ) ?? [];
     const groups = facts
       ? buildActivityGroups({
             facts,
-            deviceId: selectedDeviceId === 'all' ? undefined : selectedDeviceId,
+            deviceIds: selectedDevice?.deviceIds,
             localTargetIndex: localTargetIndex ?? undefined,
           })
       : [];
     return { groups, diagnostics: summarizeActivityProjection(scopedFacts, groups) };
-  }, [facts, localTargetIndex, selectedDeviceId]);
+  }, [devices, facts, localTargetIndex, selectedDeviceId]);
   const { groups } = projection;
 
   if ((loading || authLoading) && facts == null) {
@@ -388,7 +396,6 @@ export function Activity() {
         <div className="activity-toolbar">
           <DeviceFilters
             devices={devices}
-            currentDeviceId={currentDeviceId}
             selectedDeviceId={selectedDeviceId}
             onChange={setSelectedDeviceId}
           />

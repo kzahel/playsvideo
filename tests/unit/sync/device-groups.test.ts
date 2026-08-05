@@ -101,6 +101,52 @@ describe('logical device projection', () => {
     );
   });
 
+  it('reversibly splits a client by changing only registry membership', () => {
+    const devices = [
+      remoteDevice('production', 'Mac · Chrome', 100),
+      remoteDevice('localhost', 'Mac · Chrome', 200),
+    ];
+    const mergedRegistry: DeviceRegistryState = {
+      clients: devices.map((device) => ({
+        deviceId: device.deviceId,
+        doc: {
+          v: 1,
+          deviceId: device.deviceId,
+          generatedLabel: device.doc.label,
+          groupId: 'mac',
+          kind: 'web',
+          channel: 'production',
+          registeredAt: 1,
+          lastSeenAt: device.doc.lastSyncedAt,
+          status: 'active',
+        },
+      })),
+      groups: [{ groupId: 'mac', doc: { v: 1, name: 'My Mac', createdAt: 1, updatedAt: 1 } }],
+    };
+    expect(projectLogicalDevices({ devices, registry: mergedRegistry })).toHaveLength(1);
+
+    const splitRegistry: DeviceRegistryState = {
+      clients: mergedRegistry.clients.map((client) =>
+        client.deviceId === 'localhost'
+          ? { ...client, doc: { ...client.doc, groupId: 'dev-mac' } }
+          : client,
+      ),
+      groups: [
+        ...mergedRegistry.groups,
+        {
+          groupId: 'dev-mac',
+          doc: { v: 1, name: 'Development Mac', createdAt: 2, updatedAt: 2 },
+        },
+      ],
+    };
+    const split = projectLogicalDevices({ devices, registry: splitRegistry });
+    expect(split.map((device) => device.name)).toEqual(['Development Mac', 'My Mac']);
+    expect(split.flatMap((device) => device.deviceIds).sort()).toEqual([
+      'localhost',
+      'production',
+    ]);
+  });
+
   it('omits archived and forgotten clients normally but reveals their tombstones', () => {
     const registry: DeviceRegistryState = {
       clients: [

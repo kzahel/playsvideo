@@ -1,5 +1,11 @@
 import type { RemotePlaybackEntry, WatchState } from '../db.js';
 import {
+  projectLogicalDevices,
+  remoteDeviceStatesFromClientFacts,
+  type DeviceRegistryState,
+  type LogicalDevice,
+} from '../device-groups.js';
+import {
   resolveLocalPlaybackTarget,
   type LocalPlaybackResolution,
   type LocalPlaybackTarget,
@@ -49,9 +55,11 @@ export interface ActivityGroup {
 }
 
 export interface ActivityDeviceOption {
-  deviceId: string;
+  id: string;
+  deviceIds: string[];
   label: string;
   lastSyncedAt?: number;
+  isCurrent: boolean;
 }
 
 export interface ActivityProjectionDiagnostics {
@@ -274,40 +282,70 @@ export function listActivityDevices(
   facts: ActivityFact[],
   currentDeviceId?: string,
   currentDeviceLabel?: string,
+  registry?: DeviceRegistryState,
 ): ActivityDeviceOption[] {
-  const devices = new Map<string, ActivityDeviceOption>();
-  if (currentDeviceId) {
-    devices.set(currentDeviceId, {
-      deviceId: currentDeviceId,
-      label: currentDeviceLabel ?? 'This device',
-    });
-  }
+  return activityLogicalDevices(facts, currentDeviceId, currentDeviceLabel, registry).map(
+    (device) => ({
+      id: device.id,
+      deviceIds: device.deviceIds,
+      label: device.name,
+      lastSyncedAt: device.lastSeenAt || undefined,
+      isCurrent: device.isCurrent,
+    }),
+  );
+}
 
-  for (const fact of facts) {
-    const existing = devices.get(fact.deviceId);
-    devices.set(fact.deviceId, {
+function activityLogicalDevices(
+  facts: ActivityFact[],
+  currentDeviceId?: string,
+  currentDeviceLabel?: string,
+  registry?: DeviceRegistryState,
+): LogicalDevice[] {
+  const deviceStates = remoteDeviceStatesFromClientFacts(
+    facts.map((fact) => ({
       deviceId: fact.deviceId,
       label: fact.deviceLabel,
-      lastSyncedAt: Math.max(existing?.lastSyncedAt ?? 0, fact.deviceLastSyncedAt ?? 0) || undefined,
-    });
-  }
+      lastSeenAt: fact.deviceLastSyncedAt,
+    })),
+  );
+  return projectLogicalDevices({
+    devices: deviceStates,
+    registry,
+    currentDeviceId,
+    currentDeviceLabel,
+  });
+}
 
-  return [...devices.values()].sort((left, right) => {
-    if (left.deviceId === currentDeviceId) return -1;
-    if (right.deviceId === currentDeviceId) return 1;
-    return (right.lastSyncedAt ?? 0) - (left.lastSyncedAt ?? 0);
+export function applyLogicalDevicePresentation(
+  facts: ActivityFact[],
+  devices: ActivityDeviceOption[],
+): ActivityFact[] {
+  const deviceByClientId = new Map(
+    devices.flatMap((device) =>
+      device.deviceIds.map((deviceId) => [deviceId, device] as const),
+    ),
+  );
+  return facts.flatMap((fact) => {
+    const device = deviceByClientId.get(fact.deviceId);
+    return device ? [{ ...fact, deviceLabel: device.label }] : [];
   });
 }
 
 export function buildActivityGroups(input: {
   facts: ActivityFact[];
   deviceId?: string;
+  deviceIds?: readonly string[];
   localEntryByPlaybackKey?: ReadonlyMap<string, number>;
   localTargetIndex?: LocalPlaybackTargetIndex;
 }): ActivityGroup[] {
   const localEntryByPlaybackKey = input.localEntryByPlaybackKey ?? new Map();
-  const scopedFacts = input.deviceId
-    ? input.facts.filter((fact) => fact.deviceId === input.deviceId)
+  const selectedDeviceIds = input.deviceIds
+    ? new Set(input.deviceIds)
+    : input.deviceId
+      ? new Set([input.deviceId])
+      : undefined;
+  const scopedFacts = selectedDeviceIds
+    ? input.facts.filter((fact) => selectedDeviceIds.has(fact.deviceId))
     : input.facts;
 
   const factsByPlaybackKey = new Map<string, ActivityFact[]>();
