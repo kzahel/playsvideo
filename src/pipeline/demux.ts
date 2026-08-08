@@ -27,6 +27,7 @@ export interface DemuxResult {
   audioSink: EncodedPacketSink | null;
   subtitleTracks: SubtitleTrackInfo[];
   dispose: () => void;
+  cancelAllPending: () => void;
 }
 
 export async function demuxFile(filePath: string): Promise<DemuxResult> {
@@ -53,6 +54,11 @@ class SourceAdapter extends MBSource {
   }
   _dispose() {
     this._inner._dispose();
+  }
+  cancelAllPending() {
+    if (typeof (this._inner as any).cancelAllPending === 'function') {
+      (this._inner as any).cancelAllPending();
+    }
   }
 }
 
@@ -95,6 +101,13 @@ async function demuxInput(input: Input): Promise<DemuxResult> {
 
   const subtitleTracks = await getSubtitleTrackInfos(input);
 
+  const cancelNetworkPending = () => {
+    const source = input.source as { cancelAllPending?: () => void };
+    if (typeof source?.cancelAllPending === 'function') {
+      source.cancelAllPending();
+    }
+  };
+
   return {
     input,
     duration,
@@ -108,6 +121,7 @@ async function demuxInput(input: Input): Promise<DemuxResult> {
     audioSink,
     subtitleTracks,
     dispose: () => input.dispose(),
+    cancelAllPending: cancelNetworkPending,
   };
 }
 
