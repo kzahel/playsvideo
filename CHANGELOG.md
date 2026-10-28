@@ -4,6 +4,14 @@ All notable changes to playsvideo are documented here.
 
 ## [Unreleased]
 
+### Changed
+- Upgrade dependencies and patch stale Firebase transitive dependencies.
+- Validate dependency audits, library/app types, unit tests, and all builds on pushes and pull requests.
+
+### Fixed
+- Use the stable Video.js React player provider API.
+- Pass generated catalog IDs to metadata refresh after inserting scanned files.
+
 ## [0.4.7] - 2026-03-14
 
 ### Fixed

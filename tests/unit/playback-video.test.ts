@@ -4,19 +4,19 @@ import { describe, expect, it, vi } from 'vitest';
 import { PlaybackVideo } from '../../app/src/components/PlaybackVideo.js';
 
 describe('PlaybackVideo', () => {
-  it.each([
-    'stock',
-    'videojs',
-  ] as const)('renders exactly one media element with %s controls', (controlsType) => {
-    const html = renderToStaticMarkup(
-      createElement(PlaybackVideo, {
-        controlsType,
-        onVideoElementChange: vi.fn(),
-      }),
-    );
+  it.each(['stock', 'videojs'] as const)(
+    'renders exactly one media element with %s controls',
+    (controlsType) => {
+      const html = renderToStaticMarkup(
+        createElement(PlaybackVideo, {
+          controlsType,
+          onVideoElementChange: vi.fn(),
+        }),
+      );
 
-    expect(html.match(/<video/g)).toHaveLength(1);
-  });
+      expect(html.match(/<video/g)).toHaveLength(1);
+    },
+  );
 
   it('uses native controls only in stock mode', () => {
     const nativeHtml = renderToStaticMarkup(

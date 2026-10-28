@@ -158,10 +158,12 @@ async function syncCatalog(
     scannedAt,
   });
   const catalogChanged = presentUpdates.length > 0 || missingUpdates.length > 0;
+  let persistedPresentEntries: CatalogEntry[] = [];
 
   await db.transaction('rw', db.catalog, db.directories, async () => {
     if (presentUpdates.length > 0) {
-      await db.catalog.bulkPut(presentUpdates);
+      const ids = await db.catalog.bulkPut(presentUpdates, { allKeys: true });
+      persistedPresentEntries = presentUpdates.map((entry, index) => ({ ...entry, id: ids[index] }));
     }
     if (missingUpdates.length > 0) {
       await db.catalog.bulkPut(missingUpdates);
@@ -171,7 +173,7 @@ async function syncCatalog(
   });
 
   if (presentUpdates.length > 0) {
-    await refreshCatalogMetadata({ entries: presentUpdates });
+    await refreshCatalogMetadata({ entries: persistedPresentEntries });
   }
   if (catalogChanged) {
     await backfillCatalogAliases();

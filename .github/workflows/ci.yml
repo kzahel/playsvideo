@@ -1,0 +1,68 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v7.0.1
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v7.1.0
+        with:
+          node-version: 24
+
+      - name: Install pnpm
+        uses: pnpm/action-setup@v6.1.0
+        with:
+          cache: true
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Audit dependencies
+        run: pnpm audit
+
+      - name: Typecheck library and app
+        run: |
+          pnpm -w run typecheck
+          pnpm --filter @playsvideo/app run typecheck
+
+      - name: Lint
+        run: pnpm -w run lint
+
+      - name: Format check
+        run: pnpm -w run format:check
+
+      - name: Unit tests
+        run: pnpm -w run test:unit
+
+      - name: Build library
+        run: pnpm -w run build:lib
+
+      - name: Build site
+        run: pnpm -w run build:site
+
+      - name: Build app
+        run: pnpm --filter @playsvideo/app run build
+
+      - name: Build extension
+        run: pnpm -w run build:extension
+
+      - name: Smoke check tooling
+        run: |
+          pnpm -w exec firebase --version
+          pnpm -w exec wrangler --version

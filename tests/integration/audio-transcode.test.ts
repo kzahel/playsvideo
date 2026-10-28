@@ -25,7 +25,8 @@ describe('audio-transcode', () => {
     expect(audioNeedsTranscode(prober, 'eac3')).toBe(true);
     expect(audioNeedsTranscode(prober, 'flac')).toBe(true);
     expect(audioNeedsTranscode(prober, 'aac')).toBe(false);
-    expect(audioNeedsTranscode(prober, 'mp3')).toBe(false);
+    // The Node prober conservatively allows only AAC in fragmented MP4.
+    expect(audioNeedsTranscode(prober, 'mp3')).toBe(true);
   });
 
   it('transcodes AC3 packets to AAC', async () => {

@@ -78,6 +78,11 @@ the directory's successful-scan timestamp. This adds no filesystem I/O and
 avoids database writes, reactive query churn, and post-processing that cannot
 observe a new catalog state.
 
+Planned writes may omit the auto-generated catalog ID. Full reconciliation
+collects the persisted keys before handing rows to metadata refresh, so new
+entries carry their actual database IDs. Catalog matching preserves the full
+entry type rather than discarding fields needed by reconciliation.
+
 ## Evidence
 
 Pure unit coverage owns scope selection, trigger eligibility, additions-only

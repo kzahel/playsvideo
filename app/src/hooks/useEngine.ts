@@ -340,7 +340,7 @@ export function useEngine(
         sessionResumeRef.current = null;
       } else if (entry) {
         const resumePlayback = sessionPlayback;
-        if (resumePlayback?.positionSec > 0 && resumePlayback.watchState === 'in-progress') {
+        if (resumePlayback && resumePlayback.positionSec > 0 && resumePlayback.watchState === 'in-progress') {
           applyStartPosition(resumePlayback.positionSec, 'video:resume-position');
         } else {
           applyStartPosition(0, 'video:start-position');

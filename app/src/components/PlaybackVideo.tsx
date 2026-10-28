@@ -43,10 +43,10 @@ export function PlaybackVideo({
   }
 
   return (
-    <VideoJsPlayer.Provider>
+    <VideoJsPlayer.Player>
       <VideoSkin className="pv-videojs10-player" aria-label="PlaysVideo player">
         <Video ref={videoRef} autoPlay playsInline />
       </VideoSkin>
-    </VideoJsPlayer.Provider>
+    </VideoJsPlayer.Player>
   );
 }

@@ -25,6 +25,8 @@ const VIDEO_EXTENSIONS = new Set([
   '.3gp',
 ]);
 
+export type CatalogEntryWrite = Omit<CatalogEntry, 'id'> & { id?: number };
+
 function isVideoFileName(name: string): boolean {
   const dot = name.lastIndexOf('.');
   if (dot === -1) return false;
@@ -72,7 +74,7 @@ function metadataMaps(input: {
 }
 
 function chooseCatalogPlaybackKey(
-  entry: CatalogEntry,
+  entry: CatalogEntryWrite,
   seriesMetadataByKey: Map<string, SeriesMetadataEntry>,
   movieMetadataByKey: Map<string, MovieMetadataEntry>,
 ): string {
@@ -163,8 +165,8 @@ export function buildCatalogEntry(
   scannedAt: number,
   seriesMetadataByKey: Map<string, SeriesMetadataEntry>,
   movieMetadataByKey: Map<string, MovieMetadataEntry>,
-): CatalogEntry {
-  const nextEntry: CatalogEntry = {
+): CatalogEntryWrite {
+  const nextEntry: CatalogEntryWrite = {
     ...(existing?.id != null ? { id: existing.id } : {}),
     createdAt: existing?.createdAt ?? scannedAt,
     updatedAt: scannedAt,
@@ -215,7 +217,7 @@ export function buildMissingCatalogEntry(
 }
 
 export interface FullCatalogReconciliationPlan {
-  presentUpdates: CatalogEntry[];
+  presentUpdates: CatalogEntryWrite[];
   missingUpdates: CatalogEntry[];
 }
 
@@ -292,13 +294,13 @@ const CATALOG_MATERIAL_FIELDS = [
 
 export function catalogEntryNeedsMaterialUpdate(
   existing: CatalogEntry,
-  next: CatalogEntry,
+  next: CatalogEntryWrite,
 ): boolean {
   return CATALOG_MATERIAL_FIELDS.some((field) => existing[field] !== next[field]);
 }
 
 export interface FocusedCatalogUpdatePlan {
-  updates: CatalogEntry[];
+  updates: CatalogEntryWrite[];
   relevantFileCount: number;
 }
 

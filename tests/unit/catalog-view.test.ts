@@ -6,13 +6,10 @@ describe('catalog view mode', () => {
     expect(normalizeCatalogViewMode(viewMode)).toBe(viewMode);
   });
 
-  it.each([
-    undefined,
-    null,
-    'grid',
-    'rows',
-    1,
-  ])('falls back to the kid-friendly card grid for %j', (storedValue) => {
-    expect(normalizeCatalogViewMode(storedValue)).toBe('card');
-  });
+  it.each([undefined, null, 'grid', 'rows', 1])(
+    'falls back to the kid-friendly card grid for %j',
+    (storedValue) => {
+      expect(normalizeCatalogViewMode(storedValue)).toBe('card');
+    },
+  );
 });

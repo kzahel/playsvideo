@@ -21,9 +21,9 @@ export interface ScannedCatalogItem {
 
 export type CatalogMatchReason = 'torrent' | 'hash' | 'path' | 'fingerprint' | 'new';
 
-export interface CatalogMatchResult {
+export interface CatalogMatchResult<T extends CatalogMatchableEntry = CatalogMatchableEntry> {
   scanned: ScannedCatalogItem;
-  existing: CatalogMatchableEntry | null;
+  existing: T | null;
   reason: CatalogMatchReason;
 }
 
@@ -37,11 +37,11 @@ function pushBucket<T>(map: Map<string, T[]>, key: string | null, value: T): voi
   map.set(key, [value]);
 }
 
-function takeUnmatched(
-  map: Map<string, CatalogMatchableEntry[]>,
+function takeUnmatched<T extends CatalogMatchableEntry>(
+  map: Map<string, T[]>,
   key: string | null,
   matchedIds: Set<number>,
-): CatalogMatchableEntry | null {
+): T | null {
   if (!key) return null;
   const bucket = map.get(key);
   if (!bucket) return null;
@@ -79,14 +79,14 @@ function fingerprintKey(item: {
   return `${item.name}|${item.size}|${item.lastModified}`;
 }
 
-export function matchScannedCatalogItems(
-  existing: CatalogMatchableEntry[],
+export function matchScannedCatalogItems<T extends CatalogMatchableEntry>(
+  existing: T[],
   scanned: ScannedCatalogItem[],
-): { matches: CatalogMatchResult[]; missing: CatalogMatchableEntry[] } {
-  const existingByTorrent = new Map<string, CatalogMatchableEntry[]>();
-  const existingByHash = new Map<string, CatalogMatchableEntry[]>();
-  const existingByPath = new Map<string, CatalogMatchableEntry[]>();
-  const existingByFingerprint = new Map<string, CatalogMatchableEntry[]>();
+): { matches: CatalogMatchResult<T>[]; missing: T[] } {
+  const existingByTorrent = new Map<string, T[]>();
+  const existingByHash = new Map<string, T[]>();
+  const existingByPath = new Map<string, T[]>();
+  const existingByFingerprint = new Map<string, T[]>();
 
   for (const entry of existing) {
     pushBucket(existingByTorrent, torrentKey(entry), entry);

@@ -274,6 +274,7 @@ class FsAccessProvider implements FolderProvider {
   }
 
   async getFile(entry: CatalogEntry, options: FileAccessOptions = {}): Promise<File> {
+    if (entry.directoryId == null) throw new Error('No directory available');
     const handle = await this.resolveHandle(entry.directoryId);
     await ensurePermission(handle, options);
     this.grantedHandles.set(entry.directoryId, handle);
@@ -287,6 +288,7 @@ class FsAccessProvider implements FolderProvider {
   }
 
   async listSiblingSubtitleFiles(entry: CatalogEntry): Promise<SiblingSubtitleFile[]> {
+    if (entry.directoryId == null) return [];
     let handle: FileSystemDirectoryHandle;
     try {
       handle = await this.resolveHandle(entry.directoryId);
