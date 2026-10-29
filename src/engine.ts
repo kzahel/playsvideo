@@ -1510,6 +1510,14 @@ export class PlaysVideoEngine extends EventTarget {
       );
       if (data.fatal) {
         console.error('hls.js fatal error:', data);
+        
+        // Auto-recover fatal media errors (e.g. decoder crash)
+        if (data.type === Hls.ErrorTypes.MEDIA_ERROR) {
+          console.warn('playsvideo: attempting to recover fatal media error');
+          this.hls?.recoverMediaError();
+          return;
+        }
+        
         const internalMessage = this.getRecentInternalError();
         const message =
           internalMessage && data.details === 'fragLoadError'
@@ -1518,6 +1526,26 @@ export class PlaysVideoEngine extends EventTarget {
               ? `${data.details} (${normalizeErrorMessage(underlyingMessage)})`
               : data.details;
         this.failPlayback(message);
+      } else if (data.details === 'bufferStalledError') {
+        // Recover from non-fatal buffer stalls (e.g. after long pause)
+        // Check if there is actually video buffered ahead to distinguish decoder glitch from slow network
+        let hasBufferAhead = false;
+        for (let i = 0; i < this.video.buffered.length; i++) {
+          const start = this.video.buffered.start(i);
+          const end = this.video.buffered.end(i);
+          // If we have at least 0.5s of buffer ahead of current time
+          if (this.video.currentTime >= start && this.video.currentTime < end - 0.5) {
+            hasBufferAhead = true;
+            break;
+          }
+        }
+
+        if (hasBufferAhead) {
+          console.warn('playsvideo: Buffer is full but playback stalled. Likely a decoder glitch. Nudging.');
+          this.video.currentTime += 0.1;
+        } else {
+          mlog('playsvideo: Buffer is actually empty. Waiting for network data.');
+        }
       }
     });
 

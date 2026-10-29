@@ -359,18 +359,23 @@ self.onmessage = (event: MessageEvent) => {
       wlog(`cancel segment idx=${msg.index}`);
       controller.abort();
       segmentAbortControllers.delete(msg.index);
+      if (demux) {
+        demux.cancelAllPending();
+      }
     }
   } else if (msg.type === 'subtitle') {
     wlog(`recv subtitle trackIndex=${msg.trackIndex}`);
     const queueDelayMs = typeof msg.requestedAtMs === 'number' ? Date.now() - msg.requestedAtMs : 0;
-    handleSubtitle(msg.trackIndex, Math.max(0, queueDelayMs)).catch((err) =>
-      self.postMessage({ type: 'error', message: String(err) }),
-    );
+    handleSubtitle(msg.trackIndex, Math.max(0, queueDelayMs)).catch((err) => {
+      if (err?.name === 'AbortError' || String(err).toLowerCase().includes('abort')) return;
+      self.postMessage({ type: 'error', message: String(err) });
+    });
   }
 };
 
 function queuePipelineSetup(task: () => Promise<void>): void {
   pipelineSetup = pipelineSetup.then(task).catch((err) => {
+    if (err?.name === 'AbortError' || String(err).toLowerCase().includes('abort')) return;
     self.postMessage({ type: 'error', message: String(err) });
   });
 }
@@ -409,6 +414,10 @@ function schedulePrefetch(startIndex: number): void {
     if (!segmentCache.has(nextIndex) && !segmentTasks.has(nextIndex)) {
       emitSegmentState(nextIndex, 'prefetching');
       void ensureSegmentTask(nextIndex).catch((err) => {
+        if (err?.name === 'AbortError' || String(err).toLowerCase().includes('abort')) {
+          emitSegmentState(nextIndex, 'aborted');
+          return;
+        }
         emitSegmentState(nextIndex, 'error', { message: String(err) });
         self.postMessage({ type: 'error', message: String(err) });
       });
@@ -614,15 +623,16 @@ async function handleSegmentRequest(index: number) {
   try {
     await pipelineSetup;
     await handleSegment(index, controller.signal);
-  } catch (err) {
-    if (err instanceof DOMException && err.name === 'AbortError') {
+  } catch (e: any) {
+    const errStr = (e.message || String(e)).toLowerCase();
+    if (e.name === 'AbortError' || errStr.includes('abort')) {
       emitSegmentState(index, 'aborted');
       wlog(`seg ${index} aborted`);
       return;
     }
-    const stale = isStaleFileError(err);
-    emitSegmentState(index, 'error', { message: String(err) });
-    self.postMessage({ type: 'segment-error', index, message: String(err), stale });
+    const stale = isStaleFileError(e);
+    emitSegmentState(index, 'error', { message: String(e) });
+    self.postMessage({ type: 'segment-error', index, message: String(e), stale });
     if (stale) {
       wlog(`seg ${index} stale file detected — requesting refresh`);
     }

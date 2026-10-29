@@ -56,6 +56,19 @@ export async function runPipeline(opts: PipelineOptions): Promise<PipelineResult
     // For passthrough, use the original config.
     let audioDecoderConfig = demux.audioDecoderConfig;
 
+    // Detect HE-AAC (SBR) from AudioSpecificConfig bytes to fix MSE A/V sync issues.
+    // Standard AAC-LC config is 2 bytes. If it's longer (or explicit type 5), it often contains SBR.
+    if (!doTranscode && audioDecoderConfig && audioDecoderConfig.codec === 'mp4a.40.2' && audioDecoderConfig.description) {
+      const desc = new Uint8Array(audioDecoderConfig.description as ArrayBuffer);
+      const objectType = desc.length > 0 ? desc[0] >>> 3 : 0;
+      if (objectType === 5 || (objectType === 2 && desc.length >= 4)) {
+        audioDecoderConfig = {
+          ...audioDecoderConfig,
+          codec: 'mp4a.40.5', // Promote to HE-AAC to fix Chrome timestamp handling
+        };
+      }
+    }
+
     let init: Uint8Array | null = null;
     const segments: PipelineSegment[] = [];
 
